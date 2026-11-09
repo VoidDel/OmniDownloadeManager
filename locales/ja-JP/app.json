@@ -90,7 +90,24 @@
     "general": {
       "version": "バージョン",
       "logs": "ログ",
-      "openFolder": "フォルダーを開く"
+      "openFolder": "フォルダーを開く",
+      "autostart": "システムと一緒に起動",
+      "autostartHint": "バックグラウンドで起動し、通知領域にだけ表示します",
+      "closeToTray": "ウィンドウを閉じても実行を続ける",
+      "closeToTrayHint": "ダウンロードはバックグラウンドで続きます。通知領域のアイコンのメニューから終了します",
+      "notifyDone": "ダウンロード完了時に通知",
+      "notifyFailed": "ダウンロード失敗時に通知",
+      "notifyHint": "ウィンドウが前面にあるときは通知しません",
+      "shortcutShow": "ウィンドウの表示・非表示",
+      "shortcutNew": "新規ダウンロード",
+      "shortcutHint": "どのアプリでも有効です。クリックしてからキーを押します",
+      "shortcutRecording": "キーを押してください…",
+      "shortcutNone": "なし",
+      "shortcutClear": "ショートカットを消去",
+      "shortcutTaken": "{keys} は他のアプリが使用しています",
+      "checkUpdates": "更新を自動で確認",
+      "checkUpdatesHint": "起動後に一度確認します。インストールのタイミングは選べます",
+      "shortcutDuplicate": "そのキーはもう一方の操作に設定されています"
     },
     "download": {
       "folder": "既定のダウンロードフォルダー",
@@ -532,5 +549,43 @@
     "useBrowser": "ブラウザーでダウンロード",
     "later": "後でダウンロード",
     "start": "ダウンロード開始"
+  },
+  "tray": {
+    "show": "Omni Download を表示",
+    "quit": "終了"
+  },
+  "notify": {
+    "done": "ダウンロード完了",
+    "failed": "ダウンロード失敗"
+  },
+  "update": {
+    "check": "更新を確認",
+    "checking": "確認中…",
+    "none": "最新バージョンです",
+    "failed": "更新に失敗しました：{reason}",
+    "available": "バージョン {version} が利用できます",
+    "show": "表示",
+    "title": "Omni Download {version} が利用できます",
+    "current": "現在のバージョン {version}",
+    "later": "後で",
+    "install": "更新して再起動",
+    "hint": "進行中のダウンロードは一時停止し、再起動後に再開します",
+    "downloading": "更新をダウンロード中 {done} / {total}",
+    "starting": "ダウンロードを開始しています…",
+    "checkFailed": "更新を確認できませんでした。しばらくしてからもう一度お試しください。"
+  },
+  "welcome": {
+    "title": "Omni Download へようこそ",
+    "intro": "表示言語と保存先を選んでください。どちらもあとで設定から変更できます。",
+    "browsersIntro": "ブラウザー拡張機能を入れると、ブラウザーで始めたダウンロードが Omni Download に渡されます。",
+    "noBrowsers": "対応ブラウザー（Chrome、Edge、Firefox、Brave、Chromium）が見つかりません。",
+    "lookingForBrowsers": "ブラウザーを探しています…",
+    "getExtension": "拡張機能を入手",
+    "browsersLater": "各ブラウザーの接続状態はあとで設定から確認できます。",
+    "backgroundIntro": "Omni Download はバックグラウンドでダウンロードを続けられます。システムと一緒に起動すれば、ブラウザーからのダウンロードをいつでも受け取れます。",
+    "back": "戻る",
+    "next": "次へ",
+    "skip": "スキップ",
+    "done": "始める"
   }
 }

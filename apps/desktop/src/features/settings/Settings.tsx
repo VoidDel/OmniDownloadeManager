@@ -9,6 +9,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
+import { ShortcutInput } from '../../components/ShortcutInput';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import type { Density, MaterialKind, Settings as S, ThemeMode } from '../../lib/types';
@@ -106,8 +107,22 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const platform = useApp((st) => st.platform);
   const materialSupported = useApp((st) => st.materialSupported);
   const systemAccent = useApp((st) => st.systemAccent);
+  const autostart = useApp((st) => st.autostart);
+  const { setAutostart, checkUpdate, toast } = useApp.getState();
+  const [checking, setChecking] = useState(false);
   const { t } = useTranslation();
   const a = s.appearance;
+  const g = s.general;
+  /** Sets one shortcut, unless the other one already has those keys. */
+  const shortcut = (which: 'shortcutShow' | 'shortcutNew', other: string) => (v: string) => {
+    if (v && v === other) toast('error', t('settings.general.shortcutDuplicate'));
+    else set((x) => (x.general[which] = v));
+  };
+  const check = async () => {
+    setChecking(true);
+    await checkUpdate(true);
+    setChecking(false);
+  };
   const accentIsCustom = a.accent.startsWith('#');
   const accentIsPicked = accentIsCustom && !ACCENTS.includes(a.accent.toUpperCase());
   return (
@@ -120,6 +135,28 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             onChange={(v) => set((x) => (x.language = v))}
             options={[['auto', t('settings.language.auto', { lang: LANGUAGE_NAMES[systemLang()] })], ...SUPPORTED.map((l): [string, string] => [l, LANGUAGE_NAMES[l]])]}
           />
+        </Row>
+      </div>
+      <div className="set-group">
+        <Row label={t('settings.general.autostart')} hint={t('settings.general.autostartHint')}>
+          <Switch label={t('settings.general.autostart')} checked={autostart} disabled={!isTauri()} onChange={(v) => void setAutostart(v)} />
+        </Row>
+        <Row label={t('settings.general.closeToTray')} hint={t('settings.general.closeToTrayHint')}>
+          <Switch label={t('settings.general.closeToTray')} checked={g.closeToTray} onChange={(v) => set((x) => (x.general.closeToTray = v))} />
+        </Row>
+        <Row label={t('settings.general.notifyDone')}>
+          <Switch label={t('settings.general.notifyDone')} checked={g.notifyDone} onChange={(v) => set((x) => (x.general.notifyDone = v))} />
+        </Row>
+        <Row label={t('settings.general.notifyFailed')} hint={t('settings.general.notifyHint')}>
+          <Switch label={t('settings.general.notifyFailed')} checked={g.notifyFailed} onChange={(v) => set((x) => (x.general.notifyFailed = v))} />
+        </Row>
+      </div>
+      <div className="set-group">
+        <Row label={t('settings.general.shortcutShow')} hint={t('settings.general.shortcutHint')}>
+          <ShortcutInput label={t('settings.general.shortcutShow')} platform={platform} value={g.shortcutShow} onChange={shortcut('shortcutShow', g.shortcutNew)} />
+        </Row>
+        <Row label={t('settings.general.shortcutNew')}>
+          <ShortcutInput label={t('settings.general.shortcutNew')} platform={platform} value={g.shortcutNew} onChange={shortcut('shortcutNew', g.shortcutShow)} />
         </Row>
       </div>
       <div className="set-group">
@@ -209,6 +246,13 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
       <div className="set-group">
         <Row label={t('settings.general.version')}>
           <span className="muted">Omni Download {version}</span>
+          <button type="button" className="btn outline" disabled={checking || !isTauri()} onClick={() => void check()}>
+            <Icon name="refresh" />
+            {checking ? t('update.checking') : t('update.check')}
+          </button>
+        </Row>
+        <Row label={t('settings.general.checkUpdates')} hint={t('settings.general.checkUpdatesHint')}>
+          <Switch label={t('settings.general.checkUpdates')} checked={g.checkUpdates} onChange={(v) => set((x) => (x.general.checkUpdates = v))} />
         </Row>
         <Row label={t('settings.general.logs')} hint={<span className="mono">{logDir}</span>}>
           <button type="button" className="btn outline" disabled={!logDir || !isTauri()} onClick={() => void run(() => api.openFolder(logDir))}>

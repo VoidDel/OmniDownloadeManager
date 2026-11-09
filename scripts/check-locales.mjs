@@ -1,5 +1,6 @@
 // Checks the UI translations (locales/<lang>/app.json): every language has exactly the keys of
-// zh-CN (the source), with the same ICU placeholders, and every key the code uses exists.
+// zh-CN (the source), with the same ICU placeholders, and every key the code uses exists (the
+// window's, and the app's own for the notification-area menu and notifications).
 //
 //   node scripts/check-locales.mjs
 
@@ -59,6 +60,18 @@ for (const f of files) {
   const text = readFileSync(f, 'utf8');
   for (const m of text.matchAll(/\btr?\(\s*'([a-zA-Z][\w.]*)'/g)) {
     if (!source.has(m[1]) && ![...source.keys()].some((k) => k.startsWith(`${m[1]}.`))) report(`${f.slice(root.length)}: unknown key ${m[1]}`);
+  }
+}
+
+// The app (src-tauri/src/i18n.rs) names keys as string literals: "tray.show", "notify.done".
+const rust = walk(join(root, 'apps/desktop/src-tauri/src')).filter((f) => f.endsWith('.rs'));
+const NAMESPACES = [...new Set([...source.keys()].map((k) => k.split('.')[0]))].join('|');
+for (const f of rust) {
+  const text = readFileSync(f, 'utf8');
+  for (const m of text.matchAll(new RegExp(`"((?:${NAMESPACES})\\.[a-zA-Z][\\w.]*)"`, 'g'))) {
+    // File names look alike ("settings.toml").
+    if (/\.(toml|json|db|log|txt)$/.test(m[1])) continue;
+    if (!source.has(m[1])) report(`${f.slice(root.length)}: unknown key ${m[1]}`);
   }
 }
 

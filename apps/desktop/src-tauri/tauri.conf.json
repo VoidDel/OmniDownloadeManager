@@ -27,9 +27,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
     "publisher": "Omni Download Contributors",
     "copyright": "Copyright (c) 2026 Omni Download Contributors. MIT License.",
     "category": "Utility",
@@ -50,7 +47,8 @@
           "SimpChinese",
           "English"
         ],
-        "displayLanguageSelector": true
+        "displayLanguageSelector": true,
+        "installerHooks": "windows/hooks.nsh"
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
@@ -74,6 +72,15 @@
         "schemes": [
           "magnet"
         ]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE3Q0M5MkY0QjU3Q0Q5ODYKUldTRzJYeTE5SkxNRjRueC9CcG5YYndhVFFlc0llY0hiSGJEOG9NTWJ0QmRKYXpDeDZHWXBqUFEK",
+      "endpoints": [
+        "https://github.com/VoidDel/OmniDownloadeManager/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

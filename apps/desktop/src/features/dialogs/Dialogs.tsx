@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Modal } from '../../components/ui';
+import { UpdateDialog } from './UpdateDialog';
+import { Welcome } from './Welcome';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { useApp } from '../../store/app';
@@ -101,5 +103,9 @@ export function Dialogs() {
       return <PurgeDialog ids={dialog.ids} />;
     case 'speed':
       return <SpeedDialog />;
+    case 'update':
+      return <UpdateDialog />;
+    case 'welcome':
+      return <Welcome />;
   }
 }

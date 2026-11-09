@@ -1,0 +1,95 @@
+# Tagged releases (docs/development-plan.md §7.4): pushing a tag `v<version>` (the version in
+# tauri.conf.json) builds the installers on the three platforms into one draft release:
+#
+#   Windows  NSIS (per user)            macOS  .dmg (Universal) + .app.tar.gz
+#   Linux    .deb, .rpm, AppImage
+#
+# with the Native Messaging host bundled, each update package signed with the minisign key
+# (secret TAURI_SIGNING_PRIVATE_KEY, and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) and
+# latest.json for the in-app updater. Publishing the draft makes it the update.
+# Code signing and notarisation are not part of this yet.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust: x86_64-pc-windows-msvc
+          - os: macos-15
+            target: universal-apple-darwin
+            rust: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rust: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag names the app's version
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} but tauri.conf.json has version $version"
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # omni-ui is a git dependency and the lockfile names it by SSH, which runners have no key
+      # for: fetch it over HTTPS instead, with the OMNI_UI_TOKEN secret while the repo is private.
+      - name: Fetch omni-ui over HTTPS
+        shell: bash
+        env:
+          OMNI_UI_TOKEN: ${{ secrets.OMNI_UI_TOKEN }}
+        run: |
+          base="https://github.com/"
+          if [ -n "$OMNI_UI_TOKEN" ]; then base="https://x-access-token:${OMNI_UI_TOKEN}@github.com/"; fi
+          git config --global url."$base".insteadOf "ssh://git@github.com/"
+          git config --global --add url."$base".insteadOf "git@github.com:"
+      - run: pnpm install --frozen-lockfile
+      - name: Native Messaging host for bundling
+        run: node scripts/sidecar.mjs --target ${{ matrix.target }}
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+          tagName: ${{ github.ref_name }}
+          releaseName: Omni Download ${{ github.ref_name }}
+          releaseBody: See the assets below for Windows, macOS and Linux.
+          releaseDraft: true
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true

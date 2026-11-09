@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter omnidl-desktop tauri dev",
     "build": "pnpm --filter omnidl-desktop tauri build",
+    "bundle": "node scripts/bundle.mjs",
     "lint": "pnpm -r lint",
     "eslint": "pnpm -r eslint",
     "test": "pnpm -r test",

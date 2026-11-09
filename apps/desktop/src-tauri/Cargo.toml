@@ -27,11 +27,20 @@ omnidl-bt.workspace = true
 omnidl-ftp.workspace = true
 # The browser bridge.
 omnidl-ipc = { workspace = true, features = ["tokio"] }
-tauri.workspace = true
+# The notification-area icon, and its "busy" variant drawn at run time.
+tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-dialog.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-single-instance.workspace = true
 tauri-plugin-deep-link.workspace = true
+tauri-plugin-window-state.workspace = true
+tauri-plugin-autostart.workspace = true
+tauri-plugin-global-shortcut.workspace = true
+tauri-plugin-updater.workspace = true
+# The system language, for the notification-area menu and notifications ("auto").
+sys-locale = "0.3"
+# Release dates of updates.
+time = { version = "0.3", features = ["formatting"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -43,7 +52,12 @@ axum.workspace = true
 url.workspace = true
 uuid.workspace = true
 
+# Notifications: WinRT toasts on Windows (clicking one shows the file), the plugin elsewhere.
+[target.'cfg(not(windows))'.dependencies]
+tauri-plugin-notification.workspace = true
+
 [target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.8"
 windows-registry = "0.100"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_LibraryLoader", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
 

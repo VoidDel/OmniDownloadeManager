@@ -90,7 +90,24 @@
     "general": {
       "version": "Version",
       "logs": "Logs",
-      "openFolder": "Open folder"
+      "openFolder": "Open folder",
+      "autostart": "Start with the system",
+      "autostartHint": "Starts in the background, in the notification area",
+      "closeToTray": "Keep running when the window is closed",
+      "closeToTrayHint": "Downloads go on in the background; quit from the icon in the notification area",
+      "notifyDone": "Notify when a download finishes",
+      "notifyFailed": "Notify when a download fails",
+      "notifyHint": "Not while the window is in front",
+      "shortcutShow": "Show or hide the window",
+      "shortcutNew": "New download",
+      "shortcutHint": "Works in any app. Click, then press the keys",
+      "shortcutRecording": "Press the keys…",
+      "shortcutNone": "None",
+      "shortcutClear": "Clear the shortcut",
+      "shortcutTaken": "{keys} is already taken by another app",
+      "checkUpdates": "Check for updates",
+      "checkUpdatesHint": "Once after starting; you choose when to install",
+      "shortcutDuplicate": "Those keys are already set for the other action"
     },
     "download": {
       "folder": "Default download folder",
@@ -532,5 +549,43 @@
     "useBrowser": "Download in browser instead",
     "later": "Download later",
     "start": "Start download"
+  },
+  "tray": {
+    "show": "Show Omni Download",
+    "quit": "Quit"
+  },
+  "notify": {
+    "done": "Download finished",
+    "failed": "Download failed"
+  },
+  "update": {
+    "check": "Check for updates",
+    "checking": "Checking…",
+    "none": "You have the latest version",
+    "failed": "Update failed: {reason}",
+    "available": "Version {version} is available",
+    "show": "View",
+    "title": "Omni Download {version} is available",
+    "current": "You have {version}",
+    "later": "Later",
+    "install": "Update and restart",
+    "hint": "Downloads in progress pause and carry on after the restart",
+    "downloading": "Downloading the update: {done} of {total}",
+    "starting": "Starting the download…",
+    "checkFailed": "Couldn’t check for updates. Try again later."
+  },
+  "welcome": {
+    "title": "Welcome to Omni Download",
+    "intro": "Pick the language and where downloads go. You can change both in Settings later.",
+    "browsersIntro": "With the browser extension, downloads you start in the browser go to Omni Download.",
+    "noBrowsers": "No supported browser found (Chrome, Edge, Firefox, Brave, Chromium).",
+    "lookingForBrowsers": "Looking for browsers…",
+    "getExtension": "Get the extension",
+    "browsersLater": "You can check each browser's connection in Settings later.",
+    "backgroundIntro": "Omni Download can keep downloading in the background, and start with the system to take downloads from the browser at any time.",
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip",
+    "done": "Get started"
   }
 }

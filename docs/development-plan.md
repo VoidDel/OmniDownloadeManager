@@ -1051,11 +1051,11 @@ OmniDownloadManager/
 
 ### Phase 5 — 系统集成与发布工程（2 周）
 
-- [ ] 托盘、开机自启、`--background`、通知、全局快捷键、窗口状态记忆
-- [ ] 自动更新（updater + minisign）
-- [ ] 三平台打包：NSIS、dmg（Universal）、deb / rpm / AppImage；sidecar 打包 host
+- [x] 托盘、开机自启、`--background`、通知、全局快捷键、窗口状态记忆
+- [x] 自动更新（updater + minisign）
+- [x] 三平台打包：NSIS、dmg（Universal）、deb / rpm / AppImage；sidecar 打包 host
 - [ ] 代码签名与 macOS 公证流水线
-- [ ] i18n（zh-CN / en-US），首次启动向导
+- [x] i18n（zh-CN / zh-TW / en-US / ja-JP），首次启动向导
 - [ ] 扩展上架：Chrome Web Store、Edge Add-ons、AMO
 
 **验收**：三平台安装包一键安装可用，更新可从 0.9 升到 1.0，扩展商店审核通过。

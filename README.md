@@ -26,8 +26,18 @@
 ```bash
 pnpm install
 pnpm dev              # 启动开发窗口（Vite 端口 1430）
-pnpm build            # 打包安装程序
+pnpm bundle           # 本平台的安装包（含 omnidl-nm-host），输出在 target/release/bundle
 ```
+
+`pnpm bundle` 与发布用的配置相同（`src-tauri/tauri.release.conf.json`）：Windows 出 NSIS，macOS 出 .app 与 .dmg（`pnpm bundle --target universal-apple-darwin` 为通用版），Linux 出 deb、rpm 与 AppImage。设置了 `TAURI_SIGNING_PRIVATE_KEY`（minisign 私钥的内容或路径）时同时生成签过名的更新包。
+
+### 发布
+
+1. 把 `apps/desktop/src-tauri/tauri.conf.json`、`apps/desktop/package.json` 与 `Cargo.toml` 中的版本改成新版本并提交。
+2. 推送标签 `v<版本>`（如 `v0.2.0`）。Release 工作流在三个平台构建安装包，放进同名的草稿 Release，并生成应用内更新用的 `latest.json`。
+3. 在 GitHub 上检查并发布草稿；发布之后，已安装的应用就能检查到这个版本。
+
+仓库需要两个 Secret：`TAURI_SIGNING_PRIVATE_KEY`（更新签名私钥，对应 `tauri.conf.json` 里的公钥；私钥丢失后旧版本将无法再更新）与 `OMNI_UI_TOKEN`（与 CI 相同）。私钥有密码时再加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。代码签名与 macOS 公证尚未接入。
 
 检查（与 CI 相同）：
 
@@ -78,6 +88,8 @@ OMNIDL_APP=<omnidl-desktop.exe 的路径> pnpm --filter omnidl-extension exec pl
 ```
 
 数据位置：数据库 `omni.db` 与 `settings.toml` 在系统的应用数据目录（Windows 为 `%APPDATA%\app.omnidownload.desktop`），日志按天写在应用日志目录（设置 › 常规 › 日志）。
+
+关闭主窗口默认只是隐藏，下载继续，应用留在通知区域（托盘）；从托盘图标的菜单退出。随系统启动与浏览器拉起时以 `--background` 启动，不显示窗口。
 
 ## 界面与 omni-ui
 

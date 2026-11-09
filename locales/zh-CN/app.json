@@ -90,7 +90,24 @@
     "general": {
       "version": "版本",
       "logs": "日志",
-      "openFolder": "打开文件夹"
+      "openFolder": "打开文件夹",
+      "autostart": "随系统启动",
+      "autostartHint": "在后台启动，只显示在通知区域",
+      "closeToTray": "关闭窗口时最小化到托盘",
+      "closeToTrayHint": "下载在后台继续，从托盘图标的菜单退出",
+      "notifyDone": "下载完成时通知",
+      "notifyFailed": "下载失败时通知",
+      "notifyHint": "窗口在前台时不通知",
+      "shortcutShow": "显示或隐藏主窗口",
+      "shortcutNew": "新建下载",
+      "shortcutHint": "全局快捷键，在其他应用中也有效；点击后按下组合键",
+      "shortcutRecording": "请按下快捷键…",
+      "shortcutNone": "未设置",
+      "shortcutClear": "清除快捷键",
+      "shortcutTaken": "快捷键 {keys} 已被其他应用占用",
+      "checkUpdates": "自动检查更新",
+      "checkUpdatesHint": "启动后检查一次，有新版本时提示，由你决定何时安装",
+      "shortcutDuplicate": "这组快捷键已用于另一项操作"
     },
     "download": {
       "folder": "默认下载文件夹",
@@ -532,5 +549,43 @@
     "useBrowser": "改用浏览器下载",
     "later": "稍后下载",
     "start": "开始下载"
+  },
+  "tray": {
+    "show": "显示主窗口",
+    "quit": "退出"
+  },
+  "notify": {
+    "done": "下载完成",
+    "failed": "下载失败"
+  },
+  "update": {
+    "check": "检查更新",
+    "checking": "正在检查…",
+    "none": "已是最新版本",
+    "failed": "更新失败：{reason}",
+    "available": "新版本 {version} 可用",
+    "show": "查看",
+    "title": "Omni Download {version} 可用",
+    "current": "当前版本 {version}",
+    "later": "稍后",
+    "install": "更新并重启",
+    "hint": "进行中的下载会暂停，重启后自动继续",
+    "downloading": "正在下载更新 {done} / {total}",
+    "starting": "正在开始下载…",
+    "checkFailed": "无法检查更新，请稍后再试"
+  },
+  "welcome": {
+    "title": "欢迎使用 Omni Download",
+    "intro": "先选好界面语言和下载位置，之后都可以在设置里修改。",
+    "browsersIntro": "装上浏览器扩展后，在浏览器里开始的下载会交给 Omni Download。",
+    "noBrowsers": "没有找到支持的浏览器（Chrome、Edge、Firefox、Brave、Chromium）。",
+    "lookingForBrowsers": "正在查找浏览器…",
+    "getExtension": "获取扩展",
+    "browsersLater": "之后也可以在设置里查看各浏览器的连接状态。",
+    "backgroundIntro": "Omni Download 可以在后台继续下载，也可以随系统启动，随时接住浏览器交来的下载。",
+    "back": "上一步",
+    "next": "下一步",
+    "skip": "跳过",
+    "done": "开始使用"
   }
 }

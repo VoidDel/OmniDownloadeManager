@@ -10,6 +10,7 @@ import { Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import type { BrowserState, Integration, Settings } from '../../lib/types';
+import i18n from '../../i18n';
 import { useApp } from '../../store/app';
 
 function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; col?: boolean }) {
@@ -24,13 +25,16 @@ function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNod
   );
 }
 
+/** A browser's state for people: [class, text]. Also in the first-run guide. */
+export function browserState(b: BrowserState, seen?: number): [string, string] {
+  if (b.ours) return ['ok', seen ? i18n.t('settings.browser.state.connected', { when: fmt.when(seen) }) : i18n.t('settings.browser.state.ready')];
+  if (b.registered) return ['warn', i18n.t('settings.browser.state.otherInstall')];
+  if (b.detected) return ['warn', i18n.t('settings.browser.state.unregistered')];
+  return ['off', i18n.t('settings.browser.state.notInstalled')];
+}
+
 function BrowserRow({ b, seen }: { b: BrowserState; seen?: number }) {
-  const { t } = useTranslation();
-  let state: [string, string];
-  if (b.ours) state = ['ok', seen ? t('settings.browser.state.connected', { when: fmt.when(seen) }) : t('settings.browser.state.ready')];
-  else if (b.registered) state = ['warn', t('settings.browser.state.otherInstall')];
-  else if (b.detected) state = ['warn', t('settings.browser.state.unregistered')];
-  else state = ['off', t('settings.browser.state.notInstalled')];
+  const state = browserState(b, seen);
   return (
     <Row label={b.name}>
       <span className={`bstate ${state[0]}`}>

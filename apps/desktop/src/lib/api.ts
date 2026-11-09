@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions } from './types';
+import type { AppError, Bootstrap, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -20,6 +20,13 @@ export const api = {
   listTasks: () => invoke<Task[]>('task_list'),
   setSettings: (settings: Settings) => invoke<Settings>('settings_set', { settings }),
   setSpeedLimit: (limit: number | null) => invoke<Settings>('speed_limit_set', { limit }),
+  /** Starts with the system (or not); resolves to what the system now has. */
+  setAutostart: (enabled: boolean) => invoke<boolean>('autostart_set', { enabled }),
+  updateCheck: () => invoke<UpdateInfo | null>('update_check'),
+  /** Downloads and installs the update found by the last check, then restarts the app. */
+  updateInstall: () => invoke<void>('update_install'),
+  /** The extension's store page for a browser (or how to install it). */
+  extensionOpen: (browser: string) => invoke<void>('extension_open', { browser }),
 
   probe: (url: string, options: TaskOptions) => invoke<ProbeInfo>('task_probe', { url, options }),
   add: (items: NewTask[]) => invoke<Task[]>('task_add', { items }),
@@ -54,8 +61,10 @@ export interface AppEvents {
   newTask: (p: Prefill) => void;
   /** An extension got in touch for the first time since the app started. */
   browserSeen: (seen: [string, number][]) => void;
-  /** The backend changed the settings (a site added to "don't ask again"). */
+  /** The backend changed the settings (a site added to "don't ask again", the tray's limit). */
   settingsChanged: (s: Settings) => void;
+  /** An update package downloading. */
+  updateProgress: (p: UpdateProgress) => void;
 }
 
 export async function listenApp(h: AppEvents): Promise<UnlistenFn> {
@@ -63,6 +72,7 @@ export async function listenApp(h: AppEvents): Promise<UnlistenFn> {
     listen<Prefill>('app:new-task', (e) => h.newTask(e.payload)),
     listen<[string, number][]>('browser:seen', (e) => h.browserSeen(e.payload)),
     listen<Settings>('settings:changed', (e) => h.settingsChanged(e.payload)),
+    listen<UpdateProgress>('update:progress', (e) => h.updateProgress(e.payload)),
   ]);
   return () => off.forEach((f) => f());
 }

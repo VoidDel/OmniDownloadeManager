@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     /// UI language: `auto` (the system's) or `zh-CN`, `zh-TW`, `en-US`, `ja-JP`.
     pub language: String,
+    pub general: General,
     pub appearance: Appearance,
     /// Where new downloads go; empty: the system's Downloads folder.
     pub download_dir: String,
@@ -22,10 +23,46 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             language: "auto".into(),
+            general: General::default(),
             appearance: Appearance::default(),
             download_dir: String::new(),
             engine: EngineConfig::default(),
             browser: BrowserSettings::default(),
+        }
+    }
+}
+
+/// Running in the background, notifications, shortcuts and updates (docs/development-plan.md
+/// §6.5, §7.3). Starting with the system is the system's own setting (`autostart_set`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct General {
+    /// Closing the main window hides it (the app keeps downloading, from the notification area)
+    /// instead of quitting.
+    pub close_to_tray: bool,
+    /// A notification when a download finishes, and when one fails.
+    pub notify_done: bool,
+    pub notify_failed: bool,
+    /// Global shortcuts as accelerators (`CommandOrControl+Alt+D`); empty: none. Showing (or
+    /// hiding) the main window, and a new download.
+    pub shortcut_show: String,
+    pub shortcut_new: String,
+    /// Look for a new version a little after starting.
+    pub check_updates: bool,
+    /// The first-run guide has been through (or skipped).
+    pub onboarded: bool,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            close_to_tray: true,
+            notify_done: true,
+            notify_failed: true,
+            shortcut_show: String::new(),
+            shortcut_new: String::new(),
+            check_updates: true,
+            onboarded: false,
         }
     }
 }
@@ -103,7 +140,15 @@ impl Settings {
             }
         };
         match toml::from_str::<Self>(&text) {
-            Ok(s) => s.normalized(),
+            Ok(mut s) => {
+                // Settings from before the first-run guide existed: this is not a first run.
+                let guided = toml::from_str::<toml::Table>(&text)
+                    .is_ok_and(|t| t.get("general").and_then(|g| g.get("onboarded")).is_some());
+                if !guided {
+                    s.general.onboarded = true;
+                }
+                s.normalized()
+            }
             Err(e) => {
                 tracing::warn!("{}: {e}; using defaults", path.display());
                 Self::default()
@@ -139,6 +184,13 @@ impl Settings {
             && a.accent[1..].chars().all(|c| c.is_ascii_hexdigit());
         if !(hex || matches!(a.accent.as_str(), "theme" | "system")) {
             a.accent = "theme".into();
+        }
+        let g = &mut self.general;
+        for s in [&mut g.shortcut_show, &mut g.shortcut_new] {
+            *s = s.trim().to_owned();
+            if !s.is_empty() && crate::shortcuts::parse(s).is_none() {
+                s.clear();
+            }
         }
         if !matches!(
             self.language.as_str(),
@@ -185,8 +237,19 @@ mod tests {
         .unwrap();
         let s = Settings::load(&path);
         assert_eq!(s.appearance.mode, "system");
+        // Written before the first-run guide existed: not a first run.
+        assert!(s.general.onboarded);
         assert_eq!(s.engine.connections, 64);
         assert_eq!(s.engine.max_concurrent, 1);
+        std::fs::write(
+            &path,
+            "[general]\nonboarded = false\nshortcutShow = \"Ctrl+Nope+Q\"\nshortcutNew = \"CommandOrControl+Alt+N\"\n",
+        )
+        .unwrap();
+        let s = Settings::load(&path);
+        assert!(!s.general.onboarded);
+        assert_eq!(s.general.shortcut_show, "");
+        assert_eq!(s.general.shortcut_new, "CommandOrControl+Alt+N");
         std::fs::write(&path, "not toml [").unwrap();
         assert_eq!(Settings::load(&path), Settings::default());
     }

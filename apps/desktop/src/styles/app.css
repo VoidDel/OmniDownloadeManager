@@ -253,3 +253,30 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .trackers { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--fg-secondary); }
 .trackers li { word-break: break-all; }
 .set-port { width: 96px; font-variant-numeric: tabular-nums; }
+
+/* Global shortcut recorder (settings). */
+.shortcut { display: inline-flex; align-items: center; gap: 4px; }
+/* Looks like a text field (omni-ui styles only real inputs as one). */
+.field-look { height: var(--ctrl-h); padding: 0 10px; border-radius: var(--radius-md); border: 1px solid var(--border-default); background: var(--bg-surface); font-size: .9rem; color: var(--fg-primary); display: inline-flex; align-items: center; min-width: 0; }
+.shortcut-key { min-width: 170px; justify-content: center; font-family: var(--font-mono); font-size: .84rem; cursor: pointer; }
+.shortcut-key:focus-visible, .shortcut-key.rec { outline: 0; color: var(--accent); border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-subtle); }
+
+/* First-run guide. */
+.welcome { display: flex; flex-direction: column; gap: 14px; }
+.welcome .lead { margin: 0; color: var(--fg-secondary); line-height: 1.5; }
+.welcome-path { flex: 1; display: block; line-height: calc(var(--ctrl-h) - 2px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: .84rem; color: var(--fg-secondary); }
+.welcome-browsers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.welcome-browsers li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.welcome-browsers .nm { flex: 1; min-width: 0; font-weight: 600; }
+.welcome-switch { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
+.welcome-switch > span { display: flex; flex-direction: column; gap: 2px; }
+.welcome-switch small { color: var(--fg-secondary); }
+.welcome-dots { display: inline-flex; gap: 6px; align-self: center; }
+.welcome-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong, var(--fg-muted)); }
+.welcome-dots i.on { background: var(--accent); }
+
+/* Update dialog. */
+.update { display: flex; flex-direction: column; gap: 12px; }
+.update p { margin: 0; }
+.update-notes { max-height: 220px; overflow: auto; white-space: pre-wrap; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-subtle); font-size: .88rem; line-height: 1.5; }
+.update-progress { display: flex; flex-direction: column; gap: 6px; }

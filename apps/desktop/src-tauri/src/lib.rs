@@ -1,17 +1,23 @@
 //! The Omni Download desktop app (Tauri 2): the main window, the task manager behind its
 //! commands (HTTP, FTP and BitTorrent engines), the stream of task events to the window, the browser
 //! bridge (local pipe for the Native Messaging host, HTTP fallback, quick-download window), and
-//! magnet links and `.torrent` files from the system. The tray arrives with Phase 5
-//! (docs/development-plan.md §10).
+//! magnet links and `.torrent` files from the system; the notification-area icon, notifications,
+//! starting with the system, global shortcuts, window placement and updates
+//! (docs/development-plan.md §7.3–7.4).
 
 mod browser;
 mod commands;
 mod events;
+mod i18n;
 mod links;
 mod material;
+mod notify;
 mod secrets;
 mod settings;
+mod shortcuts;
 mod state;
+mod tray;
+mod update;
 #[cfg(windows)]
 mod win_icon;
 
@@ -50,8 +56,30 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // The main window comes back where it was; quick-download windows open centred.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["quick-*"])
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
+        // Started with the system: in the background, in the notification area.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--background"]),
+        ))
+        .plugin(shortcuts::plugin())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(update::Pending::default())
         .setup(|app| {
             let handle = app.handle();
+            // Windows shows toasts itself (clicking one shows the file, see `notify`).
+            #[cfg(not(windows))]
+            handle.plugin(tauri_plugin_notification::init())?;
             let paths = handle.path();
             let data_dir = paths.app_data_dir()?;
             let config_dir = paths.app_config_dir()?;
@@ -129,6 +157,12 @@ pub fn run() {
                 });
             }
             main_window(handle)?;
+            tray::sync(handle);
+            if let Err(keys) =
+                shortcuts::apply(handle, &handle.state::<AppState>().settings().general)
+            {
+                tracing::warn!("global shortcut {keys} is taken by another app");
+            }
             browser::start(handle);
             Ok(())
         })
@@ -137,6 +171,10 @@ pub fn run() {
             commands::task_list,
             commands::settings_set,
             commands::speed_limit_set,
+            commands::autostart_set,
+            commands::extension_open,
+            update::update_check,
+            update::update_install,
             commands::task_probe,
             commands::task_add,
             commands::task_pause,
@@ -162,6 +200,19 @@ pub fn run() {
             browser::quick_resolve,
         ])
         .on_window_event(|window, event| {
+            // Closed to the notification area: the window hides, downloads go on; the icon's
+            // menu quits.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == "main"
+                && tray::shown(window.app_handle())
+                && window
+                    .try_state::<AppState>()
+                    .is_some_and(|s| s.settings().general.close_to_tray)
+            {
+                api.prevent_close();
+                let _ = window.hide();
+                return;
+            }
             // Moved to a display with another scale: icons for the new DPI.
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
                 window_icons(window);
@@ -182,10 +233,12 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building Omni Download")
-        .run(|app, event| {
-            if let RunEvent::ExitRequested { api, .. } = event {
-                quit(app, &api);
-            }
+        .run(|app, event| match event {
+            RunEvent::ExitRequested { api, .. } => quit(app, &api),
+            // macOS: the Dock icon clicked while the window is hidden.
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => focus_main(app),
+            _ => {}
         });
 }
 

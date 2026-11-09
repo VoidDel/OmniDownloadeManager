@@ -2,13 +2,15 @@
 // progress tick re-renders only the rows whose numbers changed. Lists (filtered, sorted) are
 // derived where they are shown.
 
+import { isTauri } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Platform, ToastItem, ToastTone } from 'omni-ui';
 import { create } from 'zustand';
 
 import { api, asError, listenApp, listenTasks } from '../lib/api';
 import i18n, { initI18n, resolveLang, setLanguage } from '../i18n';
 import { applyTheme, setSystemLook } from '../lib/theme';
-import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus } from '../lib/types';
+import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus, UpdateInfo, UpdateProgress } from '../lib/types';
 import { errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
@@ -23,10 +25,15 @@ export type Dialog =
   | { kind: 'purge'; ids: string[] }
   /** A custom global speed limit. */
   | { kind: 'speed' }
+  /** A newer version: what is new, then installing it. */
+  | { kind: 'update' }
+  /** The first-run guide. */
+  | { kind: 'welcome' }
   | null;
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
+  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true },
   appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
   engine: {
@@ -83,6 +90,11 @@ interface State {
   materialSupported: boolean;
   /** The system's accent colour, when known. */
   systemAccent: string | null;
+  /** The app starts with the system. */
+  autostart: boolean;
+  /** The newer version found, and its package downloading (null before and after). */
+  update: UpdateInfo | null;
+  updateProgress: UpdateProgress | null;
   /** Finished downloads whose file was deleted or moved (checked at start and when the window
    *  comes back to the front). */
   missing: Record<string, true>;
@@ -106,6 +118,9 @@ interface State {
   dismiss: (id: number) => void;
   /** Runs a command; a failure becomes an error toast. Resolves to undefined on failure. */
   run: <T>(op: () => Promise<T>) => Promise<T | undefined>;
+  setAutostart: (enabled: boolean) => Promise<void>;
+  /** Looks for a newer version; `manual` (the settings button) also says when there is none. */
+  checkUpdate: (manual: boolean) => Promise<void>;
   /** Looks for finished downloads whose file is gone. */
   checkFiles: () => Promise<void>;
   /** Opens a finished download; a file that is gone is marked and offered for downloading again. */
@@ -175,6 +190,9 @@ export const useApp = create<State>((set, get) => ({
   seenBrowsers: [],
   materialSupported: false,
   systemAccent: null,
+  autostart: false,
+  update: null,
+  updateProgress: null,
   missing: {},
 
   boot: async (platform) => {
@@ -185,6 +203,7 @@ export const useApp = create<State>((set, get) => ({
         newTask: (p) => set({ dialog: { kind: 'new', ...p }, view: 'tasks' }),
         browserSeen: (seenBrowsers) => set({ seenBrowsers }),
         settingsChanged: (settings) => set({ settings }),
+        updateProgress: (updateProgress) => set({ updateProgress }),
       });
       // Listen first: nothing that happens while the list loads is missed.
       await listenTasks({
@@ -248,12 +267,19 @@ export const useApp = create<State>((set, get) => ({
         seenBrowsers: boot.seenBrowsers,
         materialSupported: boot.materialSupported,
         systemAccent: boot.systemAccent,
+        autostart: boot.autostart,
       });
       setSystemLook(boot);
       // Opened with magnet links or .torrent files.
       if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
       background = boot.background;
       void get().checkFiles();
+      if (isTauri() && getCurrentWindow().label === 'main') {
+        // First run: the guide (language, folder, browsers) before anything else.
+        if (!boot.settings.general.onboarded && !get().dialog) set({ dialog: { kind: 'welcome' } });
+        // Not while the app is starting up: a little later, and quietly unless there is news.
+        if (boot.settings.general.checkUpdates) setTimeout(() => void get().checkUpdate(false), 8000);
+      }
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.
       console.error('bootstrap', e);
@@ -290,7 +316,8 @@ export const useApp = create<State>((set, get) => ({
   toast: (tone, text, action) => {
     const id = ++toastId;
     set((s) => ({ toasts: [...s.toasts.slice(-3), { id, tone, text, action }] }));
-    setTimeout(() => get().dismiss(id), tone === 'error' ? 8000 : 4000);
+    // Errors, and anything with a button to press, stay longer.
+    setTimeout(() => get().dismiss(id), tone === 'error' || action ? 8000 : 4000);
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -302,6 +329,34 @@ export const useApp = create<State>((set, get) => ({
       get().toast('error', errorText(err));
       console.error(err);
       return undefined;
+    }
+  },
+
+  setAutostart: async (enabled) => {
+    const now = await get().run(() => api.setAutostart(enabled));
+    if (now !== undefined) set({ autostart: now });
+  },
+
+  checkUpdate: async (manual) => {
+    let found: UpdateInfo | null;
+    try {
+      found = await api.updateCheck();
+    } catch (e) {
+      // Offline, or no release yet: only an asked-for check says so (the details in the log).
+      console.warn('update check', asError(e).message);
+      if (manual) get().toast('error', i18n.t('update.checkFailed'));
+      return;
+    }
+    set({ update: found });
+    if (!found) {
+      if (manual) get().toast('success', i18n.t('update.none'));
+    } else if (manual) {
+      set({ dialog: { kind: 'update' } });
+    } else {
+      get().toast('info', i18n.t('update.available', { version: found.version }), {
+        label: i18n.t('update.show'),
+        run: () => set({ dialog: { kind: 'update' } }),
+      });
     }
   },
 

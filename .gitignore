@@ -12,6 +12,8 @@ coverage/
 
 # Tauri
 apps/desktop/src-tauri/gen/schemas/
+# The Native Messaging host built for bundling (scripts/sidecar.mjs).
+apps/desktop/src-tauri/binaries/
 
 # OS / editor
 .DS_Store

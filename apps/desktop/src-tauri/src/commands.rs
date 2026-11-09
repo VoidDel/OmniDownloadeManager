@@ -8,10 +8,11 @@ use omnidl_core::{
     TaskStatus,
 };
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{settings::Settings, state::AppState};
+use crate::{i18n, settings::Settings, state::AppState};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +34,8 @@ pub struct Bootstrap {
     /// Magnet links and `.torrent` files the app was started with: the new-download dialog
     /// opens with them.
     open_links: Vec<String>,
+    /// The app starts with the system (the system's setting, not ours).
+    autostart: bool,
 }
 
 #[tauri::command]
@@ -59,6 +62,11 @@ pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -
         material_supported: crate::material::supported(),
         system_accent: crate::material::system_accent(),
         open_links,
+        autostart: window
+            .app_handle()
+            .autolaunch()
+            .is_enabled()
+            .unwrap_or(false),
     }
 }
 
@@ -69,11 +77,14 @@ pub fn task_list(state: State<'_, AppState>) -> Vec<Task> {
 }
 
 #[tauri::command]
-pub async fn settings_set(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: Settings,
-) -> Result<Settings> {
+pub async fn settings_set(app: AppHandle, settings: Settings) -> Result<Settings> {
+    save_settings(&app, settings).await
+}
+
+/// Saves the settings and applies them: engine, window material, global shortcuts, the
+/// notification-area menu. Shortcuts another app holds are not saved (the error says which).
+pub async fn save_settings(app: &AppHandle, settings: Settings) -> Result<Settings> {
+    let state = app.state::<AppState>();
     let mut settings = settings.normalized();
     let before = state.settings();
     // The HTTP channel's switch, port and token change through its own commands only.
@@ -81,6 +92,18 @@ pub async fn settings_set(
     settings.browser.http_bridge = current.http_bridge;
     settings.browser.http_port = current.http_port;
     settings.browser.http_token = current.http_token;
+    let (g, b) = (&settings.general, &before.general);
+    if (&g.shortcut_show, &g.shortcut_new) != (&b.shortcut_show, &b.shortcut_new)
+        && let Err(keys) = crate::shortcuts::apply(app, g)
+    {
+        let _ = crate::shortcuts::apply(app, b);
+        let l = i18n::resolve(&settings.language);
+        return Err(Error::invalid(i18n::tr(
+            l,
+            "settings.general.shortcutTaken",
+            &[("keys", &keys)],
+        )));
+    }
     settings
         .save(&state.settings_path)
         .map_err(|e| Error::io(&e, state.settings_path.display()))?;
@@ -92,21 +115,37 @@ pub async fn settings_set(
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     let a = (&settings.appearance, &before.appearance);
     if a.0.material != a.1.material || a.0.material_kind != a.1.material_kind {
-        crate::material::apply(&app, &settings);
+        crate::material::apply(app, &settings);
+    }
+    // The menu is in the UI language and checks the speed limit.
+    if settings.language != before.language
+        || settings.engine.speed_limit != before.engine.speed_limit
+    {
+        crate::tray::sync(app);
     }
     Ok(settings)
 }
 
+/// Starts the app with the system (in the background: `--background`), or stops doing so; the
+/// state the system now has.
+#[tauri::command]
+pub fn autostart_set(app: AppHandle, enabled: bool) -> Result<bool> {
+    let launcher = app.autolaunch();
+    let r = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    r.map_err(Error::internal)?;
+    Ok(launcher.is_enabled().unwrap_or(enabled))
+}
+
 /// The global download limit in bytes per second; `null` is unlimited. Saved with the settings.
 #[tauri::command]
-pub async fn speed_limit_set(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    limit: Option<u64>,
-) -> Result<Settings> {
-    let mut settings = state.settings();
+pub async fn speed_limit_set(app: AppHandle, limit: Option<u64>) -> Result<Settings> {
+    let mut settings = app.state::<AppState>().settings();
     settings.engine.speed_limit = limit.filter(|&l| l > 0);
-    settings_set(app, state, settings).await
+    save_settings(&app, settings).await
 }
 
 #[tauri::command]
@@ -215,7 +254,11 @@ pub fn task_missing(state: State<'_, AppState>) -> Vec<TaskId> {
 /// Shows a download in the file manager: the file once it exists, else its folder.
 #[tauri::command]
 pub fn task_reveal(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Result<()> {
-    let task = find(&state, id)?;
+    reveal(&app, &find(&state, id)?)
+}
+
+/// Shows a download in the file manager (also clicking its notification).
+pub fn reveal(app: &AppHandle, task: &Task) -> Result<()> {
     // A torrent writes its files in place, without a partial file.
     let done = matches!(task.status, TaskStatus::Completed | TaskStatus::Seeding);
     let file = if done || task.kind == TaskKind::Torrent {
@@ -230,6 +273,22 @@ pub fn task_reveal(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Re
         opener.open_path(task.save_dir.clone(), None::<&str>)
     };
     r.map_err(|e| Error::internal(format!("{}: {e}", file.display())))
+}
+
+/// Where to get the browser extension: its store page once it is listed there, until then how to
+/// install it by hand.
+#[tauri::command]
+pub fn extension_open(app: AppHandle, browser: String) -> Result<()> {
+    const GUIDE: &str = "https://github.com/VoidDel/OmniDownloadeManager#浏览器扩展";
+    /// (browser id, store page), filled in as the stores list the extension.
+    const STORES: [(&str, &str); 0] = [];
+    let url = STORES
+        .iter()
+        .find(|(b, _)| *b == browser)
+        .map_or(GUIDE, |(_, url)| url);
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(Error::internal)
 }
 
 /// Opens a folder (the download folder from the settings page).

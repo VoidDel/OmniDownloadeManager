@@ -216,6 +216,19 @@ export interface BrowserSettings {
 export interface Settings {
   /** `auto` (the system's) or a supported language tag. */
   language: string;
+  general: {
+    /** Closing the main window hides it in the notification area instead of quitting. */
+    closeToTray: boolean;
+    notifyDone: boolean;
+    notifyFailed: boolean;
+    /** Global shortcuts (accelerators such as `CommandOrControl+Alt+D`); empty: none. */
+    shortcutShow: string;
+    shortcutNew: string;
+    /** Look for a new version a little after starting. */
+    checkUpdates: boolean;
+    /** The first-run guide has been through. */
+    onboarded: boolean;
+  };
   appearance: {
     mode: ThemeMode;
     lightTheme: string;
@@ -249,6 +262,21 @@ export interface Bootstrap {
   materialSupported: boolean;
   /** The system's accent colour, when known. */
   systemAccent: string | null;
+  /** The app starts with the system. */
+  autostart: boolean;
+}
+
+/** A newer version (src-tauri/src/update.rs). */
+export interface UpdateInfo {
+  version: string;
+  /** Release notes, possibly empty. */
+  notes: string;
+  date: string | null;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
 }
 
 export interface MagnetHandler {
