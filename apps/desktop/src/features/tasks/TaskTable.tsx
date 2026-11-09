@@ -30,13 +30,16 @@ const PROTO: Record<Task['kind'], string> = { http: 'HTTP', ftp: 'FTP', torrent:
 
 /** The menu for the selected tasks. */
 export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[] {
-  const { run, openDialog } = useApp.getState();
+  const { run, openDialog, openDetail } = useApp.getState();
   const list = ids.map((id) => tasks[id]).filter(Boolean);
   if (!list.length) return [];
   const one = list.length === 1 ? list[0] : null;
+  // Shows the details panel for the task (once, unless it is pinned).
+  const details: MenuItem[] = one ? [{ label: '详情', icon: 'info', run: () => openDetail(one.id) }] : [];
   if (list.every((t) => t.status === 'removed')) {
     return [
       { label: '还原', icon: 'refresh', run: () => void run(() => api.restore(ids)) },
+      ...details,
       { label: '彻底删除…', icon: 'trash', danger: true, run: () => openDialog({ kind: 'purge', ids }) },
     ];
   }
@@ -52,6 +55,7 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   if (changed.length) items.push({ label: '重新下载', icon: 'refresh', run: () => void run(() => api.restart(changed)) });
   items.push(
     { separator: true },
+    ...details,
     { label: '打开文件夹', icon: 'folderOpen', disabled: !one, run: () => one && void run(() => api.reveal(one.id)) },
     {
       label: '复制链接',

@@ -11,6 +11,8 @@ mod links;
 mod secrets;
 mod settings;
 mod state;
+#[cfg(windows)]
+mod win_icon;
 
 use std::{
     path::Path,
@@ -150,7 +152,6 @@ pub fn run() {
             commands::task_open,
             commands::task_reveal,
             commands::folder_open,
-            commands::disk_free,
             browser::browser_status,
             browser::browser_repair,
             browser::http_bridge_set,
@@ -159,6 +160,16 @@ pub fn run() {
             browser::quick_resolve,
         ])
         .on_window_event(|window, event| {
+            // Moved to a display with another scale: icons for the new DPI.
+            if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
+                window_icons(window);
+            }
+            #[cfg(windows)]
+            if let tauri::WindowEvent::Destroyed = event
+                && let Ok(h) = window.hwnd()
+            {
+                win_icon::forget(h.0 as isize);
+            }
             // A quick-download window closed without an answer cancels its download.
             if let tauri::WindowEvent::Destroyed = event
                 && window.label().starts_with("quick-")
@@ -213,7 +224,19 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .traffic_light_position(tauri::LogicalPosition::new(13.0, 22.5));
     #[cfg(not(target_os = "macos"))]
     let b = b.decorations(false);
-    b.build()
+    let w = b.build()?;
+    window_icons(&w.as_ref().window());
+    Ok(w)
+}
+
+/// Windows: taskbar and title icons at the window's DPI (see `win_icon`).
+pub(crate) fn window_icons(window: &tauri::Window) {
+    #[cfg(windows)]
+    if let Ok(h) = window.hwnd() {
+        win_icon::apply(h.0 as isize);
+    }
+    #[cfg(not(windows))]
+    let _ = window;
 }
 
 pub(crate) fn focus_main(app: &AppHandle) {

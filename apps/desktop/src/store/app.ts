@@ -68,7 +68,11 @@ interface State {
   selection: string[];
   /** Where a shift-click range starts. */
   anchor: string | null;
-  detailOpen: boolean;
+  /** The details panel opens for every selected task (the switch in its header). */
+  detailPinned: boolean;
+  /** The task the panel was opened for once (command bar, menu); selecting anything else (or
+   *  clicking empty space) closes it for good. */
+  detailFor: string | null;
   dialog: Dialog;
   toasts: ToastItem[];
   /** Browsers whose extension has been in touch since the app started: [name, Unix ms]. */
@@ -82,7 +86,11 @@ interface State {
   setFilter: (f: Filter) => void;
   setSort: (key: SortKey) => void;
   select: (ids: string[], anchor?: string | null) => void;
-  setDetailOpen: (open: boolean) => void;
+  /** Shows the panel for task `id` this once. */
+  openDetail: (id: string) => void;
+  /** Hides the panel; pinned, it also stops opening for every task (or it would come straight back). */
+  closeDetail: () => void;
+  setDetailPinned: (pinned: boolean) => void;
   openDialog: (d: Dialog) => void;
   closeDialog: () => void;
   toast: (tone: ToastTone, text: string, action?: ToastItem['action']) => void;
@@ -105,6 +113,31 @@ export function speedHistory(id: string): readonly number[] {
 
 let toastId = 0;
 
+// The panel switch is this viewer's preference: kept in the page's storage, which may be absent.
+const PINNED_KEY = 'omnidl.detailPinned';
+
+function readPinned(): boolean {
+  try {
+    return localStorage.getItem(PINNED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function savePinned(pinned: boolean) {
+  try {
+    localStorage.setItem(PINNED_KEY, pinned ? '1' : '0');
+  } catch {
+    // Not remembered; it still applies now.
+  }
+}
+
+/** The task the details panel shows, if it is shown. */
+export function detailTask(s: Pick<State, 'selection' | 'detailPinned' | 'detailFor'>): string | null {
+  const single = s.selection.length === 1 ? s.selection[0] : null;
+  return single && (s.detailPinned || s.detailFor === single) ? single : null;
+}
+
 const withTask = (tasks: Record<string, Task>, t: Task) => ({ ...tasks, [t.id]: t });
 
 export const useApp = create<State>((set, get) => ({
@@ -122,7 +155,8 @@ export const useApp = create<State>((set, get) => ({
   sort: { key: 'added', desc: false },
   selection: [],
   anchor: null,
-  detailOpen: true,
+  detailPinned: readPinned(),
+  detailFor: null,
   dialog: null,
   toasts: [],
   seenBrowsers: [],
@@ -207,8 +241,22 @@ export const useApp = create<State>((set, get) => ({
   setSettingsTab: (settingsTab) => set({ settingsTab, view: 'settings' }),
   setFilter: (filter) => set({ filter, view: 'tasks', selection: [], anchor: null }),
   setSort: (key) => set((s) => ({ sort: { key, desc: s.sort.key === key ? !s.sort.desc : key === 'speed' || key === 'size' } })),
-  select: (selection, anchor) => set((s) => ({ selection, anchor: anchor === undefined ? s.anchor : anchor })),
-  setDetailOpen: (detailOpen) => set({ detailOpen }),
+  select: (selection, anchor) =>
+    set((s) => ({
+      selection,
+      anchor: anchor === undefined ? s.anchor : anchor,
+      detailFor: selection.length === 1 && selection[0] === s.detailFor ? s.detailFor : null,
+    })),
+  openDetail: (detailFor) => set({ detailFor }),
+  closeDetail: () => {
+    savePinned(false);
+    set({ detailFor: null, detailPinned: false });
+  },
+  setDetailPinned: (detailPinned) => {
+    savePinned(detailPinned);
+    // Unpinned, the panel stays for the task it shows now.
+    set((s) => ({ detailPinned, detailFor: detailPinned ? s.detailFor : (s.selection.length === 1 ? s.selection[0] : null) }));
+  },
   openDialog: (dialog) => set({ dialog }),
   closeDialog: () => set({ dialog: null }),
 

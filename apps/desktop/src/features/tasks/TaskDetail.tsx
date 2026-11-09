@@ -352,7 +352,8 @@ function Primary({ t }: { t: Task }) {
 
 export function TaskDetail({ id }: { id: string }) {
   const t = useApp((s) => s.tasks[id]);
-  const setDetailOpen = useApp((s) => s.setDetailOpen);
+  const pinned = useApp((s) => s.detailPinned);
+  const { closeDetail, setDetailPinned } = useApp.getState();
   const run = useApp((s) => s.run);
   const toast = useApp((s) => s.toast);
   const [tab, setTab] = useState<Tab>('overview');
@@ -378,8 +379,20 @@ export function TaskDetail({ id }: { id: string }) {
     <aside className="detail" aria-label="任务详情">
       <div className="det-top">
         <h2 title={t.fileName}>{t.fileName}</h2>
-        <button type="button" className="iconbtn sm" title="隐藏详情" aria-label="隐藏详情" onClick={() => setDetailOpen(false)}>
-          <Icon name="chevronsRight" />
+        <button type="button" className="iconbtn" title="关闭详情" aria-label="关闭详情" onClick={closeDetail}>
+          <Icon name="x" />
+        </button>
+        {/* The same switch as the command bar's, in the same place: highlighted, the panel opens
+            for every task selected. */}
+        <button
+          type="button"
+          className="iconbtn"
+          aria-pressed={pinned}
+          title={pinned ? '取消固定：选中任务时不再自动显示详情' : '固定详情面板：选中任务时自动显示'}
+          aria-label="固定详情面板"
+          onClick={() => setDetailPinned(!pinned)}
+        >
+          <Icon name="sidebar" />
         </button>
       </div>
       <div className="det-meta">

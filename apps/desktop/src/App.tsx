@@ -13,7 +13,7 @@ import { CommandBar, ResizeEdges, Sidebar, StatusBar, TitleBar } from './feature
 import { TaskDetail } from './features/tasks/TaskDetail';
 import { TaskTable } from './features/tasks/TaskTable';
 import { applyTheme } from './lib/theme';
-import { useApp } from './store/app';
+import { detailTask, useApp } from './store/app';
 
 /** Window-wide shortcuts: Ctrl/⌘+N new download, Ctrl/⌘+, settings, Ctrl/⌘+L the paste box. */
 function useShortcuts() {
@@ -68,8 +68,7 @@ function useTorrentDrop() {
 export function App({ platform }: { platform: Platform }) {
   const view = useApp((s) => s.view);
   const appearance = useApp((s) => s.settings.appearance);
-  const detailOpen = useApp((s) => s.detailOpen);
-  const single = useApp((s) => (s.selection.length === 1 ? s.selection[0] : null));
+  const shown = useApp(detailTask);
   const toasts = useApp((s) => s.toasts);
   const dismiss = useApp((s) => s.dismiss);
   useShortcuts();
@@ -87,10 +86,13 @@ export function App({ platform }: { platform: Platform }) {
       <Sidebar platform={platform} />
       <div className="maincol">
         <TitleBar platform={platform} />
-        {tasks && <CommandBar />}
+        {/* The details panel runs from the title bar down; the command bar is over the list only. */}
         <div className="workarea">
-          <main className="content">{tasks ? <TaskTable /> : <Settings />}</main>
-          {tasks && detailOpen && single && <TaskDetail key={single} id={single} />}
+          <div className="listcol">
+            {tasks && <CommandBar />}
+            <main className="content">{tasks ? <TaskTable /> : <Settings />}</main>
+          </div>
+          {tasks && shown && <TaskDetail key={shown} id={shown} />}
         </div>
         <StatusBar />
       </div>

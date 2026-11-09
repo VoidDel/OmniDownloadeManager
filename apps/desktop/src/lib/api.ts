@@ -37,7 +37,6 @@ export const api = {
   open: (id: string) => invoke<void>('task_open', { id }),
   reveal: (id: string) => invoke<void>('task_reveal', { id }),
   openFolder: (path: string) => invoke<void>('folder_open', { path }),
-  diskFree: (path: string) => invoke<number | null>('disk_free', { path }),
 
   browserStatus: () => invoke<Integration>('browser_status'),
   browserRepair: () => invoke<Integration>('browser_repair'),

@@ -17,7 +17,7 @@ import { hasLink } from '../../lib/links';
 import { isDark } from '../../lib/theme';
 import type { Category, ThemeMode } from '../../lib/types';
 import { CATEGORY_LABEL } from '../../lib/words';
-import { countAll, inFilter, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
+import { countAll, detailTask, inFilter, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
 
 export const FILTERS: readonly { id: Filter; label: string; icon: IconName }[] = [
   { id: 'all', label: '全部任务', icon: 'list' },
@@ -43,7 +43,7 @@ const CATEGORY_ICON: Record<Category, IconName> = {
 };
 
 export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
-  ['general', '常规', 'sliders'],
+  ['general', '常规', 'layout'],
   ['download', '下载', 'download'],
   ['network', '网络', 'globe'],
   ['torrent', 'BT', 'magnet'],
@@ -55,13 +55,15 @@ export function filterLabel(f: Filter): string {
   return FILTERS.find((x) => x.id === f)?.label ?? '';
 }
 
-/** A menu opened from a button, below it. A second press on the button closes it. */
+/** A menu opened from a button, below it (`up`: above it, from the status bar). A second press
+ *  on the button closes it. */
 function useMenu() {
   const [at, setAt] = useState<{ x: number; y: number; anchor: HTMLElement } | null>(null);
-  const toggle = (e: ReactMouseEvent<HTMLElement>, alignEnd = false) => {
+  const toggle = (e: ReactMouseEvent<HTMLElement>, alignEnd = false, up = false) => {
     const anchor = e.currentTarget;
     const r = anchor.getBoundingClientRect();
-    setAt(at ? null : { x: alignEnd ? r.right - 220 : r.left, y: r.bottom + 4, anchor });
+    // Upwards: the menu does not fit below, so it ends just above the button.
+    setAt(at ? null : { x: alignEnd ? r.right - 220 : r.left, y: up ? r.top - 4 : r.bottom + 4, anchor });
   };
   return { at, toggle, close: () => setAt(null) };
 }
@@ -332,7 +334,7 @@ export function Sidebar({ platform }: { platform: Platform }) {
 
 const SPEED_PRESETS = [512 * 1024, 1024 ** 2, 2 * 1024 ** 2, 5 * 1024 ** 2, 10 * 1024 ** 2, 20 * 1024 ** 2];
 
-/** The global download limit: presets and a custom value. */
+/** The global download limit, in the status bar: presets and a custom value. */
 function SpeedLimitMenu() {
   const limit = useApp((s) => s.settings.engine.speedLimit);
   const { run, openDialog } = useApp(useShallow((s) => ({ run: s.run, openDialog: s.openDialog })));
@@ -351,10 +353,18 @@ function SpeedLimitMenu() {
   ];
   return (
     <>
-      <button type="button" className="btn subtle" aria-haspopup="menu" aria-expanded={menu.at !== null} title="全局限速" onClick={(e) => menu.toggle(e, true)}>
+      <button
+        type="button"
+        className="sb-limit"
+        data-on={limit != null}
+        aria-haspopup="menu"
+        aria-expanded={menu.at !== null}
+        title="全局下载限速"
+        onClick={(e) => menu.toggle(e, true, true)}
+      >
         <Icon name="gauge" />
-        <span className="lbl">{limit == null ? '不限速' : `限速 ${fmt.speed(limit)}`}</span>
-        <Icon name="chevronDown" className="chev" />
+        {limit == null ? '不限速' : `限速 ${fmt.speed(limit)}`}
+        <Icon name="chevronUp" className="chev" />
       </button>
       {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items} anchor={menu.at.anchor} onClose={menu.close} />}
     </>
@@ -377,7 +387,7 @@ function SortMenu() {
   const items: MenuItem[] = SORTS.map(([k, label]) => ({ label, checked: sort.key === k, run: () => setSort(k) }));
   return (
     <>
-      <button type="button" className="btn subtle" aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e, true)}>
+      <button type="button" className="btn subtle sort" aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e, true)}>
         <span className="lbl">{SORTS.find(([k]) => k === sort.key)?.[1]}</span>
         <Icon name="chevronDown" className="chev" />
       </button>
@@ -390,8 +400,11 @@ function SortMenu() {
 export function CommandBar() {
   const filter = useApp((s) => s.filter);
   const selection = useApp((s) => s.selection);
-  const detailOpen = useApp((s) => s.detailOpen);
-  const { run, openDialog, setDetailOpen } = useApp(useShallow((s) => ({ run: s.run, openDialog: s.openDialog, setDetailOpen: s.setDetailOpen })));
+  const pinned = useApp((s) => s.detailPinned);
+  const shown = useApp(detailTask);
+  const { run, openDialog, openDetail, setDetailPinned } = useApp(
+    useShallow((s) => ({ run: s.run, openDialog: s.openDialog, openDetail: s.openDetail, setDetailPinned: s.setDetailPinned })),
+  );
   const statuses = useApp(useShallow((s) => selection.map((id) => s.tasks[id]?.status)));
   const allIds = useApp(useShallow((s) => visibleIds(s.tasks, s.filter, { key: 'added', desc: false })));
   const anyPausable = useApp((s) => Object.values(s.tasks).some((t) => ['queued', 'probing', 'downloading'].includes(t.status)));
@@ -405,11 +418,11 @@ export function CommandBar() {
   if (filter === 'trash') {
     return (
       <div className="cmdbar">
-        <button type="button" className="btn" disabled={!sel} onClick={() => void run(() => api.restore(selection))}>
+        <button type="button" title="还原" className="btn" disabled={!sel} onClick={() => void run(() => api.restore(selection))}>
           <Icon name="refresh" />
           <span className="lbl">还原</span>
         </button>
-        <button type="button" className="btn danger" disabled={!sel} onClick={() => openDialog({ kind: 'purge', ids: selection })}>
+        <button type="button" title="彻底删除" className="btn danger" disabled={!sel} onClick={() => openDialog({ kind: 'purge', ids: selection })}>
           <Icon name="trash" />
           <span className="lbl">彻底删除</span>
         </button>
@@ -429,72 +442,60 @@ export function CommandBar() {
       </button>
       {sel ? (
         <>
-          <button type="button" className="btn" disabled={!canResume} onClick={() => void run(() => api.resume(selection))}>
+          <button type="button" title="开始" className="btn" disabled={!canResume} onClick={() => void run(() => api.resume(selection))}>
             <Icon name="play" />
             <span className="lbl">开始</span>
           </button>
-          <button type="button" className="btn" disabled={!canPause} onClick={() => void run(() => api.pause(selection))}>
+          <button type="button" title="暂停" className="btn" disabled={!canPause} onClick={() => void run(() => api.pause(selection))}>
             <Icon name="pause" />
             <span className="lbl">暂停</span>
           </button>
-          <button type="button" className="btn" onClick={() => void run(() => api.remove(selection))}>
+          <button type="button" title="删除" className="btn" onClick={() => void run(() => api.remove(selection))}>
             <Icon name="trash" />
             <span className="lbl">删除</span>
           </button>
-          <button type="button" className="btn" disabled={!single} onClick={() => single && void run(() => api.reveal(single))}>
+          <button type="button" title="打开文件夹" className="btn" disabled={!single} onClick={() => single && void run(() => api.reveal(single))}>
             <Icon name="folderOpen" />
             <span className="lbl">打开文件夹</span>
           </button>
         </>
       ) : (
         <>
-          <button type="button" className="btn" disabled={!anyResumable} onClick={() => void run(() => api.resume(Object.values(useApp.getState().tasks).filter((t) => t.status === 'paused').map((t) => t.id)))}>
+          <button type="button" title="全部开始" className="btn" disabled={!anyResumable} onClick={() => void run(() => api.resume(Object.values(useApp.getState().tasks).filter((t) => t.status === 'paused').map((t) => t.id)))}>
             <Icon name="play" />
             <span className="lbl">全部开始</span>
           </button>
-          <button type="button" className="btn" disabled={!anyPausable} onClick={() => void run(() => api.pause(Object.keys(useApp.getState().tasks)))}>
+          <button type="button" title="全部暂停" className="btn" disabled={!anyPausable} onClick={() => void run(() => api.pause(Object.keys(useApp.getState().tasks)))}>
             <Icon name="pause" />
             <span className="lbl">全部暂停</span>
           </button>
         </>
       )}
       <span className="grow" />
-      <SpeedLimitMenu />
       <SortMenu />
-      <button type="button" className="iconbtn" aria-pressed={detailOpen} title={detailOpen ? '隐藏详情' : '显示详情'} aria-label="详情面板" onClick={() => setDetailOpen(!detailOpen)}>
-        <Icon name="sidebar" />
-      </button>
+      {/* While the panel shows, the same switch is in its header, in the same place. Here it opens the
+          panel once for the selected task; highlighted, the panel opens for every task (a press here
+          turns that off). */}
+      {!shown && (
+        <button
+          type="button"
+          className="iconbtn"
+          aria-pressed={pinned}
+          disabled={!pinned && !single}
+          title={pinned ? '详情面板已固定，选中任务时自动显示（点击取消）' : '显示详情'}
+          aria-label="详情面板"
+          onClick={() => (pinned ? setDetailPinned(false) : single && openDetail(single))}
+        >
+          <Icon name="sidebar" />
+        </button>
+      )}
     </div>
   );
-}
-
-/** Free space where new downloads go, refreshed every 10 s. */
-function useDiskFree(dir: string): number | null {
-  const [free, setFree] = useState<number | null>(null);
-  useEffect(() => {
-    if (!dir || !isTauri()) return;
-    let live = true;
-    const read = () => void api.diskFree(dir).then((n) => live && setFree(n)).catch(() => undefined);
-    read();
-    const t = setInterval(read, 10_000);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, [dir]);
-  return free;
-}
-
-/** `D:` on Windows, the last folder elsewhere. */
-function volumeOf(dir: string): string {
-  const m = /^([a-zA-Z]:)/.exec(dir);
-  return m ? m[1].toUpperCase() : dir.split(/[\\/]/).filter(Boolean).pop() ?? '/';
 }
 
 export function StatusBar() {
   const speed = useApp((s) => s.stats.downloadSpeed);
   const upload = useApp((s) => s.stats.uploadSpeed);
-  const dir = useApp((s) => s.settings.downloadDir || s.defaultDir);
   const selected = useApp((s) => s.selection.length);
   const { all, running, waiting, seeding } = useApp(
     useShallow((s) => {
@@ -512,7 +513,6 @@ export function StatusBar() {
       return { all, running, waiting, seeding };
     }),
   );
-  const free = useDiskFree(dir);
   const seen = useApp((s) => s.seenBrowsers);
   const names = seen.map(([b]) => ({ chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave', chromium: 'Chromium' })[b] ?? b);
   const parts = [`${all} 个任务`];
@@ -527,22 +527,20 @@ export function StatusBar() {
           <Icon name="arrowDown" />
           {fmt.speed(speed)}
         </span>
-        {(upload > 0 || seeding > 0) && (
-          <span className="speed" title="上传速度">
-            <Icon name="arrowUp" />
-            {fmt.speed(upload)}
-          </span>
-        )}
+        <span className="speed" title="上传速度（做种与下载中的种子）">
+          <Icon name="arrowUp" />
+          {fmt.speed(upload)}
+        </span>
       </div>
       <div className="mid">{parts.join(' · ')}</div>
       <div className="rgt">
-        {free != null && <span title={dir}>{`${volumeOf(dir)} 剩余 ${fmt.bytes(free)}`}</span>}
         {names.length > 0 && (
           <span className="seen" title="浏览器扩展已连接">
             <i aria-hidden="true" />
             {names.join('、')} 已连接
           </span>
         )}
+        <SpeedLimitMenu />
       </div>
     </footer>
   );

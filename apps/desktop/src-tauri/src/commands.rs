@@ -205,18 +205,6 @@ pub fn folder_open(app: AppHandle, path: String) -> Result<()> {
         .map_err(|e| Error::internal(format!("{path}: {e}")))
 }
 
-/// Bytes free on the volume of `path` (its nearest existing ancestor); `None` if unknown.
-#[tauri::command]
-pub fn disk_free(path: String) -> Option<u64> {
-    let mut p = Path::new(&path);
-    loop {
-        if p.exists() {
-            return omnidl_storage::file::available_space(p).ok();
-        }
-        p = p.parent()?;
-    }
-}
-
 fn find(state: &AppState, id: TaskId) -> Result<Task> {
     state
         .manager
