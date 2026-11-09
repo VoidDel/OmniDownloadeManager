@@ -1,11 +1,13 @@
 //! The Omni Download desktop app (Tauri 2): the main window, the task manager behind its
-//! commands, the stream of task events to the window, and the browser bridge (local pipe for the
-//! Native Messaging host, HTTP fallback, quick-download window). The tray arrives with Phase 5
+//! commands (HTTP and BitTorrent engines), the stream of task events to the window, the browser
+//! bridge (local pipe for the Native Messaging host, HTTP fallback, quick-download window), and
+//! magnet links and `.torrent` files from the system. The tray arrives with Phase 5
 //! (docs/development-plan.md §10).
 
 mod browser;
 mod commands;
 mod events;
+mod links;
 mod secrets;
 mod settings;
 mod state;
@@ -15,6 +17,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock, atomic::Ordering},
 };
 
+use omnidl_bt::{BtConfig, BtEngine};
 use omnidl_core::TaskManager;
 use omnidl_http::HttpEngine;
 use omnidl_storage::Db;
@@ -31,11 +34,16 @@ pub fn run() {
         // First: a second launch hands over to this one and exits before anything else runs.
         // It shows the window, unless it is the browser bridge starting the app
         // (`--background`) while it is already running.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if !argv.iter().any(|a| a == "--background") {
+        // A magnet link or a `.torrent` opened from the system arrives the same way.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let found = links::from_args(argv.iter().skip(1), Path::new(&cwd));
+            if !found.is_empty() {
+                links::open(app, found);
+            } else if !argv.iter().any(|a| a == "--background") {
                 focus_main(app);
             }
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -62,10 +70,19 @@ pub fn run() {
                 Some(key) => Arc::new(omnidl_core::AesSecrets::new(&key)),
                 None => Arc::new(omnidl_core::NoSecrets),
             };
+            let bt = Arc::new(BtEngine::new(BtConfig {
+                listen_port: engine_config.bt_port,
+                dht: engine_config.bt_dht,
+                upnp: engine_config.bt_upnp,
+                ..BtConfig::new(data_dir.join("torrents"))
+            }));
+            let upload_limit = engine_config.upload_limit;
+            let bt_engine = bt.clone();
             let manager = tauri::async_runtime::block_on(async move {
+                bt_engine.set_upload_limit(upload_limit).await;
                 let db = Db::open(&db_path).await?;
                 let engines: Vec<Arc<dyn omnidl_core::DownloadEngine>> =
-                    vec![Arc::new(HttpEngine::new())];
+                    vec![Arc::new(HttpEngine::new()), bt_engine];
                 TaskManager::open_with_secrets(db, engines, engine_config, sealing)
                     .await
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
@@ -75,8 +92,11 @@ pub fn run() {
                 e
             })?;
             events::spawn(handle.clone(), &manager);
+            let cwd = std::env::current_dir().unwrap_or_default();
+            let opened = links::from_args(std::env::args().skip(1), &cwd);
             app.manage(AppState {
                 manager,
+                bt,
                 settings: Mutex::new(settings),
                 settings_path,
                 default_dir,
@@ -89,7 +109,18 @@ pub fn run() {
                 quick: Default::default(),
                 quick_seq: Default::default(),
                 seen: Default::default(),
+                page_ready: Default::default(),
+                links: Mutex::new(opened),
             });
+            // macOS hands magnet links and opened `.torrent` files over as URLs (Windows and
+            // Linux start a second instance with them, see above).
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let app = handle.clone();
+                handle.deep_link().on_open_url(move |event| {
+                    links::open(&app, links::from_urls(event.urls()));
+                });
+            }
             main_window(handle)?;
             browser::start(handle);
             Ok(())
@@ -109,6 +140,9 @@ pub fn run() {
             commands::task_purge,
             commands::task_detail,
             commands::task_set_speed_limit,
+            commands::task_files_set,
+            commands::magnet_status,
+            commands::magnet_register,
             commands::task_open,
             commands::task_reveal,
             commands::folder_open,
@@ -149,9 +183,11 @@ fn quit(app: &AppHandle, api: &tauri::ExitRequestApi) {
     }
     api.prevent_exit();
     let manager = state.manager.clone();
+    let bt = state.bt.clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         manager.shutdown().await;
+        bt.stop().await;
         tracing::info!("downloads stopped; exiting");
         app.exit(0);
     });

@@ -4,7 +4,8 @@
 //! goes: mutate under the state lock → write the task's current row → publish `Changed`. Queued
 //! tasks start in priority, then list order while fewer than `max_concurrent` run. A running task
 //! is an engine future; pausing, removing or quitting cancels it and the outcome decides the
-//! status it lands in.
+//! status it lands in. A torrent that finished downloading keeps running while it seeds, without
+//! taking a slot; pausing it ends seeding.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -28,7 +29,7 @@ use crate::{
     Checkpoint, DownloadEngine, EngineConfig, Error, ErrorCode, EventBus, Job, JobOptions,
     NoSecrets, Outcome, Priority, ProbeInfo, Progress, ProgressItem, RateLimiter, Result,
     ResumeState, Secrets, Segment, SegmentView, Stats, Task, TaskEvent, TaskId, TaskKind,
-    TaskOptions, TaskStatus, filename, now_ms,
+    TaskOptions, TaskStatus, TorrentDetail, filename, now_ms,
 };
 
 /// How often running tasks are sampled and progress is published.
@@ -64,8 +65,10 @@ fn yes() -> bool {
 pub struct TaskDetail {
     pub task: Task,
     pub segments: Vec<SegmentView>,
-    /// The finished file.
+    /// The finished file (a folder for a torrent of several files).
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub torrent: Option<TorrentDetail>,
 }
 
 /// What to do with a running task once its engine has stopped.
@@ -84,6 +87,7 @@ struct Running {
     progress: Arc<Progress>,
     limit: RateLimiter,
     meter: SpeedMeter,
+    up_meter: SpeedMeter,
 }
 
 #[derive(Default)]
@@ -117,7 +121,8 @@ pub struct TaskManager {
 
 impl TaskManager {
     /// Loads the tasks from `db` and starts what is queued. Downloads that were running when the
-    /// app quit are queued again (or paused, without `resume_on_startup`). Needs a Tokio runtime.
+    /// app quit are queued again (or paused, without `resume_on_startup`; seeding torrents are
+    /// then completed). Needs a Tokio runtime.
     pub async fn open(
         db: Db,
         engines: Vec<Arc<dyn DownloadEngine>>,
@@ -143,8 +148,8 @@ impl TaskManager {
             };
             if t.status.is_running() {
                 t.status = match t.status {
-                    TaskStatus::Seeding => TaskStatus::Completed,
                     _ if config.resume_on_startup => TaskStatus::Queued,
+                    TaskStatus::Seeding => TaskStatus::Completed,
                     _ => TaskStatus::Paused,
                 };
                 db.update_task(&t.to_record(&*secrets)).await?;
@@ -209,11 +214,38 @@ impl TaskManager {
                 })
                 .collect(),
         };
+        let torrent = match self.inner.engine(task.kind) {
+            Some(e) if task.kind == TaskKind::Torrent => e.torrent_detail(&task).await,
+            _ => None,
+        };
         Ok(TaskDetail {
             path: task.path().to_string_lossy().into_owned(),
             task,
             segments,
+            torrent,
         })
+    }
+
+    /// Chooses which files of a torrent task are downloaded (indices in the torrent's order).
+    pub async fn set_torrent_files(&self, id: TaskId, files: Vec<usize>) -> Result<()> {
+        if files.is_empty() {
+            return Err(Error::invalid("choose at least one file"));
+        }
+        let (kind, running) = {
+            let mut st = self.inner.state.lock();
+            let running = st.running.contains_key(&id);
+            let t = st.tasks.get_mut(&id).ok_or_else(|| missing(id))?;
+            if t.kind != TaskKind::Torrent {
+                return Err(Error::invalid("only a torrent has files to choose"));
+            }
+            t.options.only_files = Some(files.clone());
+            (t.kind, running)
+        };
+        if running && let Some(engine) = self.inner.engine(kind) {
+            engine.set_files(id, &files).await?;
+        }
+        self.inner.changed(id).await;
+        Ok(())
     }
 
     pub fn config(&self) -> EngineConfig {
@@ -261,19 +293,33 @@ impl TaskManager {
                 .filter(|n| !n.trim().is_empty())
                 .map(|n| filename::sanitize(&n));
             let probe = item.probe.as_ref();
+            let kind = engine.kind();
             let file_name = options
                 .file_name
                 .clone()
                 .or_else(|| probe.map(|p| filename::sanitize(&p.file_name)))
-                .or_else(|| filename::from_url(&source))
+                .or_else(|| match kind {
+                    TaskKind::Torrent => filename::for_torrent(&source),
+                    _ => filename::from_url(&source),
+                })
                 .unwrap_or_else(|| "download".into());
+            // The size of the chosen files of a torrent.
+            let total = match (probe, &options.only_files) {
+                (Some(p), Some(only)) if !p.files.is_empty() => Some(
+                    only.iter()
+                        .filter_map(|&i| p.files.get(i))
+                        .map(|f| f.size)
+                        .sum(),
+                ),
+                _ => probe.and_then(|p| p.total),
+            };
             let task = {
                 let mut st = self.inner.state.lock();
                 let sort_order = st.next_order;
                 st.next_order += 1;
                 Task {
                     id: Uuid::new_v4(),
-                    kind: engine.kind(),
+                    kind,
                     source,
                     final_url: probe.map(|p| p.final_url.clone()),
                     save_dir,
@@ -284,10 +330,11 @@ impl TaskManager {
                     } else {
                         TaskStatus::Paused
                     },
-                    total_bytes: probe.and_then(|p| p.total),
+                    total_bytes: total,
                     downloaded_bytes: 0,
                     uploaded_bytes: 0,
                     speed_bps: 0,
+                    upload_speed_bps: 0,
                     eta_secs: None,
                     connections: 0,
                     priority: Priority::Normal,
@@ -578,7 +625,15 @@ impl Inner {
         {
             let mut st = self.state.lock();
             let State { tasks, running, .. } = &mut *st;
-            let free = max.saturating_sub(running.len());
+            let busy = running
+                .keys()
+                .filter(|id| {
+                    tasks
+                        .get(id)
+                        .is_none_or(|t| t.status != TaskStatus::Seeding)
+                })
+                .count();
+            let free = max.saturating_sub(busy);
             if free == 0 {
                 return;
             }
@@ -595,6 +650,7 @@ impl Inner {
                 t.status = TaskStatus::Probing;
                 t.error = None;
                 let progress = Arc::new(Progress::new(t.downloaded_bytes, t.total_bytes));
+                progress.set_uploaded(t.uploaded_bytes);
                 running.insert(
                     id,
                     Running {
@@ -603,6 +659,7 @@ impl Inner {
                         progress,
                         limit: RateLimiter::new(t.options.speed_limit),
                         meter: SpeedMeter::default(),
+                        up_meter: SpeedMeter::default(),
                     },
                 );
                 started.push(id);
@@ -650,6 +707,7 @@ impl Inner {
                 last_modified: task.last_modified.clone(),
                 resumable: task.resumable,
                 segments,
+                completed_at: task.completed_at,
             })
         } else {
             None
@@ -676,12 +734,12 @@ impl Inner {
     }
 
     async fn finish(self: &Arc<Self>, id: TaskId, outcome: Outcome) {
-        let stop = self
+        let (stop, uploaded) = self
             .state
             .lock()
             .running
             .remove(&id)
-            .map_or(Stop::None, |r| r.stop);
+            .map_or((Stop::None, 0), |r| (r.stop, r.progress.uploaded()));
         // A run stopped before it settled the file (while probing) has nothing on disk.
         let started = self
             .state
@@ -708,7 +766,10 @@ impl Inner {
             {
                 let mut st = self.state.lock();
                 if let Some(t) = st.tasks.get_mut(&id) {
+                    let seeding = t.status == TaskStatus::Seeding;
+                    t.uploaded_bytes = t.uploaded_bytes.max(uploaded);
                     t.speed_bps = 0;
+                    t.upload_speed_bps = 0;
                     t.eta_secs = None;
                     t.connections = 0;
                     let natural = match outcome {
@@ -717,7 +778,10 @@ impl Inner {
                             t.file_name = file_name;
                             t.total_bytes = Some(total);
                             t.downloaded_bytes = total;
-                            t.completed_at = Some(now_ms());
+                            // A torrent finished when it began to seed.
+                            if !seeding || t.completed_at.is_none() {
+                                t.completed_at = Some(now_ms());
+                            }
                             t.error = None;
                             TaskStatus::Completed
                         }
@@ -742,8 +806,9 @@ impl Inner {
                             t.prev_status = Some(natural);
                             t.status = TaskStatus::Removed;
                         }
-                        // Left running in the database: it resumes on the next launch.
-                        Stop::Shutdown if natural == TaskStatus::Paused => {}
+                        // Left running in the database: it resumes (or seeds again) on the
+                        // next launch.
+                        Stop::Shutdown if natural == TaskStatus::Paused || seeding => {}
                         _ => t.status = natural,
                     }
                 }
@@ -768,6 +833,17 @@ impl Inner {
         let keys: Vec<String> = removed.iter().map(|t| t.id.to_string()).collect();
         self.db.delete_tasks(&keys).await?;
         for t in &removed {
+            if t.kind == TaskKind::Torrent {
+                if let Some(engine) = self.engine(t.kind) {
+                    engine.forget(t.id).await;
+                }
+                // A torrent writes in place, possibly over files that were already there: its
+                // data goes only when asked, finished or not.
+                if delete_files && t.started_at.is_some() {
+                    remove_torrent_data(t);
+                }
+                continue;
+            }
             // A task that never started has no partial file of its own (another task may use
             // the same name).
             if t.started_at.is_some() {
@@ -788,6 +864,24 @@ impl Inner {
 
 fn remove_file(path: &std::path::Path) {
     if let Err(e) = std::fs::remove_file(path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("deleting {}: {e}", path.display());
+    }
+}
+
+/// The torrent's file, or its folder (a torrent of several files), never the save folder itself.
+fn remove_torrent_data(t: &Task) {
+    let path = t.path();
+    if t.file_name.trim().is_empty() || path == std::path::Path::new(&t.save_dir) {
+        return;
+    }
+    let result = if path.is_dir() {
+        std::fs::remove_dir_all(&path)
+    } else {
+        std::fs::remove_file(&path)
+    };
+    if let Err(e) = result
         && e.kind() != std::io::ErrorKind::NotFound
     {
         tracing::warn!("deleting {}: {e}", path.display());
@@ -843,10 +937,45 @@ impl Checkpoint for Saver {
     }
 
     async fn save(&self, s: &ResumeState) -> Result<()> {
-        match self.inner.upgrade() {
-            Some(inner) => inner.save_segments(self.id, s).await,
-            None => Ok(()),
+        let Some(inner) = self.inner.upgrade() else {
+            return Ok(());
+        };
+        inner.save_segments(self.id, s).await?;
+        let uploaded = inner
+            .state
+            .lock()
+            .running
+            .get(&self.id)
+            .map_or(0, |r| r.progress.uploaded());
+        if uploaded > 0 {
+            inner
+                .db
+                .save_uploaded(&self.id.to_string(), uploaded as i64)
+                .await?;
         }
+        Ok(())
+    }
+
+    async fn seeding(&self, s: &ResumeState) -> Result<()> {
+        let Some(inner) = self.inner.upgrade() else {
+            return Ok(());
+        };
+        {
+            let mut st = inner.state.lock();
+            if let Some(t) = st.tasks.get_mut(&self.id) {
+                t.status = TaskStatus::Seeding;
+                t.total_bytes = s.total;
+                t.downloaded_bytes = s.downloaded();
+                t.eta_secs = None;
+                t.completed_at.get_or_insert_with(now_ms);
+                t.error = None;
+            }
+        }
+        inner.save_segments(self.id, s).await?;
+        inner.changed(self.id).await;
+        // Its slot is free.
+        inner.schedule();
+        Ok(())
     }
 }
 
@@ -865,13 +994,15 @@ async fn ticker(inner: Weak<Inner>) {
             let mut st = inner.state.lock();
             let State { tasks, running, .. } = &mut *st;
             let mut items = Vec::with_capacity(running.len());
-            let mut speed_sum = 0;
+            let mut stats = Stats::default();
             for (id, r) in running.iter_mut() {
                 let Some(t) = tasks.get_mut(id) else {
                     continue;
                 };
                 let downloaded = r.progress.downloaded();
+                let uploaded = r.progress.uploaded();
                 let speed = r.meter.sample(now, downloaded);
+                let upload_speed = r.up_meter.sample(now, uploaded);
                 let total = r.progress.total().or(t.total_bytes);
                 let eta = match total {
                     Some(total) if speed > 0 => {
@@ -880,11 +1011,19 @@ async fn ticker(inner: Weak<Inner>) {
                     _ => None,
                 };
                 t.downloaded_bytes = downloaded;
+                t.uploaded_bytes = uploaded;
                 t.total_bytes = total;
                 t.speed_bps = speed;
+                t.upload_speed_bps = upload_speed;
                 t.eta_secs = eta;
                 t.connections = r.progress.connections();
-                speed_sum += speed;
+                stats.download_speed += speed;
+                stats.upload_speed += upload_speed;
+                if t.status == TaskStatus::Seeding {
+                    stats.seeding += 1;
+                } else {
+                    stats.running += 1;
+                }
                 items.push(ProgressItem {
                     id: *id,
                     downloaded,
@@ -892,12 +1031,10 @@ async fn ticker(inner: Weak<Inner>) {
                     speed,
                     eta,
                     connections: t.connections,
+                    uploaded,
+                    upload_speed,
                 });
             }
-            let stats = Stats {
-                download_speed: speed_sum,
-                running: running.len() as u32,
-            };
             (items, stats)
         };
         // One last empty batch after the last task stops zeroes the totals in the UI.

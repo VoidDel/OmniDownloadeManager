@@ -4,6 +4,9 @@
 //! completes, fails, or is cancelled through `job.cancel`. While it runs, the engine keeps
 //! [`Progress`] current (the manager samples it for speed and the UI) and reports through
 //! [`Checkpoint`] what has to survive a restart. Engines know nothing of the database or the UI.
+//!
+//! A BitTorrent run goes on after the download finished: it reports [`Checkpoint::seeding`],
+//! uploads until the seeding policy is met or it is cancelled, and then returns `Completed`.
 
 use std::{
     collections::BTreeMap,
@@ -21,8 +24,8 @@ use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    ConflictPolicy, EngineConfig, ProxyConfig, RateLimiter, Result, Segment, SegmentView, TaskId,
-    TaskKind, TaskOptions,
+    ConflictPolicy, EngineConfig, Error, ErrorCode, ProxyConfig, RateLimiter, Result, Segment,
+    SegmentView, Task, TaskId, TaskKind, TaskOptions,
 };
 
 #[async_trait]
@@ -34,10 +37,31 @@ pub trait DownloadEngine: Send + Sync + 'static {
 
     /// Downloads until done, failed or cancelled.
     async fn run(&self, job: Job) -> Outcome;
+
+    /// Files, peers and trackers of a torrent task, running or not.
+    async fn torrent_detail(&self, task: &Task) -> Option<TorrentDetail> {
+        let _ = task;
+        None
+    }
+
+    /// Changes which files of a running torrent are downloaded (the manager has already saved
+    /// the choice in the task's options).
+    async fn set_files(&self, id: TaskId, files: &[usize]) -> Result<()> {
+        let _ = (id, files);
+        Err(Error::new(
+            ErrorCode::Unsupported,
+            "this download has no files to choose",
+        ))
+    }
+
+    /// The task was deleted for good: drop what the engine keeps for it.
+    async fn forget(&self, id: TaskId) {
+        let _ = id;
+    }
 }
 
 /// What a probe learns.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeInfo {
     /// After redirects.
@@ -49,6 +73,56 @@ pub struct ProbeInfo {
     pub content_type: Option<String>,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    /// A torrent's files, in its order (their index is what `TaskOptions::only_files` holds).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<ProbeFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeFile {
+    /// Relative, `/`-separated.
+    pub path: String,
+    pub size: u64,
+}
+
+/// A torrent task, for the details panel.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentDetail {
+    pub info_hash: String,
+    pub name: String,
+    pub piece_size: u64,
+    pub pieces: u32,
+    pub files: Vec<TorrentFile>,
+    /// Connected peers (empty while the task is not running).
+    pub peers: Vec<PeerInfo>,
+    /// Peers known from DHT, trackers and exchange.
+    pub peers_seen: u32,
+    pub trackers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentFile {
+    pub index: usize,
+    pub path: String,
+    pub size: u64,
+    /// Bytes verified on disk, while the task runs.
+    pub done: Option<u64>,
+    pub selected: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerInfo {
+    pub addr: String,
+    pub client: Option<String>,
+    /// `tcp`, `utp` or `socks`.
+    pub transport: String,
+    /// Received from this peer.
+    pub downloaded: u64,
+    pub uploaded: u64,
 }
 
 /// What a download needs to continue after a pause or a restart.
@@ -63,6 +137,8 @@ pub struct ResumeState {
     pub resumable: bool,
     /// Empty when the download has to start over (no range support, or nothing saved yet).
     pub segments: Vec<Segment>,
+    /// When it finished downloading (a torrent that was seeding when the app quit).
+    pub completed_at: Option<i64>,
 }
 
 impl ResumeState {
@@ -78,12 +154,18 @@ pub trait Checkpoint: Send + Sync {
     async fn started(&self, state: &ResumeState) -> Result<()>;
     /// Progress that is on disk (the engine flushed its writer first).
     async fn save(&self, state: &ResumeState) -> Result<()>;
+    /// A torrent finished downloading and now uploads to others; its slot is free.
+    async fn seeding(&self, state: &ResumeState) -> Result<()> {
+        self.save(state).await
+    }
 }
 
 /// Live numbers of a running download, written by the engine, read by the manager.
 #[derive(Debug, Default)]
 pub struct Progress {
     downloaded: AtomicU64,
+    /// Uploaded in total (BitTorrent), earlier runs included.
+    uploaded: AtomicU64,
     /// `u64::MAX` while unknown.
     total: AtomicU64,
     connections: AtomicU32,
@@ -109,6 +191,14 @@ impl Progress {
 
     pub fn add(&self, n: u64) {
         self.downloaded.fetch_add(n, Ordering::Relaxed);
+    }
+
+    pub fn uploaded(&self) -> u64 {
+        self.uploaded.load(Ordering::Relaxed)
+    }
+
+    pub fn set_uploaded(&self, n: u64) {
+        self.uploaded.store(n, Ordering::Relaxed);
     }
 
     pub fn total(&self) -> Option<u64> {
@@ -154,6 +244,12 @@ pub struct JobOptions {
     pub max_retries: u32,
     pub conflict: ConflictPolicy,
     pub sync_writes: bool,
+    /// The task's own download limit, for engines that throttle inside a library.
+    pub speed_limit: Option<u64>,
+    pub only_files: Option<Vec<usize>>,
+    pub seeding: bool,
+    pub seed_ratio: f64,
+    pub seed_minutes: u32,
 }
 
 impl JobOptions {
@@ -174,6 +270,11 @@ impl JobOptions {
             max_retries: config.max_retries,
             conflict: config.conflict,
             sync_writes: config.sync_writes,
+            speed_limit: task.speed_limit,
+            only_files: task.only_files.clone(),
+            seeding: config.seeding,
+            seed_ratio: config.seed_ratio,
+            seed_minutes: config.seed_minutes,
         }
     }
 }

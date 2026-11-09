@@ -4,7 +4,7 @@
 use std::{path::Path, sync::atomic::Ordering};
 
 use omnidl_core::{
-    Error, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskOptions, TaskStatus,
+    Error, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskKind, TaskOptions, TaskStatus,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -25,11 +25,20 @@ pub struct Bootstrap {
     background: bool,
     /// Browsers whose extension has been in touch: name and Unix milliseconds.
     seen_browsers: Vec<(String, i64)>,
+    /// Magnet links and `.torrent` files the app was started with: the new-download dialog
+    /// opens with them.
+    open_links: Vec<String>,
 }
 
 #[tauri::command]
 pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -> Bootstrap {
     let main = window.label() == "main";
+    let open_links = if main {
+        state.page_ready.store(true, Ordering::SeqCst);
+        std::mem::take(&mut *state.links.lock().unwrap_or_else(|e| e.into_inner()))
+    } else {
+        Vec::new()
+    };
     Bootstrap {
         settings: state.settings(),
         tasks: if main {
@@ -42,6 +51,7 @@ pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -
         log_dir: state.log_dir.clone(),
         background: main && state.background.swap(false, Ordering::SeqCst),
         seen_browsers: state.seen_browsers(),
+        open_links,
     }
 }
 
@@ -52,7 +62,7 @@ pub fn task_list(state: State<'_, AppState>) -> Vec<Task> {
 }
 
 #[tauri::command]
-pub fn settings_set(state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
+pub async fn settings_set(state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
     let mut settings = settings.normalized();
     // The HTTP channel's switch, port and token change through its own commands only.
     let current = state.settings().browser;
@@ -63,16 +73,20 @@ pub fn settings_set(state: State<'_, AppState>, settings: Settings) -> Result<Se
         .save(&state.settings_path)
         .map_err(|e| Error::io(&e, state.settings_path.display()))?;
     state.manager.set_config(settings.engine.clone());
+    state
+        .bt
+        .set_upload_limit(settings.engine.upload_limit)
+        .await;
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     Ok(settings)
 }
 
 /// The global download limit in bytes per second; `null` is unlimited. Saved with the settings.
 #[tauri::command]
-pub fn speed_limit_set(state: State<'_, AppState>, limit: Option<u64>) -> Result<Settings> {
+pub async fn speed_limit_set(state: State<'_, AppState>, limit: Option<u64>) -> Result<Settings> {
     let mut settings = state.settings();
     settings.engine.speed_limit = limit.filter(|&l| l > 0);
-    settings_set(state, settings)
+    settings_set(state, settings).await
 }
 
 #[tauri::command]
@@ -128,6 +142,16 @@ pub async fn task_detail(state: State<'_, AppState>, id: TaskId) -> Result<TaskD
     state.manager.detail(id).await
 }
 
+/// Which files of a torrent task are downloaded (indices in the torrent's order).
+#[tauri::command]
+pub async fn task_files_set(
+    state: State<'_, AppState>,
+    id: TaskId,
+    files: Vec<usize>,
+) -> Result<()> {
+    state.manager.set_torrent_files(id, files).await
+}
+
 #[tauri::command]
 pub async fn task_set_speed_limit(
     state: State<'_, AppState>,
@@ -141,7 +165,7 @@ pub async fn task_set_speed_limit(
 #[tauri::command]
 pub fn task_open(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Result<()> {
     let task = find(&state, id)?;
-    if task.status != TaskStatus::Completed {
+    if !matches!(task.status, TaskStatus::Completed | TaskStatus::Seeding) {
         return Err(Error::invalid("the download has not finished"));
     }
     let path = task.path();
@@ -154,7 +178,9 @@ pub fn task_open(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Resu
 #[tauri::command]
 pub fn task_reveal(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Result<()> {
     let task = find(&state, id)?;
-    let file = if task.status == TaskStatus::Completed {
+    // A torrent writes its files in place, without a partial file.
+    let done = matches!(task.status, TaskStatus::Completed | TaskStatus::Seeding);
+    let file = if done || task.kind == TaskKind::Torrent {
         task.path()
     } else {
         task.partial_path()
@@ -196,4 +222,32 @@ fn find(state: &AppState, id: TaskId) -> Result<Task> {
         .manager
         .get(id)
         .ok_or_else(|| Error::invalid(format!("no task {id}")))
+}
+
+/// Whether this app opens magnet links. Windows and Linux can register at run time; on macOS
+/// the installed app is registered by its bundle.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MagnetHandler {
+    can_register: bool,
+    registered: bool,
+}
+
+#[tauri::command]
+pub fn magnet_status(app: AppHandle) -> MagnetHandler {
+    use tauri_plugin_deep_link::DeepLinkExt;
+    MagnetHandler {
+        can_register: cfg!(any(windows, target_os = "linux")),
+        registered: app.deep_link().is_registered("magnet").unwrap_or(false),
+    }
+}
+
+/// Makes this app the one that opens magnet links.
+#[tauri::command]
+pub fn magnet_register(app: AppHandle) -> Result<MagnetHandler> {
+    use tauri_plugin_deep_link::DeepLinkExt;
+    app.deep_link()
+        .register("magnet")
+        .map_err(|e| Error::internal(format!("registering for magnet links: {e}")))?;
+    Ok(magnet_status(app))
 }

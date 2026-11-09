@@ -36,14 +36,20 @@ pub struct ProgressItem {
     /// Bytes per second over the last few seconds.
     pub speed: u64,
     pub eta: Option<u64>,
+    /// Peers, for a torrent.
     pub connections: u32,
+    pub uploaded: u64,
+    pub upload_speed: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub download_speed: u64,
+    pub upload_speed: u64,
+    /// Downloading (seeding torrents are counted apart).
     pub running: u32,
+    pub seeding: u32,
 }
 
 /// A broadcast channel. Slow subscribers lose old events (`RecvError::Lagged`) and should reload

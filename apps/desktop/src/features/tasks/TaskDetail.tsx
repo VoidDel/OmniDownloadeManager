@@ -1,5 +1,6 @@
 // The details panel (docs/development-plan.md §6.2): the selected task's numbers, its segment map
-// and the speed of the last two minutes; actions at the bottom follow its state.
+// and the speed of the last two minutes; a torrent shows its files (to choose from), peers and
+// trackers instead of segments. Actions at the bottom follow its state.
 
 import { useEffect, useState } from 'react';
 
@@ -8,11 +9,12 @@ import { Tabs } from '../../components/ui';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { hostOf } from '../../lib/links';
-import type { SegmentView, Task } from '../../lib/types';
-import { STATUS_COLOR, STATUS_LABEL, errorText } from '../../lib/words';
+import type { TaskDetail as Detail, SegmentView, Task, TorrentDetail } from '../../lib/types';
+import { STATUS_COLOR, errorText, statusText } from '../../lib/words';
 import { speedHistory, useApp } from '../../store/app';
+import { FileTree } from './FileTree';
 
-type Tab = 'overview' | 'segments';
+type Tab = 'overview' | 'segments' | 'files' | 'peers';
 const BLOCKS = 64;
 const PROTO: Record<Task['kind'], string> = { http: 'HTTP', ftp: 'FTP', torrent: 'BT' };
 
@@ -41,25 +43,25 @@ function blockColor(f: number): string {
   return 'var(--bg-pressed)';
 }
 
-/** The segments of a task, refreshed twice a second while it runs. */
-function useSegments(id: string, running: boolean, status: Task['status']): SegmentView[] {
-  const [segments, setSegments] = useState<SegmentView[]>([]);
+/** Segments (and a torrent's files and peers) of a task, refreshed while it runs. */
+function useDetail(id: string, running: boolean, status: Task['status'], every: number): Detail | null {
+  const [detail, setDetail] = useState<Detail | null>(null);
   useEffect(() => {
     let live = true;
     const load = () =>
       void api
         .detail(id)
-        .then((d) => live && setSegments(d.segments))
+        .then((d) => live && setDetail(d))
         .catch(() => undefined);
     load();
-    const t = running ? setInterval(load, 500) : undefined;
+    const t = running ? setInterval(load, every) : undefined;
     return () => {
       live = false;
       clearInterval(t);
     };
     // `status`: reload once when it settles (paused, failed).
-  }, [id, running, status]);
-  return segments;
+  }, [id, running, status, every]);
+  return detail?.task.id === id ? detail : null;
 }
 
 /** Speed over the last two minutes. */
@@ -83,8 +85,12 @@ function SpeedChart({ id, speed }: { id: string; speed: number }) {
   );
 }
 
-function Overview({ t, segments }: { t: Task; segments: SegmentView[] }) {
+/** Uploaded over size. */
+const ratio = (t: Task) => (t.totalBytes ? (t.uploadedBytes / t.totalBytes).toFixed(2) : '—');
+
+function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; torrent?: TorrentDetail }) {
   const running = t.status === 'downloading' || t.status === 'probing';
+  const bt = t.kind === 'torrent';
   const fill = blockFill(segments, t.totalBytes, t.status === 'completed');
   return (
     <>
@@ -102,12 +108,42 @@ function Overview({ t, segments }: { t: Task; segments: SegmentView[] }) {
             <dd className="num">{fmt.speed(t.speedBps)}</dd>
             <dt>剩余时间</dt>
             <dd className="num">{fmt.duration(t.etaSecs)}</dd>
-            <dt>连接</dt>
-            <dd>{t.connections ? `${t.connections} 个连接` : '—'}</dd>
+            <dt>{bt ? '节点' : '连接'}</dt>
+            <dd>{t.connections ? `${t.connections} 个${bt ? '节点' : '连接'}` : '—'}</dd>
           </>
         )}
-        <dt>断点续传</dt>
-        <dd>{t.startedAt == null ? '开始后确定' : t.resumable ? '支持' : '不支持（暂停后需要重新下载）'}</dd>
+        {bt && (
+          <>
+            {t.status === 'seeding' && (
+              <>
+                <dt>上传速度</dt>
+                <dd className="num">{fmt.speed(t.uploadSpeedBps)}</dd>
+                <dt>节点</dt>
+                <dd>{t.connections ? `${t.connections} 个节点` : '—'}</dd>
+              </>
+            )}
+            <dt>已上传</dt>
+            <dd className="num">
+              {fmt.bytes(t.uploadedBytes)} · 分享率 {ratio(t)}
+            </dd>
+            {torrent && (
+              <>
+                <dt>文件</dt>
+                <dd>
+                  {torrent.files.filter((f) => f.selected).length} / {torrent.files.length} 个 · {torrent.pieces} 块 × {fmt.bytes(torrent.pieceSize)}
+                </dd>
+                <dt>特征码</dt>
+                <dd className="mono path">{torrent.infoHash}</dd>
+              </>
+            )}
+          </>
+        )}
+        {!bt && (
+          <>
+            <dt>断点续传</dt>
+            <dd>{t.startedAt == null ? '开始后确定' : t.resumable ? '支持' : '不支持（暂停后需要重新下载）'}</dd>
+          </>
+        )}
         <dt>添加时间</dt>
         <dd>{fmt.when(t.createdAt)}</dd>
         {t.completedAt != null && (
@@ -130,7 +166,7 @@ function Overview({ t, segments }: { t: Task; segments: SegmentView[] }) {
           </div>
         </div>
       )}
-      {t.totalBytes != null && t.totalBytes > 0 && (
+      {!bt && t.totalBytes != null && t.totalBytes > 0 && (
         <div>
           <div className="det-head">
             <span>分片进度</span>
@@ -207,6 +243,84 @@ function Segments({ t, segments }: { t: Task; segments: SegmentView[] }) {
   );
 }
 
+/** A torrent's files: which to download (until it is complete), and how far each is. */
+function Files({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
+  const run = useApp((s) => s.run);
+  const [pending, setPending] = useState<Set<number> | null>(null);
+  if (!torrent) return <p className="muted det-note">{t.startedAt == null ? '获取到种子信息后显示文件。' : '没有文件信息。'}</p>;
+  const editable = ['queued', 'probing', 'downloading', 'paused', 'failed'].includes(t.status);
+  const selected = pending ?? new Set(torrent.files.filter((f) => f.selected).map((f) => f.index));
+  const choose = (next: Set<number>) => {
+    setPending(next);
+    void run(() => api.setTorrentFiles(t.id, [...next].sort((a, b) => a - b))).finally(() => setPending(null));
+  };
+  return <FileTree files={torrent.files} selected={selected} onChange={editable ? choose : undefined} />;
+}
+
+/** Connected peers and the trackers. */
+function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
+  const live = t.status === 'downloading' || t.status === 'seeding';
+  return (
+    <>
+      <div>
+        <div className="det-head">
+          <span>节点</span>
+          <span className="muted">{live && torrent ? `已连接 ${torrent.peers.length} · 已发现 ${torrent.peersSeen}` : ''}</span>
+        </div>
+        {!live || !torrent?.peers.length ? (
+          <p className="muted det-note">{live ? '正在寻找节点…' : '任务运行时显示连接的节点。'}</p>
+        ) : (
+          <div className="peers" role="table" aria-label="节点">
+            <div role="row" className="peer head">
+              <span role="columnheader">地址</span>
+              <span role="columnheader">客户端</span>
+              <span role="columnheader" className="num">
+                ↓
+              </span>
+              <span role="columnheader" className="num">
+                ↑
+              </span>
+            </div>
+            {torrent.peers.map((p) => (
+              <div role="row" key={p.addr} className="peer">
+                <span role="cell" className="mono" title={`${p.addr} · ${p.transport.toUpperCase()}`}>
+                  {p.addr}
+                </span>
+                <span role="cell" className="dim" title={p.client ?? undefined}>
+                  {p.client ?? '—'}
+                </span>
+                <span role="cell" className="num">
+                  {fmt.bytes(p.downloaded)}
+                </span>
+                <span role="cell" className="num">
+                  {fmt.bytes(p.uploaded)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="det-head">
+          <span>Tracker</span>
+          <span className="muted">{torrent ? `${torrent.trackers.length} 个` : ''}</span>
+        </div>
+        {torrent?.trackers.length ? (
+          <ul className="trackers">
+            {torrent.trackers.map((u) => (
+              <li key={u} className="mono">
+                {u}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted det-note">没有 Tracker，靠 DHT 与节点交换寻找节点。</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** The primary action for a task's state. */
 function Primary({ t }: { t: Task }) {
   const run = useApp((s) => s.run);
@@ -220,8 +334,9 @@ function Primary({ t }: { t: Task }) {
         return ['继续', 'play', () => api.resume([t.id])];
       case 'failed':
         return t.error?.code === 'remote_changed' ? ['重新下载', 'refresh', () => api.restart([t.id])] : ['重试', 'refresh', () => api.resume([t.id])];
-      case 'completed':
       case 'seeding':
+        return ['停止做种', 'pause', () => api.pause([t.id])];
+      case 'completed':
         return ['打开文件', 'external', () => api.open(t.id)];
       default:
         return ['还原', 'refresh', () => api.restore([t.id])];
@@ -241,10 +356,24 @@ export function TaskDetail({ id }: { id: string }) {
   const run = useApp((s) => s.run);
   const toast = useApp((s) => s.toast);
   const [tab, setTab] = useState<Tab>('overview');
-  const running = t?.status === 'downloading' || t?.status === 'probing';
-  const segments = useSegments(id, running, t?.status ?? 'queued');
+  const bt = t?.kind === 'torrent';
+  const running = t?.status === 'downloading' || t?.status === 'probing' || t?.status === 'seeding';
+  const detail = useDetail(id, running, t?.status ?? 'queued', bt ? 1000 : 500);
   if (!t) return null;
+  const segments = detail?.segments ?? [];
+  const torrent = detail?.torrent;
   const color = STATUS_COLOR[t.status];
+  const tabs: [Tab, string][] = bt
+    ? [
+        ['overview', '概览'],
+        ['files', '文件'],
+        ['peers', '节点'],
+      ]
+    : [
+        ['overview', '概览'],
+        ['segments', '分片'],
+      ];
+  const shown = tabs.some(([k]) => k === tab) ? tab : 'overview';
   return (
     <aside className="detail" aria-label="任务详情">
       <div className="det-top">
@@ -257,7 +386,7 @@ export function TaskDetail({ id }: { id: string }) {
         <span className={`badge proto-${t.kind}`}>{PROTO[t.kind]}</span>
         <span className="st" style={{ color }}>
           <i className="sdot" style={{ background: color }} />
-          {STATUS_LABEL[t.status]}
+          {statusText(t)}
         </span>
         {hostOf(t.finalUrl ?? t.source) && (
           <>
@@ -266,17 +395,13 @@ export function TaskDetail({ id }: { id: string }) {
           </>
         )}
       </div>
-      <Tabs
-        id="det"
-        label="详情"
-        value={tab}
-        onChange={setTab}
-        options={[
-          ['overview', '概览'],
-          ['segments', '分片'],
-        ]}
-      />
-      <div className="det-body">{tab === 'overview' ? <Overview t={t} segments={segments} /> : <Segments t={t} segments={segments} />}</div>
+      <Tabs id="det" label="详情" value={shown} onChange={setTab} options={tabs} />
+      <div className="det-body">
+        {shown === 'overview' && <Overview t={t} segments={segments} torrent={torrent} />}
+        {shown === 'segments' && <Segments t={t} segments={segments} />}
+        {shown === 'files' && <Files t={t} torrent={torrent} />}
+        {shown === 'peers' && <Peers t={t} torrent={torrent} />}
+      </div>
       <div className="det-foot">
         <Primary t={t} />
         <button type="button" className="btn outline" onClick={() => void run(() => api.reveal(t.id))}>

@@ -98,6 +98,32 @@ pub fn from_url(url: &str) -> Option<String> {
     (name != "download" || decoded.trim() == "download").then_some(name)
 }
 
+/// A torrent's name before its metadata is known: the `dn` of a magnet link, or the name of a
+/// `.torrent` file without its extension.
+pub fn for_torrent(source: &str) -> Option<String> {
+    let s = source.trim();
+    let raw = if s
+        .get(..7)
+        .is_some_and(|p| p.eq_ignore_ascii_case("magnet:"))
+    {
+        let query = s.split_once('?').map_or("", |(_, q)| q);
+        let dn = query
+            .split('&')
+            .find_map(|kv| kv.strip_prefix("dn="))?
+            .replace('+', " ");
+        percent_decode(&dn)
+    } else {
+        let last = s.rsplit(['/', '\\']).find(|p| !p.is_empty())?;
+        let last = percent_decode(last.split(['?', '#']).next()?);
+        let cut = last.len().checked_sub(".torrent".len())?;
+        if !last.is_char_boundary(cut) || !last[cut..].eq_ignore_ascii_case(".torrent") {
+            return None;
+        }
+        last[..cut].to_owned()
+    };
+    (!raw.trim().is_empty()).then(|| sanitize(&raw))
+}
+
 /// Decodes `%XX` escapes as UTF-8 (invalid sequences are replaced).
 pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&percent_decode_bytes(s)).into_owned()
@@ -190,6 +216,22 @@ mod tests {
         assert_eq!(numbered("src.tar.gz", 2), "src (2).tar.gz");
         assert_eq!(numbered("README", 3), "README (3)");
         assert_eq!(numbered(".bashrc", 1), ".bashrc (1)");
+    }
+
+    #[test]
+    fn names_torrents_before_their_metadata() {
+        let m = "magnet:?xt=urn:btih:abc&dn=Big+Buck%20Bunny&tr=udp%3A%2F%2Ft";
+        assert_eq!(for_torrent(m).as_deref(), Some("Big Buck Bunny"));
+        assert_eq!(for_torrent("magnet:?xt=urn:btih:abc"), None);
+        assert_eq!(
+            for_torrent(r"C:\x\Ubuntu 24.04.TORRENT").as_deref(),
+            Some("Ubuntu 24.04")
+        );
+        assert_eq!(
+            for_torrent("https://e.com/a/debian.torrent?x=1").as_deref(),
+            Some("debian")
+        );
+        assert_eq!(for_torrent("https://e.com/a.zip"), None);
     }
 
     #[test]

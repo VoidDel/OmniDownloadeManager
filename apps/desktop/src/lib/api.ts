@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, Integration, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions } from './types';
+import type { AppError, Bootstrap, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -31,6 +31,9 @@ export const api = {
   purge: (ids: string[], deleteFiles: boolean) => invoke<void>('task_purge', { ids, deleteFiles }),
   detail: (id: string) => invoke<TaskDetail>('task_detail', { id }),
   setTaskSpeedLimit: (id: string, limit: number | null) => invoke<void>('task_set_speed_limit', { id, limit }),
+  setTorrentFiles: (id: string, files: number[]) => invoke<void>('task_files_set', { id, files }),
+  magnetStatus: () => invoke<MagnetHandler>('magnet_status'),
+  magnetRegister: () => invoke<MagnetHandler>('magnet_register'),
   open: (id: string) => invoke<void>('task_open', { id }),
   reveal: (id: string) => invoke<void>('task_reveal', { id }),
   openFolder: (path: string) => invoke<void>('folder_open', { path }),
@@ -46,7 +49,7 @@ export const api = {
 
 /** Window-level events from the app (not tasks). */
 export interface AppEvents {
-  /** The browser sent several links: open the new-download dialog with them. */
+  /** Links to add (a batch from the browser, a magnet link or .torrent from the system). */
   newTask: (p: Prefill) => void;
   /** An extension got in touch for the first time since the app started. */
   browserSeen: (seen: [string, number][]) => void;

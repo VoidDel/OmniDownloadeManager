@@ -55,6 +55,26 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "torrent"
+        ],
+        "name": "BitTorrent",
+        "description": "BitTorrent file",
+        "mimeType": "application/x-bittorrent",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "magnet"
+        ]
+      }
     }
   }
 }

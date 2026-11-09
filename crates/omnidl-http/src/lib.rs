@@ -61,6 +61,7 @@ impl DownloadEngine for HttpEngine {
             content_type: p.content_type,
             etag: p.etag,
             last_modified: p.last_modified,
+            files: Vec::new(),
         })
     }
 

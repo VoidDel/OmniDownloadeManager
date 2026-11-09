@@ -188,3 +188,32 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .quick footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 16px; flex: none; }
 .q-keys { flex: 1; font-size: .8rem; color: var(--fg-muted); }
 .q-keys kbd { font-family: var(--font-mono); font-size: .75rem; }
+
+/* ---------------------------------------------------------------- torrents: files, peers */
+/* The file tree of a torrent (new-download dialog, details panel). */
+.ft { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); flex: none; }
+.ft-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); font-size: .8rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+.ft-list { overflow: auto; max-height: 240px; padding: 4px 0; }
+.detail .ft-list { max-height: none; }
+.ft-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 3px 12px 3px calc(12px + var(--depth, 0) * 18px); font-size: .86rem; cursor: default; }
+.ft-row:hover { background: var(--bg-hover); }
+.ft-row[data-off="true"] .ft-file { opacity: .55; }
+.ft-fold, .ft-file { display: flex; align-items: center; gap: 6px; min-width: 0; text-align: start; color: inherit; }
+.ft-fold > .ic:first-child { width: 12px; height: 12px; color: var(--fg-muted); transition: transform var(--dur); flex: none; }
+.ft-fold[aria-expanded="true"] > .ic:first-child { transform: rotate(90deg); }
+.ft-ic, .ft-file .fi { width: 16px; height: 16px; flex: none; }
+.ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-size { display: flex; gap: 8px; font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ft-pct { color: var(--accent); }
+.nt-hintrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nt-hintrow .btn .ic { width: 14px; height: 14px; }
+
+.peers { display: flex; flex-direction: column; font-size: .8rem; }
+.peer { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 64px 64px; gap: 8px; padding: 4px 0; align-items: center; }
+.peer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peer.head { color: var(--fg-muted); border-bottom: 1px solid var(--border-subtle); }
+.peer .num { text-align: end; font-variant-numeric: tabular-nums; }
+.trackers { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--fg-secondary); }
+.trackers li { word-break: break-all; }
+.set-port { width: 96px; font-variant-numeric: tabular-nums; }
+.statusbar .lft { display: flex; align-items: center; gap: 12px; }

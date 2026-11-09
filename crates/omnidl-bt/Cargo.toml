@@ -10,4 +10,15 @@ publish.workspace = true
 
 [dependencies]
 omnidl-core.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+librqbit.workspace = true
+parking_lot.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+tracing.workspace = true
+
+[dev-dependencies]
 omnidl-storage.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["fs", "net", "signal"] }
+uuid.workspace = true

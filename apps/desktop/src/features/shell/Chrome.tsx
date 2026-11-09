@@ -46,6 +46,7 @@ export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
   ['general', '常规', 'sliders'],
   ['download', '下载', 'download'],
   ['network', '网络', 'globe'],
+  ['torrent', 'BT', 'magnet'],
   ['browser', '浏览器', 'plug'],
 ];
 
@@ -492,20 +493,23 @@ function volumeOf(dir: string): string {
 
 export function StatusBar() {
   const speed = useApp((s) => s.stats.downloadSpeed);
+  const upload = useApp((s) => s.stats.uploadSpeed);
   const dir = useApp((s) => s.settings.downloadDir || s.defaultDir);
   const selected = useApp((s) => s.selection.length);
-  const { all, running, waiting } = useApp(
+  const { all, running, waiting, seeding } = useApp(
     useShallow((s) => {
       let all = 0;
       let running = 0;
       let waiting = 0;
+      let seeding = 0;
       for (const t of Object.values(s.tasks)) {
         if (t.status === 'removed') continue;
         all++;
         if (t.status === 'downloading' || t.status === 'probing') running++;
         if (t.status === 'queued') waiting++;
+        if (t.status === 'seeding') seeding++;
       }
-      return { all, running, waiting };
+      return { all, running, waiting, seeding };
     }),
   );
   const free = useDiskFree(dir);
@@ -514,6 +518,7 @@ export function StatusBar() {
   const parts = [`${all} 个任务`];
   if (running) parts.push(`下载中 ${running}`);
   if (waiting) parts.push(`等待 ${waiting}`);
+  if (seeding) parts.push(`做种 ${seeding}`);
   if (selected) parts.push(`已选 ${selected}`);
   return (
     <footer className="statusbar">
@@ -522,6 +527,12 @@ export function StatusBar() {
           <Icon name="arrowDown" />
           {fmt.speed(speed)}
         </span>
+        {(upload > 0 || seeding > 0) && (
+          <span className="speed" title="上传速度">
+            <Icon name="arrowUp" />
+            {fmt.speed(upload)}
+          </span>
+        )}
       </div>
       <div className="mid">{parts.join(' · ')}</div>
       <div className="rgt">

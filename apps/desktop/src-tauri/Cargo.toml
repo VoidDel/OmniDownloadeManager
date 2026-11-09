@@ -23,15 +23,16 @@ tauri-build.workspace = true
 omnidl-core.workspace = true
 omnidl-storage.workspace = true
 omnidl-http.workspace = true
-# Linked so the dependency graph is fixed; empty until their phases.
-omnidl-ftp.workspace = true
 omnidl-bt.workspace = true
+# Linked so the dependency graph is fixed; empty until its phase.
+omnidl-ftp.workspace = true
 # The browser bridge.
 omnidl-ipc = { workspace = true, features = ["tokio"] }
 tauri.workspace = true
 tauri-plugin-dialog.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-single-instance.workspace = true
+tauri-plugin-deep-link.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

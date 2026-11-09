@@ -21,6 +21,8 @@ pub struct TaskOptions {
     /// Extra request headers.
     pub headers: BTreeMap<String, String>,
     pub proxy: Option<ProxyConfig>,
+    /// BitTorrent: indices of the files to download, in the torrent's order (`None`: all).
+    pub only_files: Option<Vec<usize>>,
 }
 
 /// Where requests go.

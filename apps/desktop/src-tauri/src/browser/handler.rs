@@ -63,11 +63,21 @@ pub async fn handle(app: &AppHandle, req: Request) -> Response {
                 },
             )
         }
-        Body::AddMagnet(_) => Response::err(
-            id,
-            ErrorCode::Unsupported,
-            "BitTorrent and magnet links arrive in a later version",
-        ),
+        // The dialog shows the torrent's files to choose from.
+        Body::AddMagnet(m) => {
+            if !m.uri.trim().to_ascii_lowercase().starts_with("magnet:") {
+                return Response::err(id, ErrorCode::BadRequest, "not a magnet link");
+            }
+            crate::links::open(app, vec![m.uri.trim().to_owned()]);
+            Response::ok(
+                id,
+                AddResult {
+                    action: AddAction::Dialog,
+                    asked: true,
+                    task_id: None,
+                },
+            )
+        }
     }
 }
 
@@ -239,14 +249,14 @@ async fn add_download(
     })
 }
 
-/// What the new-download dialog opens with for a batch.
-#[derive(Clone, Serialize)]
+/// What the new-download dialog opens with: links one per line, and request details.
+#[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Prefill {
-    text: String,
-    referer: Option<String>,
-    cookies: Option<String>,
-    user_agent: Option<String>,
+pub struct Prefill {
+    pub text: String,
+    pub referer: Option<String>,
+    pub cookies: Option<String>,
+    pub user_agent: Option<String>,
 }
 
 /// A batch opens the new-download dialog in the main window with the links (the user picks).

@@ -4,11 +4,12 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicU32},
     },
 };
 
+use omnidl_bt::BtEngine;
 use omnidl_core::TaskManager;
 
 use crate::{
@@ -18,6 +19,8 @@ use crate::{
 
 pub struct AppState {
     pub manager: TaskManager,
+    /// Also in the manager's engines: the app sets its upload limit and stops it on exit.
+    pub bt: Arc<BtEngine>,
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
     /// The system Downloads folder.
@@ -39,6 +42,10 @@ pub struct AppState {
     pub quick_seq: AtomicU32,
     /// Browsers whose extension has been in touch: name → Unix milliseconds.
     pub seen: Mutex<BTreeMap<String, i64>>,
+    /// The main window's page has loaded (asked for its first data).
+    pub page_ready: AtomicBool,
+    /// Magnet links and `.torrent` files that arrived before it had.
+    pub links: Mutex<Vec<String>>,
 }
 
 impl AppState {

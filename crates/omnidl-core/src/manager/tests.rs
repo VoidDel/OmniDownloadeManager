@@ -41,6 +41,7 @@ impl DownloadEngine for FakeEngine {
             content_type: None,
             etag: None,
             last_modified: None,
+            ..Default::default()
         })
     }
 
@@ -330,4 +331,133 @@ fn measures_speed_over_a_window() {
     assert_eq!(s, 0);
     // A restart (fewer bytes) starts a new window.
     assert_eq!(m.sample(t0 + Duration::from_secs(6), 0), 0);
+}
+
+/// A torrent that is complete at once and then seeds, uploading 100 bytes every 10 ms until it
+/// is cancelled or has uploaded `stop_at`.
+struct FakeSeeder {
+    stop_at: Option<u64>,
+    runs: AtomicU64,
+}
+
+impl FakeSeeder {
+    fn new(stop_at: Option<u64>) -> Arc<Self> {
+        Arc::new(Self {
+            stop_at,
+            runs: AtomicU64::new(0),
+        })
+    }
+}
+
+#[async_trait]
+impl DownloadEngine for FakeSeeder {
+    fn kind(&self) -> TaskKind {
+        TaskKind::Torrent
+    }
+
+    async fn probe(&self, _: &str, _: &JobOptions) -> Result<ProbeInfo> {
+        Ok(ProbeInfo::default())
+    }
+
+    async fn run(&self, job: Job) -> Outcome {
+        const SIZE: u64 = 1000;
+        self.runs.fetch_add(1, Ordering::SeqCst);
+        let state = ResumeState {
+            file_name: "t".into(),
+            total: Some(SIZE),
+            resumable: true,
+            segments: vec![Segment {
+                start: 0,
+                end: Some(SIZE - 1),
+                downloaded: SIZE,
+            }],
+            ..Default::default()
+        };
+        job.checkpoint.started(&state).await.unwrap();
+        job.progress.set_total(Some(SIZE));
+        job.progress.set_downloaded(SIZE);
+        job.checkpoint.seeding(&state).await.unwrap();
+        loop {
+            tokio::select! {
+                _ = job.cancel.cancelled() => break,
+                _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            }
+            let up = job.progress.uploaded() + 100;
+            job.progress.set_uploaded(up);
+            if self.stop_at.is_some_and(|s| up >= s) {
+                break;
+            }
+        }
+        job.checkpoint.save(&state).await.unwrap();
+        Outcome::Completed {
+            file_name: "t".into(),
+            total: SIZE,
+        }
+    }
+}
+
+const MAGNET: &str = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=t";
+
+async fn mixed(seeder: Arc<FakeSeeder>, db: Db, max_concurrent: u32) -> TaskManager {
+    let config = EngineConfig {
+        max_concurrent,
+        ..Default::default()
+    };
+    let engines: Vec<Arc<dyn DownloadEngine>> = vec![seeder, FakeEngine::new(1000, 100, 20)];
+    TaskManager::open(db, engines, config).await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn seeding_frees_the_slot_and_pausing_ends_it() {
+    let m = mixed(FakeSeeder::new(None), Db::memory().await.unwrap(), 1).await;
+    let torrent = m.add(vec![new_task(MAGNET, true)]).await.unwrap()[0].clone();
+    assert_eq!(torrent.kind, TaskKind::Torrent);
+    assert_eq!(torrent.file_name, "t");
+    let seeding = wait_for(&m, torrent.id, |t| t.status == TaskStatus::Seeding).await;
+    assert!(seeding.completed_at.is_some());
+    // The only slot is free for another download while the torrent seeds.
+    let http = m
+        .add(vec![new_task("https://example.com/b.bin", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, http, |t| t.status == TaskStatus::Completed).await;
+    wait_for(&m, torrent.id, |t| t.uploaded_bytes > 0).await;
+    m.pause(&[torrent.id]).await.unwrap();
+    let done = wait_for(&m, torrent.id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(done.completed_at, seeding.completed_at);
+    assert!(done.uploaded_bytes > 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn seeding_ends_when_the_engine_is_done() {
+    let m = mixed(FakeSeeder::new(Some(500)), Db::memory().await.unwrap(), 3).await;
+    let id = m.add(vec![new_task(MAGNET, true)]).await.unwrap()[0].id;
+    let t = wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    assert!(t.uploaded_bytes >= 500);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn seeding_goes_on_after_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("omni.db");
+    let seeder = FakeSeeder::new(None);
+    let m = mixed(seeder.clone(), Db::open(&path).await.unwrap(), 3).await;
+    let id = m.add(vec![new_task(MAGNET, true)]).await.unwrap()[0].id;
+    wait_for(&m, id, |t| {
+        t.status == TaskStatus::Seeding && t.uploaded_bytes >= 300
+    })
+    .await;
+    m.shutdown().await;
+
+    let seeder = FakeSeeder::new(None);
+    let m = mixed(seeder.clone(), Db::open(&path).await.unwrap(), 3).await;
+    let before = m.get(id).unwrap().uploaded_bytes;
+    assert!(before >= 300, "uploaded bytes were saved");
+    wait_for(&m, id, |t| {
+        t.status == TaskStatus::Seeding && t.uploaded_bytes > before
+    })
+    .await;
+    assert_eq!(seeder.runs.load(Ordering::SeqCst), 1);
+    m.shutdown().await;
 }

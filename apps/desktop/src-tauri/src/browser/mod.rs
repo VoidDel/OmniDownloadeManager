@@ -7,6 +7,8 @@ pub mod http;
 pub mod integration;
 pub mod quick;
 
+pub use handler::Prefill;
+
 use omnidl_core::{Error, Result};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State, WebviewWindow};

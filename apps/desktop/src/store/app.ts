@@ -12,7 +12,7 @@ import { errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
 export type SortKey = 'added' | 'name' | 'size' | 'progress' | 'speed' | 'status';
-export type SettingsTab = 'general' | 'download' | 'network' | 'browser';
+export type SettingsTab = 'general' | 'download' | 'network' | 'torrent' | 'browser';
 export type View = 'tasks' | 'settings';
 
 export type Dialog =
@@ -39,6 +39,13 @@ export const DEFAULT_SETTINGS: Settings = {
     conflict: 'rename',
     resumeOnStartup: true,
     syncWrites: true,
+    seeding: true,
+    seedRatio: 1.5,
+    seedMinutes: 1440,
+    uploadLimit: null,
+    btPort: 6881,
+    btDht: true,
+    btUpnp: true,
   },
   browser: { quickDialog: true, silentSites: [], httpBridge: false, httpPort: 0, httpToken: '' },
 };
@@ -106,7 +113,7 @@ export const useApp = create<State>((set, get) => ({
   logDir: '',
   settings: DEFAULT_SETTINGS,
   tasks: {},
-  stats: { downloadSpeed: 0, running: 0 },
+  stats: { downloadSpeed: 0, uploadSpeed: 0, running: 0, seeding: 0 },
   view: 'tasks',
   settingsTab: 'general',
   filter: 'all',
@@ -152,7 +159,16 @@ export const useApp = create<State>((set, get) => ({
             for (const p of items) {
               const t = tasks[p.id];
               if (!t) continue;
-              tasks[p.id] = { ...t, downloadedBytes: p.downloaded, totalBytes: p.total, speedBps: p.speed, etaSecs: p.eta, connections: p.connections };
+              tasks[p.id] = {
+                ...t,
+                downloadedBytes: p.downloaded,
+                totalBytes: p.total,
+                speedBps: p.speed,
+                etaSecs: p.eta,
+                connections: p.connections,
+                uploadedBytes: p.uploaded,
+                uploadSpeedBps: p.uploadSpeed,
+              };
               const h = history.get(p.id) ?? [];
               h.push(p.speed);
               if (h.length > HISTORY) h.splice(0, h.length - HISTORY);
@@ -173,6 +189,8 @@ export const useApp = create<State>((set, get) => ({
         tasks: Object.fromEntries(boot.tasks.map((t) => [t.id, t])),
         seenBrowsers: boot.seenBrowsers,
       });
+      // Opened with magnet links or .torrent files.
+      if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
       background = boot.background;
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.
@@ -270,7 +288,7 @@ export function visibleIds(tasks: Record<string, Task>, filter: Filter, sort: St
 }
 
 export function progressOf(t: Task): number {
-  if (t.status === 'completed') return 1;
+  if (t.status === 'completed' || t.status === 'seeding') return 1;
   return t.totalBytes ? Math.min(1, t.downloadedBytes / t.totalBytes) : 0;
 }
 

@@ -131,6 +131,7 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Download> {
             last_modified: probe.last_modified,
             resumable,
             segments: Vec::new(),
+            completed_at: None,
         },
         table: Arc::new(Mutex::new(SegmentTable::new(plan))),
         writer,

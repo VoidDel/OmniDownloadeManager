@@ -22,7 +22,8 @@ mod task;
 
 pub use config::{ConflictPolicy, EngineConfig, default_user_agent};
 pub use engine::{
-    Checkpoint, DownloadEngine, Job, JobOptions, Outcome, ProbeInfo, Progress, ResumeState,
+    Checkpoint, DownloadEngine, Job, JobOptions, Outcome, PeerInfo, ProbeFile, ProbeInfo, Progress,
+    ResumeState, TorrentDetail, TorrentFile,
 };
 pub use error::{Error, ErrorCode, Result};
 pub use events::{EventBus, ProgressItem, Stats, TaskEvent};

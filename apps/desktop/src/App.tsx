@@ -1,6 +1,8 @@
 // The main window (docs/development-plan.md §6.2): sidebar, title bar, command bar, the task list
 // with its details panel (or the settings page), and the status bar, in omni-ui's window shell.
 
+import { isTauri } from '@tauri-apps/api/core';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { onSystemThemeChange, type Platform } from 'omni-ui';
 import { useEffect } from 'react';
 
@@ -37,6 +39,32 @@ function useShortcuts() {
   }, []);
 }
 
+/** `.torrent` files dropped on the window open the new-download dialog with them. */
+function useTorrentDrop() {
+  useEffect(() => {
+    if (!isTauri()) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void getCurrentWebview()
+      .onDragDropEvent((e) => {
+        if (e.payload.type !== 'drop') return;
+        const files = e.payload.paths.filter((p) => p.toLowerCase().endsWith('.torrent'));
+        if (!files.length) return;
+        const s = useApp.getState();
+        s.setView('tasks');
+        s.openDialog({ kind: 'new', text: files.join('\n') });
+      })
+      .then((f) => {
+        if (gone) f();
+        else off = f;
+      });
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, []);
+}
+
 export function App({ platform }: { platform: Platform }) {
   const view = useApp((s) => s.view);
   const appearance = useApp((s) => s.settings.appearance);
@@ -45,6 +73,7 @@ export function App({ platform }: { platform: Platform }) {
   const toasts = useApp((s) => s.toasts);
   const dismiss = useApp((s) => s.dismiss);
   useShortcuts();
+  useTorrentDrop();
 
   // Following the system: switch with it.
   useEffect(() => {

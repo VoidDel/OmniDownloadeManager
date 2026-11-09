@@ -1,6 +1,7 @@
-// The new-download dialog (docs/development-plan.md §6.3): links one per line, each probed for
-// name, size and range support while the user looks; folder, connections, limit and request
-// details apply to all of them.
+// The new-download dialog (docs/development-plan.md §6.3): links one per line (or .torrent
+// files), each probed for name, size and range support (a torrent's files) while the user looks;
+// folder, connections, limit and request details apply to all of them. A single torrent shows
+// its files to choose from.
 
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -14,6 +15,7 @@ import { parseLinks, type Link } from '../../lib/links';
 import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
 import { errorText } from '../../lib/words';
 import { useApp } from '../../store/app';
+import { FileTree } from '../tasks/FileTree';
 
 type Probe = { state: 'probing' } | { state: 'ok'; info: ProbeInfo } | { state: 'error'; error: AppError };
 
@@ -30,29 +32,38 @@ const BADGE: Record<Link['kind'], [string, string]> = {
 };
 
 /** `previewed`: within the links probed here (the rest are probed when they start). */
+/** Kinds this version adds. */
+const SUPPORTED: ReadonlySet<Link['kind']> = new Set(['http', 'magnet', 'torrent']);
+
 function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: Probe; previewed: boolean; connections: number }) {
-  const supported = link.kind === 'http';
+  const supported = SUPPORTED.has(link.kind);
+  const torrent = link.kind === 'magnet' || link.kind === 'torrent';
   const name = probe?.state === 'ok' ? probe.info.fileName : link.url;
   let sub: ReactNode;
-  if (!supported) sub = <span className="warn-text">FTP 与 BT 下载将在后续版本支持，这一行不会添加</span>;
+  if (!supported) sub = <span className="warn-text">FTP 下载将在后续版本支持，这一行不会添加</span>;
   else if (!probe && !previewed) sub = '开始下载时获取文件信息';
   else if (!probe || probe.state === 'probing')
     sub = (
       <>
         <span className="pulse" aria-hidden="true" />
-        正在获取文件信息…
+        {link.kind === 'magnet' ? '正在向节点获取种子信息…' : '正在获取文件信息…'}
       </>
     );
   else if (probe.state === 'error') sub = <span className="err-text" title={probe.error.message}>{errorText(probe.error)}，仍可添加，开始时会重试</span>;
-  else {
+  else if (torrent) {
+    const i = probe.info;
+    const files = i.files?.length ?? 1;
+    sub = [i.total != null ? fmt.bytes(i.total) : '大小未知', files > 1 ? `${files} 个文件` : '单个文件'].join(' · ');
+  } else {
     const i = probe.info;
     const parts = [i.total != null ? fmt.bytes(i.total) : '大小未知', i.resumable ? '支持断点续传' : '不支持断点续传'];
     if (i.resumable && i.total != null) parts.push(`将使用 ${Math.max(1, Math.min(connections, Math.floor(i.total / 1048576) || 1))} 个连接`);
     sub = parts.join(' · ');
   }
+  const many = probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1;
   return (
     <div className="nt-row" data-off={!supported}>
-      {probe?.state === 'ok' ? <FileIcon name={name} isDir={false} /> : <Icon name={supported ? 'link' : 'magnet'} className="fi" />}
+      {probe?.state === 'ok' ? <FileIcon name={name} isDir={many} /> : <Icon name={torrent ? 'magnet' : 'link'} className="fi" />}
       <span className="nt-txt">
         <span className="nt-name" title={link.url}>
           {name}
@@ -88,9 +99,17 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [busy, setBusy] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  const http = useMemo(() => links.filter((l) => l.kind === 'http'), [links]);
-  const single = http.length === 1 ? http[0] : null;
+  const addable = useMemo(() => links.filter((l) => SUPPORTED.has(l.kind)), [links]);
+  const hasHttp = addable.some((l) => l.kind === 'http');
+  const single = addable.length === 1 ? addable[0] : null;
   const singleProbe = single ? probes[single.url] : undefined;
+  // The files of a single torrent: all chosen until the user unticks some.
+  const torrentFiles = useMemo(
+    () => (single && single.kind !== 'http' && singleProbe?.state === 'ok' ? (singleProbe.info.files ?? []).map((f, index) => ({ ...f, index })) : []),
+    [single, singleProbe],
+  );
+  const [picked, setPicked] = useState<{ url: string; files: Set<number> } | null>(null);
+  const chosen = picked && picked.url === single?.url ? picked.files : new Set(torrentFiles.map((f) => f.index));
   const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || settings.engine.connections));
   const speed = fmt.parseSpeed(limit);
 
@@ -107,13 +126,14 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       cookies: cookies.trim() || null,
       headers: {},
       proxy,
+      onlyFiles: null,
     };
   }, [conn, defaultConnections, speed, userAgent, referer, cookies, proxyMode, proxyUrl]);
 
   // Probe new links shortly after typing stops (with the request details set so far).
   useEffect(() => {
     if (!isTauri()) return;
-    const todo = http.slice(0, PROBE_MAX).filter((l) => !probes[l.url]);
+    const todo = addable.slice(0, PROBE_MAX).filter((l) => !probes[l.url]);
     if (!todo.length) return;
     const t = setTimeout(() => {
       setProbes((p) => ({ ...p, ...Object.fromEntries(todo.map((l) => [l.url, { state: 'probing' } as Probe])) }));
@@ -125,14 +145,23 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [http, probes, options]);
+  }, [addable, probes, options]);
 
   // The name field starts with the server's name for a single link.
   const shownName = name ?? (singleProbe?.state === 'ok' ? singleProbe.info.fileName : '');
 
-  const known = http.map((l) => probes[l.url]).filter((p): p is Extract<Probe, { state: 'ok' }> => p?.state === 'ok');
-  const totalKnown = known.reduce((n, p) => n + (p.info.total ?? 0), 0);
+  const known = addable.map((l) => probes[l.url]).filter((p): p is Extract<Probe, { state: 'ok' }> => p?.state === 'ok');
+  const choosing = torrentFiles.length > 1 && chosen.size < torrentFiles.length;
+  const totalKnown = choosing
+    ? torrentFiles.filter((f) => chosen.has(f.index)).reduce((n, f) => n + f.size, 0)
+    : known.reduce((n, p) => n + (p.info.total ?? 0), 0);
   const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim());
+
+  const addTorrentFiles = async () => {
+    const files = await open({ multiple: true, title: '选择种子文件', filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
+    const list = Array.isArray(files) ? files : typeof files === 'string' ? [files] : [];
+    if (list.length) setText((t) => [t.trim(), ...list].filter(Boolean).join('\n'));
+  };
 
   const browse = async () => {
     const picked = await open({ directory: true, defaultPath: dir || undefined, title: '选择保存位置' }).catch(() => null);
@@ -140,15 +169,19 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   };
 
   const submit = async () => {
-    if (!http.length || invalid || busy) return;
+    if (!addable.length || invalid || busy) return;
     setBusy(true);
     const opts = options;
-    const items: NewTask[] = http.map((l) => {
+    const items: NewTask[] = addable.map((l) => {
       const p = probes[l.url];
       return {
         source: l.url,
         saveDir: dir.trim() || defaultDir,
-        options: { ...opts, fileName: single && name?.trim() ? name.trim() : null },
+        options: {
+          ...opts,
+          fileName: single?.kind === 'http' && name?.trim() ? name.trim() : null,
+          onlyFiles: l === single && choosing ? [...chosen].sort((a, b) => a - b) : null,
+        },
         start,
         probe: p?.state === 'ok' ? p.info : null,
       };
@@ -168,9 +201,9 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const footer = (
     <>
       <span className="grow nt-sum">
-        {http.length > 0 && (
+        {addable.length > 0 && (
           <>
-            <b>{http.length} 个任务</b>
+            <b>{addable.length} 个任务</b>
             {totalKnown > 0 && ` · ${fmt.bytes(totalKnown)}`}
           </>
         )}
@@ -178,7 +211,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <button type="button" className="btn outline" onClick={closeDialog}>
         取消
       </button>
-      <button type="button" className="btn primary" disabled={!http.length || invalid || busy} onClick={() => void submit()}>
+      <button type="button" className="btn primary" disabled={!addable.length || invalid || busy} onClick={() => void submit()}>
         {start ? '添加并开始' : '添加'}
       </button>
     </>
@@ -196,7 +229,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           rows={3}
           spellCheck={false}
           value={text}
-          placeholder="https://example.com/file.zip"
+          placeholder="https://example.com/file.zip 或 magnet:?xt=…"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -205,17 +238,24 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
             }
           }}
         />
-        <small className="hint">每行一个链接。现在支持 HTTP 与 HTTPS，FTP 和 BT 将在后续版本支持。</small>
+        <div className="nt-hintrow">
+          <small className="hint">每行一个：HTTP 或 HTTPS 链接、磁力链接、种子文件的路径。</small>
+          <button type="button" className="btn subtle sm" onClick={() => void addTorrentFiles()}>
+            <Icon name="folderOpen" />
+            打开种子文件
+          </button>
+        </div>
       </div>
       {links.length > 0 && (
         <div className="nt-list">
           {links.map((l) => (
-            <LinkRow key={l.url} link={l} probe={probes[l.url]} previewed={isTauri() && http.indexOf(l) < PROBE_MAX} connections={conn} />
+            <LinkRow key={l.url} link={l} probe={probes[l.url]} previewed={isTauri() && addable.indexOf(l) < PROBE_MAX} connections={conn} />
           ))}
         </div>
       )}
+      {single && torrentFiles.length > 1 && <FileTree files={torrentFiles} selected={chosen} onChange={(files) => setPicked({ url: single.url, files })} />}
       <div className="frow">
-        {single && (
+        {single?.kind === 'http' && (
           <>
             <label htmlFor="nt-name">文件名</label>
             <input id="nt-name" className="inp" value={shownName} placeholder="按服务器提供的名称" onChange={(e) => setName(e.target.value)} />
@@ -228,10 +268,14 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
             浏览
           </button>
         </div>
-        <label htmlFor="nt-conn">连接数</label>
+        <label htmlFor={hasHttp ? 'nt-conn' : 'nt-limit'}>{hasHttp ? '连接数' : '限速'}</label>
         <div className="inline nt-nums">
-          <input id="nt-conn" className="inp" type="number" min={1} max={64} value={connections} onChange={(e) => setConnections(e.target.value)} />
-          <label htmlFor="nt-limit">限速</label>
+          {hasHttp && (
+            <>
+              <input id="nt-conn" className="inp" type="number" min={1} max={64} value={connections} onChange={(e) => setConnections(e.target.value)} />
+              <label htmlFor="nt-limit">限速</label>
+            </>
+          )}
           <input
             id="nt-limit"
             className="inp"

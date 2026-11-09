@@ -44,6 +44,8 @@ export interface TaskOptions {
   cookies: string | null;
   headers: Record<string, string>;
   proxy: ProxyConfig | null;
+  /** BitTorrent: indices of the files to download (null: all). */
+  onlyFiles: number[] | null;
 }
 
 export interface Task {
@@ -58,7 +60,9 @@ export interface Task {
   downloadedBytes: number;
   uploadedBytes: number;
   speedBps: number;
+  uploadSpeedBps: number;
   etaSecs: number | null;
+  /** Peers, for a torrent. */
   connections: number;
   category: Category;
   priority: Priority;
@@ -78,6 +82,14 @@ export interface ProbeInfo {
   contentType: string | null;
   etag: string | null;
   lastModified: string | null;
+  /** A torrent's files in its order (absent for other downloads). */
+  files?: ProbeFile[];
+}
+
+export interface ProbeFile {
+  /** Relative, `/`-separated. */
+  path: string;
+  size: number;
 }
 
 export interface NewTask {
@@ -99,6 +111,35 @@ export interface TaskDetail {
   task: Task;
   segments: SegmentView[];
   path: string;
+  torrent?: TorrentDetail;
+}
+
+export interface TorrentDetail {
+  infoHash: string;
+  name: string;
+  pieceSize: number;
+  pieces: number;
+  files: TorrentFile[];
+  peers: PeerInfo[];
+  peersSeen: number;
+  trackers: string[];
+}
+
+export interface TorrentFile {
+  index: number;
+  path: string;
+  size: number;
+  /** Verified bytes while the task runs. */
+  done: number | null;
+  selected: boolean;
+}
+
+export interface PeerInfo {
+  addr: string;
+  client: string | null;
+  transport: string;
+  downloaded: number;
+  uploaded: number;
 }
 
 export interface ProgressItem {
@@ -108,11 +149,15 @@ export interface ProgressItem {
   speed: number;
   eta: number | null;
   connections: number;
+  uploaded: number;
+  uploadSpeed: number;
 }
 
 export interface Stats {
   downloadSpeed: number;
+  uploadSpeed: number;
   running: number;
+  seeding: number;
 }
 
 export interface ProgressBatch {
@@ -135,6 +180,15 @@ export interface EngineConfig {
   conflict: 'rename' | 'overwrite';
   resumeOnStartup: boolean;
   syncWrites: boolean;
+  seeding: boolean;
+  /** 0: no limit. */
+  seedRatio: number;
+  /** 0: no limit. */
+  seedMinutes: number;
+  uploadLimit: number | null;
+  btPort: number;
+  btDht: boolean;
+  btUpnp: boolean;
 }
 
 export interface BrowserSettings {
@@ -167,6 +221,13 @@ export interface Bootstrap {
   background: boolean;
   /** Browsers whose extension has been in touch: [name, Unix ms]. */
   seenBrowsers: [string, number][];
+  /** Magnet links and .torrent files the app was opened with. */
+  openLinks: string[];
+}
+
+export interface MagnetHandler {
+  canRegister: boolean;
+  registered: boolean;
 }
 
 export type BrowserId = 'chrome' | 'edge' | 'firefox' | 'brave' | 'chromium';
@@ -232,4 +293,5 @@ export const emptyOptions = (): TaskOptions => ({
   cookies: null,
   headers: {},
   proxy: null,
+  onlyFiles: null,
 });

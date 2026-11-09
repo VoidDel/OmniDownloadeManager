@@ -15,7 +15,7 @@ pub enum ConflictPolicy {
     Overwrite,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EngineConfig {
     /// Downloads running at once.
@@ -37,6 +37,21 @@ pub struct EngineConfig {
     /// Sync the file to disk before each progress checkpoint (crash-safe resume). Off trades
     /// that guarantee for less disk work.
     pub sync_writes: bool,
+    /// BitTorrent: keep sharing a torrent after it finished downloading.
+    pub seeding: bool,
+    /// Stop seeding once this many times the torrent's size was uploaded (0: no limit).
+    pub seed_ratio: f64,
+    /// Stop seeding this many minutes after the download finished (0: no limit).
+    pub seed_minutes: u32,
+    /// BitTorrent upload limit in bytes per second.
+    pub upload_limit: Option<u64>,
+    /// Port for incoming BitTorrent connections (0: any free port). Takes effect on restart,
+    /// like the two switches below.
+    pub bt_port: u16,
+    /// Find peers through the distributed hash table (needed for most magnet links).
+    pub bt_dht: bool,
+    /// Ask the router to forward `bt_port` (UPnP).
+    pub bt_upnp: bool,
 }
 
 impl Default for EngineConfig {
@@ -53,6 +68,13 @@ impl Default for EngineConfig {
             conflict: ConflictPolicy::Rename,
             resume_on_startup: true,
             sync_writes: true,
+            seeding: true,
+            seed_ratio: 1.5,
+            seed_minutes: 24 * 60,
+            upload_limit: None,
+            bt_port: 6881,
+            bt_dht: true,
+            bt_upnp: true,
         }
     }
 }
@@ -68,6 +90,13 @@ impl EngineConfig {
         if self.speed_limit == Some(0) {
             self.speed_limit = None;
         }
+        if self.upload_limit == Some(0) {
+            self.upload_limit = None;
+        }
+        if !self.seed_ratio.is_finite() || self.seed_ratio < 0.0 {
+            self.seed_ratio = 0.0;
+        }
+        self.seed_ratio = self.seed_ratio.min(1000.0);
         if self.user_agent.trim().is_empty() {
             self.user_agent = default_user_agent().into();
         }

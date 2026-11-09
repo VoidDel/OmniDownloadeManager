@@ -12,7 +12,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { ROW_HEIGHT } from '../../lib/theme';
 import type { Task } from '../../lib/types';
-import { STATUS_COLOR, STATUS_LABEL, errorText } from '../../lib/words';
+import { STATUS_COLOR, errorText, statusText } from '../../lib/words';
 import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
@@ -42,11 +42,13 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   }
   const canPause = list.some((t) => ['queued', 'probing', 'downloading'].includes(t.status));
   const canResume = list.some((t) => t.status === 'paused' || t.status === 'failed');
+  const seeding = list.filter((t) => t.status === 'seeding').map((t) => t.id);
   const changed = list.filter((t) => t.error?.code === 'remote_changed').map((t) => t.id);
   const items: MenuItem[] = [];
-  if (one?.status === 'completed') items.push({ label: '打开', icon: 'external', kbd: 'Enter', run: () => void run(() => api.open(one.id)) });
+  if (one?.status === 'completed' || one?.status === 'seeding') items.push({ label: '打开', icon: 'external', kbd: 'Enter', run: () => void run(() => api.open(one.id)) });
   if (canResume) items.push({ label: '开始', icon: 'play', run: () => void run(() => api.resume(ids)) });
   if (canPause) items.push({ label: '暂停', icon: 'pause', run: () => void run(() => api.pause(ids)) });
+  if (seeding.length) items.push({ label: '停止做种', icon: 'stop', run: () => void run(() => api.pause(seeding)) });
   if (changed.length) items.push({ label: '重新下载', icon: 'refresh', run: () => void run(() => api.restart(changed)) });
   items.push(
     { separator: true },
@@ -70,7 +72,8 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
   const color = STATUS_COLOR[t.status];
   const running = t.status === 'downloading' || t.status === 'probing';
   const p = progressOf(t);
-  const pct = t.status === 'completed' ? '100%' : fmt.percent(t.downloadedBytes, t.totalBytes);
+  const seeding = t.status === 'seeding';
+  const pct = t.status === 'completed' || seeding ? '100%' : fmt.percent(t.downloadedBytes, t.totalBytes);
   const size = t.totalBytes != null ? fmt.bytes(t.totalBytes) : t.downloadedBytes ? fmt.bytes(t.downloadedBytes) : '—';
   const remaining = running ? fmt.duration(t.etaSecs) : t.status === 'completed' ? fmt.when(t.completedAt) : '—';
   const title = t.error ? `${errorText(t.error)}\n${t.error.message}` : undefined;
@@ -99,7 +102,7 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
         {size}
       </span>
       <span className="dim num c-speed" role="gridcell">
-        {running && t.speedBps ? fmt.speed(t.speedBps) : '—'}
+        {seeding ? `↑ ${fmt.speed(t.uploadSpeedBps)}` : running && t.speedBps ? fmt.speed(t.speedBps) : '—'}
       </span>
       <span className="dim num c-eta" role="gridcell">
         {remaining}
@@ -107,7 +110,7 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
       <span className="st" role="gridcell" style={{ color }} title={title}>
         <i className="sdot" style={{ background: color }} />
         {/* The reason is in the tooltip and the details panel; the column only says the state. */}
-        {STATUS_LABEL[t.status]}
+        {statusText(t)}
       </span>
     </div>
   );
@@ -165,7 +168,7 @@ export function TaskTable() {
     const t = id ? useApp.getState().tasks[id] : null;
     if (!t) return;
     const { run } = useApp.getState();
-    if (t.status === 'completed') void run(() => api.open(t.id));
+    if (t.status === 'completed' || t.status === 'seeding') void run(() => api.open(t.id));
     else if (t.status === 'paused' || t.status === 'failed') void run(() => api.resume([t.id]));
     else if (t.status === 'removed') void run(() => api.restore([t.id]));
   };

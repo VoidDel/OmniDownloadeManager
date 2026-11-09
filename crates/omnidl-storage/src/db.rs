@@ -287,6 +287,16 @@ impl Db {
             .await?;
         Ok(())
     }
+
+    /// Bytes a torrent task uploaded in total (saved while it seeds).
+    pub async fn save_uploaded(&self, id: &str, uploaded: i64) -> Result<()> {
+        sqlx::query("UPDATE tasks SET uploaded = ? WHERE id = ?")
+            .bind(uploaded)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }
 
 fn task_from_row(r: &SqliteRow) -> Result<TaskRecord> {

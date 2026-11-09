@@ -1,4 +1,4 @@
-// The settings page (docs/development-plan.md §6.3): general, download and network for Phase 1.
+// The settings page (docs/development-plan.md §6.3): general, download, network, BT, browser.
 // Changes save at once (the backend applies them to downloads that start later; the global limit
 // and appearance apply immediately). Layout and classes are OmniZip's (omni-ui settings CSS).
 
@@ -14,6 +14,7 @@ import type { Density, Settings as S, ThemeMode } from '../../lib/types';
 import { useApp } from '../../store/app';
 import { SETTINGS_TABS } from '../shell/Chrome';
 import { BrowserSettings } from './BrowserSettings';
+import { TorrentSettings } from './TorrentSettings';
 
 const THEMES: ThemeSummary[] = builtinThemes.map((t) => summarize(t, true));
 
@@ -289,6 +290,7 @@ export function Settings() {
         {tab === 'general' && <General s={s} set={set} />}
         {tab === 'download' && <Download s={s} set={set} />}
         {tab === 'network' && <Network s={s} set={set} />}
+        {tab === 'torrent' && <TorrentSettings s={s} set={set} />}
         {tab === 'browser' && <BrowserSettings s={s} set={set} />}
       </div>
     </div>
