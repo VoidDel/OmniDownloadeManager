@@ -24,7 +24,6 @@ omnidl-core.workspace = true
 omnidl-storage.workspace = true
 omnidl-http.workspace = true
 omnidl-bt.workspace = true
-# Linked so the dependency graph is fixed; empty until its phase.
 omnidl-ftp.workspace = true
 # The browser bridge.
 omnidl-ipc = { workspace = true, features = ["tokio"] }

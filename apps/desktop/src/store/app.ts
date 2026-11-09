@@ -46,6 +46,8 @@ export const DEFAULT_SETTINGS: Settings = {
     btPort: 6881,
     btDht: true,
     btUpnp: true,
+    ftpConnections: 2,
+    ftpActive: false,
   },
   browser: { quickDialog: true, silentSites: [], httpBridge: false, httpPort: 0, httpToken: '' },
 };

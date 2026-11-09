@@ -156,12 +156,15 @@ async fn add_download(
 ) -> Result<AddResult, (ErrorCode, String)> {
     let url = d.url.trim().to_owned();
     match TaskKind::detect(&url) {
-        Some(TaskKind::Http) => {}
-        Some(_) => {
-            return Err((
-                ErrorCode::Unsupported,
-                "FTP and BitTorrent arrive in later versions".into(),
-            ));
+        Some(TaskKind::Http | TaskKind::Ftp) => {}
+        // A torrent: its files are chosen in the new-download dialog.
+        Some(TaskKind::Torrent) => {
+            crate::links::open(app, vec![url]);
+            return Ok(AddResult {
+                action: AddAction::Dialog,
+                asked: true,
+                task_id: None,
+            });
         }
         None => return Err((ErrorCode::BadRequest, format!("not a link: {url}"))),
     }

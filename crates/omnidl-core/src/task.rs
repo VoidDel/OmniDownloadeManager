@@ -237,10 +237,13 @@ impl Task {
         std::path::Path::new(&self.save_dir).join(filename::partial(&self.file_name))
     }
 
-    /// The database row. Options carrying cookies or headers are sealed with `secrets`.
+    /// The database row. Options carrying cookies, headers or a password are sealed with
+    /// `secrets`.
     pub(crate) fn to_record(&self, secrets: &dyn Secrets) -> omnidl_storage::TaskRecord {
         let json = serde_json::to_string(&self.options).unwrap_or_else(|_| "{}".into());
-        let sensitive = self.options.cookies.is_some() || !self.options.headers.is_empty();
+        let sensitive = self.options.cookies.is_some()
+            || !self.options.headers.is_empty()
+            || self.options.password.is_some();
         let options_json = if sensitive {
             secrets.seal(json.as_bytes()).unwrap_or(json)
         } else {

@@ -4,11 +4,13 @@
 //! - [`segments`]: the segment table shared by the multi-connection engines (HTTP now, FTP in
 //!   Phase 4), with work stealing.
 //! - [`filename`]: cleaning names for every file system, numbering duplicates, categories.
+//! - [`disk`]: room on the disk, claiming a free name, putting a finished file in place.
 //! - [`RateLimiter`]: token buckets for the global and per-task limits.
 //! - [`DownloadEngine`]: what a protocol crate implements; [`TaskManager`] schedules tasks onto
 //!   engines, persists them through `omnidl-storage` and publishes [`TaskEvent`]s.
 
 mod config;
+pub mod disk;
 mod engine;
 mod error;
 mod events;

@@ -17,6 +17,7 @@ export type ErrorCode =
   | 'timeout'
   | 'tls'
   | 'http_status'
+  | 'ftp_reply'
   | 'not_found'
   | 'auth_required'
   | 'forbidden'
@@ -46,6 +47,12 @@ export interface TaskOptions {
   proxy: ProxyConfig | null;
   /** BitTorrent: indices of the files to download (null: all). */
   onlyFiles: number[] | null;
+  /** FTP account (anonymous when null); a password in the link moves here. */
+  username: string | null;
+  password: string | null;
+  ftpActive: boolean | null;
+  /** FTPS: accept a certificate that does not verify. */
+  insecureTls: boolean | null;
 }
 
 export interface Task {
@@ -189,6 +196,8 @@ export interface EngineConfig {
   btPort: number;
   btDht: boolean;
   btUpnp: boolean;
+  ftpConnections: number;
+  ftpActive: boolean;
 }
 
 export interface BrowserSettings {
@@ -294,4 +303,8 @@ export const emptyOptions = (): TaskOptions => ({
   headers: {},
   proxy: null,
   onlyFiles: null,
+  username: null,
+  password: null,
+  ftpActive: null,
+  insecureTls: null,
 });

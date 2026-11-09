@@ -17,6 +17,8 @@ pub enum ErrorCode {
     Tls,
     /// Any other HTTP status the server answered with (`status`).
     HttpStatus,
+    /// An FTP server refused a command for good (`status` holds its reply code).
+    FtpReply,
     NotFound,
     /// 401 / 407 without usable credentials.
     AuthRequired,
@@ -38,7 +40,8 @@ pub enum ErrorCode {
 pub struct Error {
     pub code: ErrorCode,
     pub message: String,
-    /// HTTP status for `HttpStatus`, `NotFound`, `Forbidden`, `AuthRequired`.
+    /// HTTP status for `HttpStatus`, `NotFound`, `Forbidden`, `AuthRequired`; the FTP reply code
+    /// for `FtpReply`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
 }

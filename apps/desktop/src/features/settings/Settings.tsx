@@ -216,55 +216,73 @@ function Network({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const [mode, setMode] = useState<ProxyMode>(e.proxy.mode);
   const [customUrl, setCustomUrl] = useState(e.proxy.mode === 'custom' ? e.proxy.url : '');
   return (
-    <div className="set-group">
-      <Row col label="代理" hint="HTTP、HTTPS 或 SOCKS5 代理；socks5h:// 由代理解析域名">
-        <div className="inline">
-          <Segmented<ProxyMode>
-            value={mode}
-            label="代理"
-            onChange={(v) => {
-              setMode(v);
-              if (v !== 'custom') set((x) => (x.engine.proxy = { mode: v }));
-              else if (customUrl.trim()) set((x) => (x.engine.proxy = { mode: 'custom', url: customUrl.trim() }));
-            }}
+    <>
+      <div className="set-group">
+        <Row col label="代理" hint="HTTP、HTTPS 或 SOCKS5 代理，用于 HTTP 下载；socks5h:// 由代理解析域名">
+          <div className="inline">
+            <Segmented<ProxyMode>
+              value={mode}
+              label="代理"
+              onChange={(v) => {
+                setMode(v);
+                if (v !== 'custom') set((x) => (x.engine.proxy = { mode: v }));
+                else if (customUrl.trim()) set((x) => (x.engine.proxy = { mode: 'custom', url: customUrl.trim() }));
+              }}
+              options={[
+                ['system', '系统代理'],
+                ['none', '不使用'],
+                ['custom', '自定义'],
+              ]}
+            />
+            {mode === 'custom' && (
+              <TextSetting
+                mono
+                label="代理地址"
+                value={customUrl}
+                placeholder="http://127.0.0.1:7890"
+                onSave={(v) => {
+                  setCustomUrl(v);
+                  if (v) set((x) => (x.engine.proxy = { mode: 'custom', url: v }));
+                }}
+              />
+            )}
+          </div>
+        </Row>
+        <Row col label="User-Agent" hint="默认使用桌面版 Chrome 的标识；有的网站会拒绝陌生的客户端">
+          <div className="inline">
+            <TextSetting mono label="User-Agent" value={e.userAgent} onSave={(v) => set((x) => (x.engine.userAgent = v))} />
+            <button type="button" className="btn outline" onClick={() => set((x) => (x.engine.userAgent = ''))}>
+              恢复默认
+            </button>
+          </div>
+        </Row>
+        <Row label="连接超时">
+          <NumberSelect label="连接超时" unit=" 秒" value={e.connectTimeoutSecs} options={[5, 10, 15, 30, 60]} onChange={(v) => set((x) => (x.engine.connectTimeoutSecs = v))} />
+        </Row>
+        <Row label="无响应超时" hint="连接这么久收不到数据就断开重连">
+          <NumberSelect label="无响应超时" unit=" 秒" value={e.readTimeoutSecs} options={[10, 20, 30, 60, 120]} onChange={(v) => set((x) => (x.engine.readTimeoutSecs = v))} />
+        </Row>
+        <Row label="失败重试次数" hint="网络错误或服务器 5xx 时，每个连接按 1、2、4… 秒的间隔重试">
+          <NumberSelect label="失败重试次数" unit=" 次" value={e.maxRetries} options={[0, 3, 5, 10, 20]} onChange={(v) => set((x) => (x.engine.maxRetries = v))} />
+        </Row>
+      </div>
+      <div className="set-group">
+        <Row label="FTP 会话数" hint="每个 FTP 任务同时登录的会话；很多服务器限制每个用户的连接数">
+          <NumberSelect label="FTP 会话数" value={e.ftpConnections} options={[1, 2, 3, 4, 6, 8]} onChange={(v) => set((x) => (x.engine.ftpConnections = v))} />
+        </Row>
+        <Row label="FTP 传输模式" hint="被动模式适合大多数网络；主动模式需要服务器能连回本机">
+          <Segmented<'passive' | 'active'>
+            value={e.ftpActive ? 'active' : 'passive'}
+            label="FTP 传输模式"
+            onChange={(v) => set((x) => (x.engine.ftpActive = v === 'active'))}
             options={[
-              ['system', '系统代理'],
-              ['none', '不使用'],
-              ['custom', '自定义'],
+              ['passive', '被动'],
+              ['active', '主动'],
             ]}
           />
-          {mode === 'custom' && (
-            <TextSetting
-              mono
-              label="代理地址"
-              value={customUrl}
-              placeholder="http://127.0.0.1:7890"
-              onSave={(v) => {
-                setCustomUrl(v);
-                if (v) set((x) => (x.engine.proxy = { mode: 'custom', url: v }));
-              }}
-            />
-          )}
-        </div>
-      </Row>
-      <Row col label="User-Agent" hint="默认使用桌面版 Chrome 的标识；有的网站会拒绝陌生的客户端">
-        <div className="inline">
-          <TextSetting mono label="User-Agent" value={e.userAgent} onSave={(v) => set((x) => (x.engine.userAgent = v))} />
-          <button type="button" className="btn outline" onClick={() => set((x) => (x.engine.userAgent = ''))}>
-            恢复默认
-          </button>
-        </div>
-      </Row>
-      <Row label="连接超时">
-        <NumberSelect label="连接超时" unit=" 秒" value={e.connectTimeoutSecs} options={[5, 10, 15, 30, 60]} onChange={(v) => set((x) => (x.engine.connectTimeoutSecs = v))} />
-      </Row>
-      <Row label="无响应超时" hint="连接这么久收不到数据就断开重连">
-        <NumberSelect label="无响应超时" unit=" 秒" value={e.readTimeoutSecs} options={[10, 20, 30, 60, 120]} onChange={(v) => set((x) => (x.engine.readTimeoutSecs = v))} />
-      </Row>
-      <Row label="失败重试次数" hint="网络错误或服务器 5xx 时，每个连接按 1、2、4… 秒的间隔重试">
-        <NumberSelect label="失败重试次数" unit=" 次" value={e.maxRetries} options={[0, 3, 5, 10, 20]} onChange={(v) => set((x) => (x.engine.maxRetries = v))} />
-      </Row>
-    </div>
+        </Row>
+      </div>
+    </>
   );
 }
 

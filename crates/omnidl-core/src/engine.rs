@@ -250,6 +250,12 @@ pub struct JobOptions {
     pub seeding: bool,
     pub seed_ratio: f64,
     pub seed_minutes: u32,
+    /// FTP sessions (1–8).
+    pub ftp_connections: u32,
+    pub ftp_active: bool,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub insecure_tls: bool,
 }
 
 impl JobOptions {
@@ -275,6 +281,14 @@ impl JobOptions {
             seeding: config.seeding,
             seed_ratio: config.seed_ratio,
             seed_minutes: config.seed_minutes,
+            ftp_connections: task
+                .connections
+                .unwrap_or(config.ftp_connections)
+                .clamp(1, 8),
+            ftp_active: task.ftp_active.unwrap_or(config.ftp_active),
+            username: task.username.clone().filter(|s| !s.is_empty()),
+            password: task.password.clone(),
+            insecure_tls: task.insecure_tls.unwrap_or(false),
         }
     }
 }

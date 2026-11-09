@@ -5,10 +5,10 @@
 
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { FileIcon, Icon } from '../../components/Icon';
-import { Modal, Select } from '../../components/ui';
+import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { parseLinks, type Link } from '../../lib/links';
@@ -23,6 +23,7 @@ type Probe = { state: 'probing' } | { state: 'ok'; info: ProbeInfo } | { state: 
 const PROBE_MAX = 20;
 
 type ProxyMode = 'inherit' | 'system' | 'none' | 'custom';
+type FtpMode = 'inherit' | 'passive' | 'active';
 
 const BADGE: Record<Link['kind'], [string, string]> = {
   http: ['HTTP', 'proto-http'],
@@ -33,14 +34,14 @@ const BADGE: Record<Link['kind'], [string, string]> = {
 
 /** `previewed`: within the links probed here (the rest are probed when they start). */
 /** Kinds this version adds. */
-const SUPPORTED: ReadonlySet<Link['kind']> = new Set(['http', 'magnet', 'torrent']);
+const SUPPORTED: ReadonlySet<Link['kind']> = new Set(['http', 'ftp', 'magnet', 'torrent']);
 
 function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: Probe; previewed: boolean; connections: number }) {
   const supported = SUPPORTED.has(link.kind);
   const torrent = link.kind === 'magnet' || link.kind === 'torrent';
   const name = probe?.state === 'ok' ? probe.info.fileName : link.url;
   let sub: ReactNode;
-  if (!supported) sub = <span className="warn-text">FTP 下载将在后续版本支持，这一行不会添加</span>;
+  if (!supported) sub = <span className="warn-text">这类链接暂不支持，这一行不会添加</span>;
   else if (!probe && !previewed) sub = '开始下载时获取文件信息';
   else if (!probe || probe.state === 'probing')
     sub = (
@@ -57,7 +58,9 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
   } else {
     const i = probe.info;
     const parts = [i.total != null ? fmt.bytes(i.total) : '大小未知', i.resumable ? '支持断点续传' : '不支持断点续传'];
-    if (i.resumable && i.total != null) parts.push(`将使用 ${Math.max(1, Math.min(connections, Math.floor(i.total / 1048576) || 1))} 个连接`);
+    const most = link.kind === 'ftp' ? Math.min(connections, 8) : connections;
+    const unit = link.kind === 'ftp' ? '会话' : '连接';
+    if (i.resumable && i.total != null) parts.push(`将使用 ${Math.max(1, Math.min(most, Math.floor(i.total / 1048576) || 1))} 个${unit}`);
     sub = parts.join(' · ');
   }
   const many = probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1;
@@ -86,7 +89,12 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [probes, setProbes] = useState<Record<string, Probe>>({});
   const [dir, setDir] = useState(defaultDir);
   const [name, setName] = useState<string | null>(null);
-  const [connections, setConnections] = useState(String(settings.engine.connections));
+  // Empty: the setting (HTTP and FTP have their own).
+  const [connections, setConnections] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [ftpMode, setFtpMode] = useState<FtpMode>('inherit');
+  const [insecureTls, setInsecureTls] = useState(false);
   const [limit, setLimit] = useState('');
   const [referer, setReferer] = useState(initial.referer ?? '');
   const [cookies, setCookies] = useState(initial.cookies ?? '');
@@ -101,8 +109,12 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
 
   const addable = useMemo(() => links.filter((l) => SUPPORTED.has(l.kind)), [links]);
   const hasHttp = addable.some((l) => l.kind === 'http');
+  const hasFtp = addable.some((l) => l.kind === 'ftp');
+  // FTP links are probed again when the account or TLS choice changes.
+  const ftpKey = JSON.stringify([username, password, ftpMode, insecureTls]);
+  const keyOf = useCallback((l: Link) => (l.kind === 'ftp' ? `${l.url}\u0000${ftpKey}` : l.url), [ftpKey]);
   const single = addable.length === 1 ? addable[0] : null;
-  const singleProbe = single ? probes[single.url] : undefined;
+  const singleProbe = single ? probes[keyOf(single)] : undefined;
   // The files of a single torrent: all chosen until the user unticks some.
   const torrentFiles = useMemo(
     () => (single && single.kind !== 'http' && singleProbe?.state === 'ok' ? (singleProbe.info.files ?? []).map((f, index) => ({ ...f, index })) : []),
@@ -110,16 +122,16 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   );
   const [picked, setPicked] = useState<{ url: string; files: Set<number> } | null>(null);
   const chosen = picked && picked.url === single?.url ? picked.files : new Set(torrentFiles.map((f) => f.index));
-  const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || settings.engine.connections));
+  const defaultConnections = hasHttp || !hasFtp ? settings.engine.connections : settings.engine.ftpConnections;
+  const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || defaultConnections));
   const speed = fmt.parseSpeed(limit);
 
-  const defaultConnections = settings.engine.connections;
   const options = useMemo((): TaskOptions => {
     const proxy: ProxyConfig | null =
       proxyMode === 'inherit' ? null : proxyMode === 'custom' ? { mode: 'custom', url: proxyUrl.trim() } : { mode: proxyMode };
     return {
       fileName: null,
-      connections: conn === defaultConnections ? null : conn,
+      connections: connections.trim() ? conn : null,
       speedLimit: speed ?? null,
       userAgent: userAgent.trim() || null,
       referer: referer.trim() || null,
@@ -127,30 +139,35 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       headers: {},
       proxy,
       onlyFiles: null,
+      username: username.trim() || null,
+      password: username.trim() && password ? password : null,
+      ftpActive: ftpMode === 'inherit' ? null : ftpMode === 'active',
+      insecureTls: insecureTls || null,
     };
-  }, [conn, defaultConnections, speed, userAgent, referer, cookies, proxyMode, proxyUrl]);
+  }, [conn, connections, speed, userAgent, referer, cookies, proxyMode, proxyUrl, username, password, ftpMode, insecureTls]);
 
   // Probe new links shortly after typing stops (with the request details set so far).
   useEffect(() => {
     if (!isTauri()) return;
-    const todo = addable.slice(0, PROBE_MAX).filter((l) => !probes[l.url]);
+    const todo = addable.slice(0, PROBE_MAX).filter((l) => !probes[keyOf(l)]);
     if (!todo.length) return;
     const t = setTimeout(() => {
-      setProbes((p) => ({ ...p, ...Object.fromEntries(todo.map((l) => [l.url, { state: 'probing' } as Probe])) }));
+      setProbes((p) => ({ ...p, ...Object.fromEntries(todo.map((l) => [keyOf(l), { state: 'probing' } as Probe])) }));
       for (const l of todo) {
+        const key = keyOf(l);
         api.probe(l.url, options).then(
-          (info) => setProbes((p) => ({ ...p, [l.url]: { state: 'ok', info } })),
-          (e) => setProbes((p) => ({ ...p, [l.url]: { state: 'error', error: asError(e) } })),
+          (info) => setProbes((p) => ({ ...p, [key]: { state: 'ok', info } })),
+          (e) => setProbes((p) => ({ ...p, [key]: { state: 'error', error: asError(e) } })),
         );
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [addable, probes, options]);
+  }, [addable, probes, options, keyOf]);
 
   // The name field starts with the server's name for a single link.
   const shownName = name ?? (singleProbe?.state === 'ok' ? singleProbe.info.fileName : '');
 
-  const known = addable.map((l) => probes[l.url]).filter((p): p is Extract<Probe, { state: 'ok' }> => p?.state === 'ok');
+  const known = addable.map((l) => probes[keyOf(l)]).filter((p): p is Extract<Probe, { state: 'ok' }> => p?.state === 'ok');
   const choosing = torrentFiles.length > 1 && chosen.size < torrentFiles.length;
   const totalKnown = choosing
     ? torrentFiles.filter((f) => chosen.has(f.index)).reduce((n, f) => n + f.size, 0)
@@ -173,7 +190,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
     setBusy(true);
     const opts = options;
     const items: NewTask[] = addable.map((l) => {
-      const p = probes[l.url];
+      const p = probes[keyOf(l)];
       return {
         source: l.url,
         saveDir: dir.trim() || defaultDir,
@@ -239,7 +256,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           }}
         />
         <div className="nt-hintrow">
-          <small className="hint">每行一个：HTTP 或 HTTPS 链接、磁力链接、种子文件的路径。</small>
+          <small className="hint">每行一个：HTTP、FTP 链接，磁力链接或种子文件的路径。</small>
           <button type="button" className="btn subtle sm" onClick={() => void addTorrentFiles()}>
             <Icon name="folderOpen" />
             打开种子文件
@@ -249,7 +266,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       {links.length > 0 && (
         <div className="nt-list">
           {links.map((l) => (
-            <LinkRow key={l.url} link={l} probe={probes[l.url]} previewed={isTauri() && addable.indexOf(l) < PROBE_MAX} connections={conn} />
+            <LinkRow key={l.url} link={l} probe={probes[keyOf(l)]} previewed={isTauri() && addable.indexOf(l) < PROBE_MAX} connections={conn} />
           ))}
         </div>
       )}
@@ -268,11 +285,20 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
             浏览
           </button>
         </div>
-        <label htmlFor={hasHttp ? 'nt-conn' : 'nt-limit'}>{hasHttp ? '连接数' : '限速'}</label>
+        <label htmlFor={hasHttp || hasFtp ? 'nt-conn' : 'nt-limit'}>{hasHttp || hasFtp ? '连接数' : '限速'}</label>
         <div className="inline nt-nums">
-          {hasHttp && (
+          {(hasHttp || hasFtp) && (
             <>
-              <input id="nt-conn" className="inp" type="number" min={1} max={64} value={connections} onChange={(e) => setConnections(e.target.value)} />
+              <input
+                id="nt-conn"
+                className="inp"
+                type="number"
+                min={1}
+                max={hasHttp ? 64 : 8}
+                value={connections}
+                placeholder={String(defaultConnections)}
+                onChange={(e) => setConnections(e.target.value)}
+              />
               <label htmlFor="nt-limit">限速</label>
             </>
           )}
@@ -287,6 +313,34 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           />
         </div>
       </div>
+      {hasFtp && (
+        <div className="frow">
+          <label htmlFor="nt-user">FTP 账号</label>
+          <div className="inline">
+            <input id="nt-user" className="inp" value={username} placeholder="留空为匿名登录" autoComplete="off" spellCheck={false} onChange={(e) => setUsername(e.target.value)} />
+            {username.trim() && <PasswordInput id="nt-pass" label="密码" toggleLabel="显示密码" value={password} onChange={setPassword} />}
+          </div>
+          <label>传输模式</label>
+          <div className="inline">
+            <Segmented<FtpMode>
+              value={ftpMode}
+              label="传输模式"
+              onChange={setFtpMode}
+              options={[
+                ['inherit', '跟随设置'],
+                ['passive', '被动'],
+                ['active', '主动'],
+              ]}
+            />
+            {addable.some((l) => l.kind === 'ftp' && l.url.toLowerCase().startsWith('ftps:')) && (
+              <label className="chk">
+                <input type="checkbox" checked={insecureTls} onChange={(e) => setInsecureTls(e.target.checked)} />
+                接受未验证的证书
+              </label>
+            )}
+          </div>
+        </div>
+      )}
       <details className="nt-adv" open={advancedOpen || undefined}>
         <summary>
           <Icon name="chevronRight" />

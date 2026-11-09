@@ -2,7 +2,7 @@
 
 跨平台（Windows、macOS、Linux）下载管理器：HTTP / FTP 多连接与断点续传、BitTorrent 与磁力链接，以及 Chrome、Edge、Firefox 扩展。Rust + Tauri 2 + React，界面与 [OmniZip](https://github.com/VoidDel/OmniZip) 同属 Omni 家族，共用设计系统 [omni-ui](https://github.com/VoidDel/omni-ui)。
 
-> 当前进度：**Phase 3** 已完成：HTTP / HTTPS 多连接下载与断点续传、任务列表与设置（Phase 1），Chrome、Edge、Firefox 扩展接管下载（Phase 2），以及 BitTorrent 与磁力链接（文件选择、做种策略、`magnet:` 与 `.torrent` 关联）。FTP 在后续阶段，路线图见 [开发方案](docs/development-plan.md) §10。
+> 当前进度：**Phase 4** 已完成：HTTP / HTTPS 多连接下载与断点续传、任务列表与设置（Phase 1），Chrome、Edge、Firefox 扩展接管下载（Phase 2），BitTorrent 与磁力链接（文件选择、做种策略、`magnet:` 与 `.torrent` 关联，Phase 3），以及 FTP / FTPS（账号、多会话、`REST` 续传，Phase 4）。之后是系统集成与发布工程，路线图见 [开发方案](docs/development-plan.md) §10。
 
 ## 目录
 
@@ -47,6 +47,9 @@ cargo run -p omnidl-http --release --example test_server -- 127.0.0.1:18080
 # 然后在应用里添加，例如：
 #   http://127.0.0.1:18080/dl/3221225472/ubuntu.iso      每个连接约 1 MB/s，便于观察进度
 #   http://127.0.0.1:18080/get/52428800/node.zip         全速
+
+# FTP：把一个文件夹放到本机 FTP 上（不带账号参数时匿名登录）
+cargo run -p omnidl-ftp --example ftp_server -- <文件夹> [端口，默认 2121] [user:password]
 
 # BT：在本机做种一个文件或文件夹（写出 .torrent，打印带 x.pe 的磁力链接），再把它们加进应用
 cargo run -p omnidl-bt --example seed -- <文件或文件夹> [端口] [KiB/s]

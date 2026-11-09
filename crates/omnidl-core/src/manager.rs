@@ -281,13 +281,24 @@ impl TaskManager {
     pub async fn add(&self, items: Vec<NewTask>) -> Result<Vec<Task>> {
         let mut added = Vec::with_capacity(items.len());
         for item in items {
-            let source = item.source.trim().to_owned();
+            let mut source = item.source.trim().to_owned();
             let engine = self.inner.engine_for(&source)?;
+            let mut options = item.options;
+            if engine.kind() == TaskKind::Ftp
+                && let Some((clean, user, password)) = filename::split_credentials(&source)
+            {
+                // The link stays visible (list, details, copy link): the password goes sealed
+                // into the options.
+                source = clean;
+                options.username = Some(user);
+                if password.is_some() {
+                    options.password = password;
+                }
+            }
             let save_dir = item.save_dir.trim().to_owned();
             if save_dir.is_empty() {
                 return Err(Error::invalid("no download folder"));
             }
-            let mut options = item.options;
             options.file_name = options
                 .file_name
                 .filter(|n| !n.trim().is_empty())

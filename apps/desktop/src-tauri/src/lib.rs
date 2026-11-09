@@ -1,5 +1,5 @@
 //! The Omni Download desktop app (Tauri 2): the main window, the task manager behind its
-//! commands (HTTP and BitTorrent engines), the stream of task events to the window, the browser
+//! commands (HTTP, FTP and BitTorrent engines), the stream of task events to the window, the browser
 //! bridge (local pipe for the Native Messaging host, HTTP fallback, quick-download window), and
 //! magnet links and `.torrent` files from the system. The tray arrives with Phase 5
 //! (docs/development-plan.md §10).
@@ -19,6 +19,7 @@ use std::{
 
 use omnidl_bt::{BtConfig, BtEngine};
 use omnidl_core::TaskManager;
+use omnidl_ftp::FtpEngine;
 use omnidl_http::HttpEngine;
 use omnidl_storage::Db;
 use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
@@ -81,8 +82,11 @@ pub fn run() {
             let manager = tauri::async_runtime::block_on(async move {
                 bt_engine.set_upload_limit(upload_limit).await;
                 let db = Db::open(&db_path).await?;
-                let engines: Vec<Arc<dyn omnidl_core::DownloadEngine>> =
-                    vec![Arc::new(HttpEngine::new()), bt_engine];
+                let engines: Vec<Arc<dyn omnidl_core::DownloadEngine>> = vec![
+                    Arc::new(HttpEngine::new()),
+                    Arc::new(FtpEngine::new()),
+                    bt_engine,
+                ];
                 TaskManager::open_with_secrets(db, engines, engine_config, sealing)
                     .await
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)

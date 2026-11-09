@@ -13,7 +13,7 @@ mod run;
 
 use std::{
     collections::{HashMap, HashSet},
-    net::{Ipv6Addr, SocketAddr},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     num::NonZeroU32,
     path::{Path, PathBuf},
     sync::Arc,
@@ -132,7 +132,7 @@ impl BtEngine {
     async fn start_session(&self) -> Result<Arc<Session>> {
         let c = &self.config;
         std::fs::create_dir_all(&c.state_dir).map_err(|e| Error::io(&e, c.state_dir.display()))?;
-        let options = |port: u16| SessionOptions {
+        let options = |port: u16, ipv4_only: bool| SessionOptions {
             dht: c.dht.then(|| DhtSessionConfig {
                 bootstrap_addrs: None,
                 port: None,
@@ -145,10 +145,16 @@ impl BtEngine {
             disable_local_service_discovery: !c.local_discovery,
             listen: Some(ListenerOptions {
                 mode: ListenerMode::TcpOnly,
-                listen_addr: (Ipv6Addr::UNSPECIFIED, port).into(),
+                listen_addr: if ipv4_only {
+                    (Ipv4Addr::UNSPECIFIED, port).into()
+                } else {
+                    (Ipv6Addr::UNSPECIFIED, port).into()
+                },
                 enable_upnp_port_forwarding: c.upnp,
+                ipv4_only,
                 ..Default::default()
             }),
+            ipv4_only,
             ratelimits: LimitsConfig {
                 upload_bps: bps(*self.upload_limit.lock()),
                 download_bps: None,
@@ -157,19 +163,27 @@ impl BtEngine {
             ..Default::default()
         };
         let folder = c.state_dir.join("default");
-        match Session::new_with_opts(folder.clone(), options(c.listen_port)).await {
-            Ok(s) => Ok(s),
-            Err(e) if c.listen_port != 0 => {
-                tracing::warn!(
-                    "BitTorrent port {} unavailable ({e:#}); using any",
-                    c.listen_port
-                );
-                Session::new_with_opts(folder, options(0))
-                    .await
-                    .map_err(failure)
-            }
-            Err(e) => Err(failure(e)),
+        // The chosen port on IPv6 and IPv4; a taken port: any port; no IPv6: IPv4 only.
+        let mut attempts = vec![(c.listen_port, false)];
+        if c.listen_port != 0 {
+            attempts.push((0, false));
         }
+        attempts.push((0, true));
+        let mut last = None;
+        for (port, ipv4_only) in attempts {
+            match Session::new_with_opts(folder.clone(), options(port, ipv4_only)).await {
+                Ok(s) => return Ok(s),
+                Err(e) => {
+                    tracing::warn!(
+                        "BitTorrent session on port {port} (IPv4 only: {ipv4_only}): {e:#}"
+                    );
+                    last = Some(e);
+                }
+            }
+        }
+        Err(failure(
+            last.map_or_else(|| "no session".into(), |e| format!("{e:#}")),
+        ))
     }
 
     /// Peers to try for `source`: those of the settings and a magnet link's `x.pe` hints.

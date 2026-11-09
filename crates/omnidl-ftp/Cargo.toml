@@ -11,3 +11,24 @@ publish.workspace = true
 [dependencies]
 omnidl-core.workspace = true
 omnidl-storage.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+parking_lot.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
+suppaftp.workspace = true
+tokio = { workspace = true, features = ["net", "io-util"] }
+tokio-rustls.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+libunftp.workspace = true
+omnidl-storage.workspace = true
+rcgen.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "fs"] }
+unftp-core.workspace = true
+unftp-sbe-fs.workspace = true

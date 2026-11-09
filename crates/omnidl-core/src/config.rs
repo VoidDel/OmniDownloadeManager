@@ -52,6 +52,10 @@ pub struct EngineConfig {
     pub bt_dht: bool,
     /// Ask the router to forward `bt_port` (UPnP).
     pub bt_upnp: bool,
+    /// FTP sessions per download unless the task says otherwise (servers often limit them).
+    pub ftp_connections: u32,
+    /// FTP active mode by default.
+    pub ftp_active: bool,
 }
 
 impl Default for EngineConfig {
@@ -75,6 +79,8 @@ impl Default for EngineConfig {
             bt_port: 6881,
             bt_dht: true,
             bt_upnp: true,
+            ftp_connections: 2,
+            ftp_active: false,
         }
     }
 }
@@ -84,6 +90,7 @@ impl EngineConfig {
     pub fn normalized(mut self) -> Self {
         self.max_concurrent = self.max_concurrent.clamp(1, 32);
         self.connections = self.connections.clamp(1, 64);
+        self.ftp_connections = self.ftp_connections.clamp(1, 8);
         self.connect_timeout_secs = self.connect_timeout_secs.clamp(1, 600);
         self.read_timeout_secs = self.read_timeout_secs.clamp(1, 3600);
         self.max_retries = self.max_retries.min(100);

@@ -57,10 +57,12 @@ export function errorText(e: AppError): string {
       return '安全连接失败，证书无效';
     case 'http_status':
       return e.status ? `服务器返回错误 ${e.status}` : '服务器返回错误';
+    case 'ftp_reply':
+      return e.status ? `FTP 服务器拒绝了请求（${e.status}）` : 'FTP 服务器拒绝了请求';
     case 'not_found':
       return '服务器上没有这个文件';
     case 'auth_required':
-      return '需要登录或授权';
+      return '需要登录或授权，账号或密码不对';
     case 'forbidden':
       return '服务器拒绝访问';
     case 'remote_changed':

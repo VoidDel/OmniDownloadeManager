@@ -1,7 +1,7 @@
 //! One run of an HTTP download: settle the file, run the connections, save progress, finish.
 
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicU32, Ordering},
@@ -11,8 +11,9 @@ use std::{
 
 use futures_util::StreamExt;
 use omnidl_core::{
-    ConflictPolicy, Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable, filename,
-    segments,
+    Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable,
+    disk::{backoff, claim_name, ensure_space, place},
+    filename, segments,
 };
 use omnidl_storage::{FileWriter, file};
 use parking_lot::Mutex;
@@ -34,7 +35,6 @@ use crate::{
 const UI_TICK: Duration = Duration::from_millis(250);
 /// How often progress is saved (a crash loses at most this much).
 const SAVE_EVERY: Duration = Duration::from_secs(1);
-const MAX_BACKOFF: Duration = Duration::from_secs(60);
 
 pub(crate) async fn run(retry_delay: Duration, job: Job) -> Outcome {
     let job = Arc::new(job);
@@ -168,52 +168,6 @@ async fn probe_retrying(
             r => return r,
         }
     }
-}
-
-/// Fails early when the file cannot fit.
-fn ensure_space(dir: &Path, total: Option<u64>) -> Result<()> {
-    let Some(total) = total else {
-        return Ok(());
-    };
-    match file::available_space(dir) {
-        Ok(free) if free < total => Err(Error::new(
-            ErrorCode::DiskFull,
-            format!("{total} bytes needed, {free} free in {}", dir.display()),
-        )),
-        _ => Ok(()),
-    }
-}
-
-/// Picks the first free name `base`, `base (1)`… and creates its partial file. A name is taken
-/// when another download has its partial file, or (when renaming) the file exists.
-fn claim_name(
-    dir: &Path,
-    base: &str,
-    total: Option<u64>,
-    conflict: ConflictPolicy,
-) -> Result<(String, std::fs::File)> {
-    for n in 0..10_000 {
-        let name = if n == 0 {
-            base.to_owned()
-        } else {
-            filename::numbered(base, n)
-        };
-        if conflict == ConflictPolicy::Rename && dir.join(&name).exists() {
-            continue;
-        }
-        let partial = dir.join(filename::partial(&name));
-        match file::create_new(&partial, total) {
-            Ok(f) => return Ok((name, f)),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(Error::io(&e, partial.display())),
-        }
-    }
-    Err(Error::internal(format!("no free name for {base}")))
-}
-
-fn backoff(base: Duration, attempt: u32) -> Duration {
-    base.saturating_mul(1 << attempt.saturating_sub(1).min(16))
-        .min(MAX_BACKOFF)
 }
 
 /// Why the connections stopped.
@@ -416,23 +370,11 @@ impl Download {
         if let Err(e) = self.writer.close().await {
             return Outcome::Failed(Error::io(&e, "writing the file"), Some(state));
         }
-        let partial = self.dir.join(filename::partial(&state.file_name));
-        let mut name = state.file_name.clone();
-        if self.job.options.conflict == ConflictPolicy::Rename && self.dir.join(&name).exists() {
-            // Someone created the file meanwhile.
-            if let Some(free) = (1..10_000)
-                .map(|n| filename::numbered(&state.file_name, n))
-                .find(|n| {
-                    !self.dir.join(n).exists() && !self.dir.join(filename::partial(n)).exists()
-                })
-            {
-                name = free;
-            }
-        }
+        let name = match place(&self.dir, &state.file_name, self.job.options.conflict) {
+            Ok(n) => n,
+            Err(e) => return Outcome::Failed(e, Some(state)),
+        };
         let target = self.dir.join(&name);
-        if let Err(e) = std::fs::rename(&partial, &target) {
-            return Outcome::Failed(Error::io(&e, target.display()), Some(state));
-        }
         if let Some(t) = state
             .last_modified
             .as_deref()

@@ -124,6 +124,24 @@ pub fn for_torrent(source: &str) -> Option<String> {
     (!raw.trim().is_empty()).then(|| sanitize(&raw))
 }
 
+/// `scheme://user:password@host/…` → the link without them, the user and the password (both
+/// percent-decoded); `None` without credentials.
+pub fn split_credentials(url: &str) -> Option<(String, String, Option<String>)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (authority, tail) = rest.split_at(authority_end);
+    let (userinfo, host) = authority.rsplit_once('@')?;
+    let (user, password) = match userinfo.split_once(':') {
+        Some((u, p)) => (u, Some(percent_decode(p))),
+        None => (userinfo, None),
+    };
+    Some((
+        format!("{scheme}://{host}{tail}"),
+        percent_decode(user),
+        password,
+    ))
+}
+
 /// Decodes `%XX` escapes as UTF-8 (invalid sequences are replaced).
 pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&percent_decode_bytes(s)).into_owned()
@@ -216,6 +234,24 @@ mod tests {
         assert_eq!(numbered("src.tar.gz", 2), "src (2).tar.gz");
         assert_eq!(numbered("README", 3), "README (3)");
         assert_eq!(numbered(".bashrc", 1), ".bashrc (1)");
+    }
+
+    #[test]
+    fn splits_credentials_off_links() {
+        assert_eq!(
+            split_credentials("ftp://bob:p%40ss@h.example:2121/pub/a.iso"),
+            Some((
+                "ftp://h.example:2121/pub/a.iso".into(),
+                "bob".into(),
+                Some("p@ss".into())
+            ))
+        );
+        assert_eq!(
+            split_credentials("ftp://anon@h/a"),
+            Some(("ftp://h/a".into(), "anon".into(), None))
+        );
+        assert_eq!(split_credentials("ftp://h/a@b"), None);
+        assert_eq!(split_credentials("ftp://h/a"), None);
     }
 
     #[test]
