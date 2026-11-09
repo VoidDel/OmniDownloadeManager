@@ -145,3 +145,46 @@
 /* ---------------------------------------------------------------- empty states */
 .emptyst .empty-title { color: var(--fg-primary); font-weight: 600; font-size: 1rem; }
 .emptyst p { margin: 4px 0 0; font-size: .9rem; max-width: 420px; }
+
+/* ---------------------------------------------------------------- status bar: browsers */
+.statusbar .rgt { display: flex; align-items: center; gap: 12px; }
+.statusbar .seen { display: inline-flex; align-items: center; gap: 5px; }
+.statusbar .seen i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+/* ---------------------------------------------------------------- settings: browser */
+.bstate { display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; color: var(--fg-secondary); white-space: nowrap; }
+.bstate i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-muted); }
+.bstate.ok { color: var(--success); }
+.bstate.ok i { background: var(--success); }
+.bstate.warn { color: var(--warning); }
+.bstate.warn i { background: var(--warning); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.site-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 2px; }
+.site-chip button { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--fg-muted); }
+.site-chip button:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.site-chip button .ic { width: 12px; height: 12px; }
+
+/* ---------------------------------------------------------------- quick-download window */
+html:has(.quick), body:has(.quick) { overflow: hidden; }
+.quick { height: 100vh; display: flex; flex-direction: column; background: var(--bg-canvas); color: var(--fg-primary); font-variant-numeric: tabular-nums; border: 1px solid var(--border-subtle); box-sizing: border-box; }
+.quick header { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding-left: 14px; }
+.quick header h1 { margin: 0; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.quick header h1 span { font-size: .82rem; font-weight: 400; color: var(--fg-secondary); overflow: hidden; text-overflow: ellipsis; }
+.q-close { width: 46px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-secondary); flex: none; }
+.q-close:hover { background: #e81123; color: #fff; }
+.q-body { flex: 1; padding: 8px 16px 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px 12px; align-content: start; }
+.q-body > label { font-size: .9rem; color: var(--fg-secondary); }
+.q-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.q-name .inp { flex: 1; font-weight: 500; }
+.q-info { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: .8rem; color: var(--fg-secondary); min-height: 20px; }
+.q-info b { color: var(--fg-primary); font-weight: 500; }
+.q-info .q-part + .q-part::before, .q-info .q-part + .q-ok::before { content: ''; display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); margin: 0 8px 2px 0; vertical-align: middle; }
+.q-probing { display: inline-flex; align-items: center; gap: 6px; }
+.q-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--success); }
+.q-ok .ic { width: 13px; height: 13px; }
+.q-nums .inp { flex: 0 0 72px; min-width: 0; }
+.q-nums > label { font-size: .86rem; color: var(--fg-secondary); }
+.q-remember { color: var(--fg-secondary); font-size: .86rem; }
+.quick footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 16px; flex: none; }
+.q-keys { flex: 1; font-size: .8rem; color: var(--fg-muted); }
+.q-keys kbd { font-family: var(--font-mono); font-size: .75rem; }

@@ -13,6 +13,35 @@ pub struct Settings {
     /// Where new downloads go; empty: the system's Downloads folder.
     pub download_dir: String,
     pub engine: EngineConfig,
+    pub browser: BrowserSettings,
+}
+
+/// Browser integration (docs/development-plan.md §5, §6.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BrowserSettings {
+    /// Ask in the quick-download window before taking over a browser download.
+    pub quick_dialog: bool,
+    /// Sites whose downloads start without asking ("don't ask again for this site").
+    pub silent_sites: Vec<String>,
+    /// The local HTTP channel for browsers without Native Messaging (Snap, Flatpak).
+    pub http_bridge: bool,
+    /// Its port, kept so a pairing stays valid across restarts (0: not chosen yet).
+    pub http_port: u16,
+    /// Its pairing token (empty: not made yet).
+    pub http_token: String,
+}
+
+impl Default for BrowserSettings {
+    fn default() -> Self {
+        Self {
+            quick_dialog: true,
+            silent_sites: Vec::new(),
+            http_bridge: false,
+            http_port: 0,
+            http_token: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

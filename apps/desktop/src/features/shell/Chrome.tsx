@@ -46,6 +46,7 @@ export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
   ['general', '常规', 'sliders'],
   ['download', '下载', 'download'],
   ['network', '网络', 'globe'],
+  ['browser', '浏览器', 'plug'],
 ];
 
 export function filterLabel(f: Filter): string {
@@ -508,6 +509,8 @@ export function StatusBar() {
     }),
   );
   const free = useDiskFree(dir);
+  const seen = useApp((s) => s.seenBrowsers);
+  const names = seen.map(([b]) => ({ chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave', chromium: 'Chromium' })[b] ?? b);
   const parts = [`${all} 个任务`];
   if (running) parts.push(`下载中 ${running}`);
   if (waiting) parts.push(`等待 ${waiting}`);
@@ -521,8 +524,14 @@ export function StatusBar() {
         </span>
       </div>
       <div className="mid">{parts.join(' · ')}</div>
-      <div className="rgt" title={dir}>
-        {free != null && `${volumeOf(dir)} 剩余 ${fmt.bytes(free)}`}
+      <div className="rgt">
+        {free != null && <span title={dir}>{`${volumeOf(dir)} 剩余 ${fmt.bytes(free)}`}</span>}
+        {names.length > 0 && (
+          <span className="seen" title="浏览器扩展已连接">
+            <i aria-hidden="true" />
+            {names.join('、')} 已连接
+          </span>
+        )}
       </div>
     </footer>
   );

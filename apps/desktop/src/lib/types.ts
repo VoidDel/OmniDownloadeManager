@@ -137,6 +137,14 @@ export interface EngineConfig {
   syncWrites: boolean;
 }
 
+export interface BrowserSettings {
+  quickDialog: boolean;
+  silentSites: string[];
+  httpBridge: boolean;
+  httpPort: number;
+  httpToken: string;
+}
+
 export interface Settings {
   appearance: {
     mode: ThemeMode;
@@ -146,6 +154,7 @@ export interface Settings {
   };
   downloadDir: string;
   engine: EngineConfig;
+  browser: BrowserSettings;
 }
 
 export interface Bootstrap {
@@ -154,6 +163,64 @@ export interface Bootstrap {
   version: string;
   defaultDir: string;
   logDir: string;
+  /** Started by the browser bridge: keep the main window hidden. */
+  background: boolean;
+  /** Browsers whose extension has been in touch: [name, Unix ms]. */
+  seenBrowsers: [string, number][];
+}
+
+export type BrowserId = 'chrome' | 'edge' | 'firefox' | 'brave' | 'chromium';
+
+export interface BrowserState {
+  id: BrowserId;
+  name: string;
+  detected: boolean;
+  registered: boolean;
+  ours: boolean;
+}
+
+/** The browser integration settings page (src-tauri/src/browser/mod.rs). */
+export interface Integration {
+  hostPath: string | null;
+  bridgeOk: boolean;
+  browsers: BrowserState[];
+  seen: [string, number][];
+  httpRunning: boolean;
+  pairingCode: string | null;
+  settings: Settings;
+}
+
+/** A download the browser handed over, waiting in the quick-download window. */
+export interface QuickRequest {
+  url: string;
+  fileName: string | null;
+  size: number | null;
+  mime: string | null;
+  site: string;
+  browser: string | null;
+  hasCookies: boolean;
+  hasReferer: boolean;
+  saveDir: string;
+  connections: number;
+  options: TaskOptions;
+}
+
+export interface QuickDecision {
+  action: 'start' | 'later' | 'browser' | 'cancel';
+  fileName?: string | null;
+  saveDir?: string | null;
+  connections?: number | null;
+  speedLimit?: number | null;
+  remember?: boolean;
+  probe?: ProbeInfo | null;
+}
+
+/** What the new-download dialog opens with (a batch from the browser). */
+export interface Prefill {
+  text: string;
+  referer?: string | null;
+  cookies?: string | null;
+  userAgent?: string | null;
 }
 
 export const emptyOptions = (): TaskOptions => ({

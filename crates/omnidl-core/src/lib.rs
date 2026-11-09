@@ -16,6 +16,7 @@ pub mod filename;
 mod manager;
 mod options;
 mod ratelimit;
+mod secrets;
 pub mod segments;
 mod task;
 
@@ -28,6 +29,7 @@ pub use events::{EventBus, ProgressItem, Stats, TaskEvent};
 pub use manager::{NewTask, TaskDetail, TaskManager};
 pub use options::{ProxyConfig, TaskOptions};
 pub use ratelimit::RateLimiter;
+pub use secrets::{AesSecrets, NoSecrets, Secrets};
 pub use segments::{Segment, SegmentTable, SegmentView};
 pub use task::{Category, Priority, Task, TaskId, TaskKind, TaskStatus};
 

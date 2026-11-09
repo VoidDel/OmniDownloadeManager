@@ -1,10 +1,10 @@
 // Typed wrappers over the Tauri commands (src-tauri/src/commands.rs) and events
-// (src-tauri/src/bridge.rs). Failures reject with an AppError.
+// (src-tauri/src/events.rs, src-tauri/src/browser). Failures reject with an AppError.
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, NewTask, ProbeInfo, ProgressBatch, Settings, Task, TaskDetail, TaskOptions } from './types';
+import type { AppError, Bootstrap, Integration, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -35,7 +35,33 @@ export const api = {
   reveal: (id: string) => invoke<void>('task_reveal', { id }),
   openFolder: (path: string) => invoke<void>('folder_open', { path }),
   diskFree: (path: string) => invoke<number | null>('disk_free', { path }),
+
+  browserStatus: () => invoke<Integration>('browser_status'),
+  browserRepair: () => invoke<Integration>('browser_repair'),
+  httpBridgeSet: (enabled: boolean) => invoke<Integration>('http_bridge_set', { enabled }),
+  httpBridgeNewToken: () => invoke<Integration>('http_bridge_new_token'),
+  quickRequest: () => invoke<QuickRequest | null>('quick_request'),
+  quickResolve: (decision: QuickDecision) => invoke<void>('quick_resolve', { decision }),
 };
+
+/** Window-level events from the app (not tasks). */
+export interface AppEvents {
+  /** The browser sent several links: open the new-download dialog with them. */
+  newTask: (p: Prefill) => void;
+  /** An extension got in touch for the first time since the app started. */
+  browserSeen: (seen: [string, number][]) => void;
+  /** The backend changed the settings (a site added to "don't ask again"). */
+  settingsChanged: (s: Settings) => void;
+}
+
+export async function listenApp(h: AppEvents): Promise<UnlistenFn> {
+  const off = await Promise.all([
+    listen<Prefill>('app:new-task', (e) => h.newTask(e.payload)),
+    listen<[string, number][]>('browser:seen', (e) => h.browserSeen(e.payload)),
+    listen<Settings>('settings:changed', (e) => h.settingsChanged(e.payload)),
+  ]);
+  return () => off.forEach((f) => f());
+}
 
 export interface TaskEvents {
   added: (t: Task) => void;

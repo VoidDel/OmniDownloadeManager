@@ -8,6 +8,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { QuickApp } from './features/quick/QuickApp';
 import { nextFrame } from './lib/frame';
 import { detectPlatform } from './lib/platform';
 import { applyTheme } from './lib/theme';
@@ -22,16 +23,17 @@ document.addEventListener('contextmenu', (e) => {
   if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
 });
 
+// The same page serves the main window and the quick-download windows (`quick-<n>`).
+const quick = isTauri() && getCurrentWindow().label.startsWith('quick-');
+
 // Settings, theme and tasks first, so the first frame is the real one.
 void useApp
   .getState()
   .boot(platform)
-  .finally(() => {
-    createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <App platform={platform} />
-      </StrictMode>,
-    );
-    // The window is created hidden; show it once the first frame is painted (no white flash).
-    if (isTauri()) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
+  .then((background) => {
+    createRoot(document.getElementById('root')!).render(<StrictMode>{quick ? <QuickApp /> : <App platform={platform} />}</StrictMode>);
+    // The main window is created hidden; it shows once the first frame is painted (no white
+    // flash), unless the browser bridge started the app in the background. Quick-download
+    // windows show themselves once they have their request.
+    if (isTauri() && !quick && !background) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
   });

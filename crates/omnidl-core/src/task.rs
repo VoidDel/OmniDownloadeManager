@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Error, TaskOptions, filename};
+use crate::{Error, Secrets, TaskOptions, filename, secrets::SEALED_PREFIX};
 
 pub type TaskId = Uuid;
 
@@ -235,7 +235,15 @@ impl Task {
         std::path::Path::new(&self.save_dir).join(filename::partial(&self.file_name))
     }
 
-    pub(crate) fn to_record(&self) -> omnidl_storage::TaskRecord {
+    /// The database row. Options carrying cookies or headers are sealed with `secrets`.
+    pub(crate) fn to_record(&self, secrets: &dyn Secrets) -> omnidl_storage::TaskRecord {
+        let json = serde_json::to_string(&self.options).unwrap_or_else(|_| "{}".into());
+        let sensitive = self.options.cookies.is_some() || !self.options.headers.is_empty();
+        let options_json = if sensitive {
+            secrets.seal(json.as_bytes()).unwrap_or(json)
+        } else {
+            json
+        };
         omnidl_storage::TaskRecord {
             id: self.id.to_string(),
             kind: self.kind.as_str().into(),
@@ -251,7 +259,7 @@ impl Task {
             category: self.category.as_str().into(),
             priority: self.priority as i64,
             sort_order: self.sort_order,
-            options_json: serde_json::to_string(&self.options).unwrap_or_else(|_| "{}".into()),
+            options_json,
             etag: self.etag.clone(),
             last_modified: self.last_modified.clone(),
             resumable: self.resumable,
@@ -265,7 +273,22 @@ impl Task {
         }
     }
 
-    pub(crate) fn from_record(r: omnidl_storage::TaskRecord) -> Option<Self> {
+    pub(crate) fn from_record(
+        r: omnidl_storage::TaskRecord,
+        secrets: &dyn Secrets,
+    ) -> Option<Self> {
+        let options = if r.options_json.starts_with(SEALED_PREFIX) {
+            // A lost key costs the cookies, not the task.
+            secrets
+                .open(&r.options_json)
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or_else(|| {
+                    tracing::warn!("task {}: stored request details cannot be decrypted", r.id);
+                    TaskOptions::default()
+                })
+        } else {
+            serde_json::from_str(&r.options_json).unwrap_or_default()
+        };
         Some(Self {
             id: r.id.parse().ok()?,
             kind: TaskKind::parse(&r.kind)?,
@@ -283,7 +306,7 @@ impl Task {
             category: Category::parse(&r.category),
             priority: Priority::from_i64(r.priority),
             resumable: r.resumable,
-            options: serde_json::from_str(&r.options_json).unwrap_or_default(),
+            options,
             error: r.error_json.and_then(|j| serde_json::from_str(&j).ok()),
             created_at: r.created_at,
             started_at: r.started_at,
@@ -372,6 +395,19 @@ mod tests {
             etag: Some("\"e\"".into()),
             last_modified: None,
         };
-        assert_eq!(Task::from_record(t.to_record()), Some(t));
+        assert_eq!(
+            Task::from_record(t.to_record(&crate::NoSecrets), &crate::NoSecrets),
+            Some(t.clone())
+        );
+        // Cookies are sealed when there is a key.
+        let mut t = t;
+        t.options.cookies = Some("session=abc".into());
+        let key = crate::AesSecrets::new(&[1; 32]);
+        let r = t.to_record(&key);
+        assert!(r.options_json.starts_with(SEALED_PREFIX) && !r.options_json.contains("abc"));
+        assert_eq!(Task::from_record(r.clone(), &key), Some(t.clone()));
+        // Without the key the task survives without its request details.
+        let lost = Task::from_record(r, &crate::NoSecrets).unwrap();
+        assert_eq!(lost.options, TaskOptions::default());
     }
 }

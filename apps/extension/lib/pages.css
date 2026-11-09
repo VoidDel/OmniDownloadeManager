@@ -1,0 +1,37 @@
+/* The extension's own pages, on omni-ui's tokens and components (imported first). */
+
+body { margin: 0; background: var(--bg-canvas); color: var(--fg-primary); font-family: var(--font-ui); font-size: 14px; }
+
+/* ---------------------------------------------------------------- popup */
+.popup { width: 340px; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; box-sizing: border-box; }
+.popup header { display: flex; align-items: center; gap: 8px; }
+.popup header b { flex: 1; font-size: .95rem; }
+.pstate { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--fg-secondary); }
+.pstate i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-muted); }
+.pstate.ok i { background: var(--success); }
+.pstate.warn { color: var(--warning); }
+.pstate.warn i { background: var(--warning); }
+.pmsg { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warning) 10%, transparent); font-size: .84rem; }
+.pmsg span { color: var(--fg-secondary); line-height: 1.5; }
+.pline { display: flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+.pline .ic { width: 14px; height: 14px; color: var(--accent); }
+.prow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-surface); border: 1px solid var(--border-subtle); }
+.plab { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.plab small { color: var(--fg-secondary); font-size: .76rem; }
+.precent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.precent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; font-size: .82rem; }
+.precent .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.precent .pst { color: var(--fg-secondary); font-size: .76rem; }
+.precent .progress { grid-column: 1 / -1; }
+.popup footer { display: flex; gap: 8px; align-items: center; }
+.popup footer .grow { flex: 1; justify-content: center; }
+
+/* ---------------------------------------------------------------- options */
+.options { max-width: 720px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-direction: column; gap: 12px; }
+.options h1 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 1.3rem; font-weight: 600; }
+.options h2 { margin: 16px 0 0; font-size: .95rem; font-weight: 600; color: var(--fg-secondary); }
+.opt-text { flex: 1; min-width: 240px; width: 100%; box-sizing: border-box; }
+textarea.opt-text { min-height: 72px; font-family: var(--font-mono); font-size: .84rem; }
+.opt-num { width: 80px; }
+.options .set-row.col .ctl > .inline, .options .set-row.col .ctl > .opt-text { flex: 1; width: 100%; }
+.warn-group { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }

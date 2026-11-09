@@ -13,6 +13,7 @@ import { api } from '../../lib/api';
 import type { Density, Settings as S, ThemeMode } from '../../lib/types';
 import { useApp } from '../../store/app';
 import { SETTINGS_TABS } from '../shell/Chrome';
+import { BrowserSettings } from './BrowserSettings';
 
 const THEMES: ThemeSummary[] = builtinThemes.map((t) => summarize(t, true));
 
@@ -288,6 +289,7 @@ export function Settings() {
         {tab === 'general' && <General s={s} set={set} />}
         {tab === 'download' && <Download s={s} set={set} />}
         {tab === 'network' && <Network s={s} set={set} />}
+        {tab === 'browser' && <BrowserSettings s={s} set={set} />}
       </div>
     </div>
   );

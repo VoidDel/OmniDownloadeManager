@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions of the main window: its own title bar (move, resize, minimise, maximise, close), showing itself after the first frame, following the theme, and the folder picker. Downloads go through Omni Download commands only (docs/development-plan.md §8.1).",
+  "description": "Permissions of the main window and the quick-download windows (quick-*): their own title bar (move, resize, minimise, maximise, close), showing themselves after the first frame, following the theme, and the folder picker. Downloads go through Omni Download commands only (docs/development-plan.md §8.1).",
   "windows": [
-    "main"
+    "main",
+    "quick-*"
   ],
   "permissions": [
     "core:default",

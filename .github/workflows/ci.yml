@@ -1,5 +1,6 @@
 # Pull requests and main (docs/development-plan.md §11).
 # lint (Linux: themes, tsc, ESLint, rustfmt, clippy) ──► test (Windows, macOS, Linux)
+#                                                    └► extension (builds, Playwright in Chromium)
 #
 # Kept cheap like OmniZip's: documentation-only changes do not run it, a newer push cancels the
 # run in progress, every job has a time limit, and only main saves build caches.
@@ -114,3 +115,33 @@ jobs:
         run: cargo test --workspace
       - name: Frontend tests
         run: pnpm test
+
+  # The browser extension: both builds, and its Playwright tests in Chromium (the opt-in test with
+  # a real app and Edge, e2e/native.spec.ts, skips itself here).
+  extension:
+    needs: lint
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Fetch omni-ui over HTTPS
+        shell: bash
+        env:
+          OMNI_UI_TOKEN: ${{ secrets.OMNI_UI_TOKEN }}
+        run: |
+          base="https://github.com/"
+          if [ -n "$OMNI_UI_TOKEN" ]; then base="https://x-access-token:${OMNI_UI_TOKEN}@github.com/"; fi
+          git config --global url."$base".insteadOf "ssh://git@github.com/"
+          git config --global --add url."$base".insteadOf "git@github.com:"
+      - run: pnpm install --frozen-lockfile
+      - name: Build (Chromium and Firefox)
+        run: pnpm ext:build
+      - name: Chromium for Playwright
+        run: pnpm --filter omnidl-extension exec playwright install --with-deps chromium
+      - name: Playwright
+        run: pnpm --filter omnidl-extension exec playwright test

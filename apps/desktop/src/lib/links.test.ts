@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hostOf, kindOf, parseLinks } from './links';
+import { hostOf, kindOf, nameFromUrl, parseLinks } from './links';
 
 describe('links', () => {
   it('recognises kinds', () => {
@@ -31,5 +31,13 @@ describe('links', () => {
   it('reads hosts', () => {
     expect(hostOf('https://cdn.example.com:8443/a')).toBe('cdn.example.com:8443');
     expect(hostOf('nope')).toBe('');
+  });
+});
+
+describe('nameFromUrl', () => {
+  it('decodes the last segment', () => {
+    expect(nameFromUrl('https://e.com/files/a%20b.zip?x=1')).toBe('a b.zip');
+    expect(nameFromUrl('https://e.com/')).toBeNull();
+    expect(nameFromUrl('nope')).toBeNull();
   });
 });

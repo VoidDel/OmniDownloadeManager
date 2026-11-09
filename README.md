@@ -2,13 +2,14 @@
 
 跨平台（Windows、macOS、Linux）下载管理器：HTTP / FTP 多连接与断点续传、BitTorrent 与磁力链接，以及 Chrome、Edge、Firefox 扩展。Rust + Tauri 2 + React，界面与 [OmniZip](https://github.com/VoidDel/OmniZip) 同属 Omni 家族，共用设计系统 [omni-ui](https://github.com/VoidDel/omni-ui)。
 
-> 当前进度：**Phase 1**（HTTP / HTTPS 多连接下载、断点续传、任务列表、详情面板、设置）已完成。FTP、BitTorrent 与浏览器扩展在后续阶段，路线图见 [开发方案](docs/development-plan.md) §10。
+> 当前进度：**Phase 2** 已完成：HTTP / HTTPS 多连接下载与断点续传、任务列表与设置（Phase 1），以及 Chrome、Edge、Firefox 扩展接管下载（Native Messaging、快捷下载框、备用 HTTP 通道）。FTP 与 BitTorrent 在后续阶段，路线图见 [开发方案](docs/development-plan.md) §10。
 
 ## 目录
 
 | 路径 | 内容 |
 |---|---|
 | `apps/desktop/` | Tauri 应用：`src/` 为 React 前端，`src-tauri/` 为 Rust 外壳（`omnidl-desktop`） |
+| `apps/extension/` | 浏览器扩展（WXT），输出 Chromium 与 Firefox 两个版本 |
 | `crates/omnidl-core` | 任务模型、状态机、调度器、限速、事件总线 |
 | `crates/omnidl-storage` | SQLite 持久化与写盘 |
 | `crates/omnidl-http` · `omnidl-ftp` · `omnidl-bt` | 各协议下载引擎 |
@@ -49,6 +50,23 @@ cargo run -p omnidl-http --release --example test_server -- 127.0.0.1:18080
 
 # Phase 1 验收用的大文件测试（写 5 GiB，中途强杀后续传并逐字节校验；OMNIDL_LARGE_GIB 改大小）
 cargo test -p omnidl-http --release --test download -- --ignored large_file --nocapture
+```
+
+### 浏览器扩展
+
+```bash
+pnpm ext:build        # apps/extension/.output/chrome-mv3（Chrome、Edge、Brave）与 firefox-mv3
+pnpm --filter omnidl-extension dev   # 开发模式：启动带扩展的浏览器，改代码自动重载
+```
+
+加载开发版：Chrome / Edge 打开扩展管理页并开启“开发者模式”，选择“加载解压缩的扩展”，指向 `apps/extension/.output/chrome-mv3`；Firefox 在 `about:debugging` 中“临时载入附加组件”，选 `apps/extension/.output/firefox-mv3/manifest.json`。扩展通过 Native Messaging 找到应用：应用启动时为五种浏览器注册 `omnidl-nm-host`（它必须在应用可执行文件旁边；`pnpm dev` 会先构建它），设置 › 浏览器可查看状态和重新写入。
+
+测试：
+
+```bash
+pnpm ext:e2e          # Playwright：在 Chromium 中加载扩展，对本地网站和模拟的应用测试接管
+# 完整链路（Windows，可选）：真实 Edge → Native Messaging → host → 应用。应用需先构建且未在运行
+OMNIDL_APP=<omnidl-desktop.exe 的路径> pnpm --filter omnidl-extension exec playwright test native
 ```
 
 数据位置：数据库 `omni.db` 与 `settings.toml` 在系统的应用数据目录（Windows 为 `%APPDATA%\app.omnidownload.desktop`），日志按天写在应用日志目录（设置 › 常规 › 日志）。

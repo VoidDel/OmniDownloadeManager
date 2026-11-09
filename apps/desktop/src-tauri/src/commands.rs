@@ -1,7 +1,7 @@
 //! Commands the window calls (docs/development-plan.md §6.4). Failures reach the page as
 //! `omnidl_core::Error` (`{ code, message, status? }`), which it words from `code`.
 
-use std::path::Path;
+use std::{path::Path, sync::atomic::Ordering};
 
 use omnidl_core::{
     Error, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskOptions, TaskStatus,
@@ -21,16 +21,27 @@ pub struct Bootstrap {
     /// The system Downloads folder (used while `settings.downloadDir` is empty).
     default_dir: String,
     log_dir: String,
+    /// Started by the browser bridge: the main window stays hidden (asked once).
+    background: bool,
+    /// Browsers whose extension has been in touch: name and Unix milliseconds.
+    seen_browsers: Vec<(String, i64)>,
 }
 
 #[tauri::command]
-pub fn app_bootstrap(state: State<'_, AppState>) -> Bootstrap {
+pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -> Bootstrap {
+    let main = window.label() == "main";
     Bootstrap {
         settings: state.settings(),
-        tasks: state.manager.list(),
+        tasks: if main {
+            state.manager.list()
+        } else {
+            Vec::new()
+        },
         version: env!("CARGO_PKG_VERSION"),
         default_dir: state.default_dir.clone(),
         log_dir: state.log_dir.clone(),
+        background: main && state.background.swap(false, Ordering::SeqCst),
+        seen_browsers: state.seen_browsers(),
     }
 }
 
@@ -42,7 +53,12 @@ pub fn task_list(state: State<'_, AppState>) -> Vec<Task> {
 
 #[tauri::command]
 pub fn settings_set(state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
-    let settings = settings.normalized();
+    let mut settings = settings.normalized();
+    // The HTTP channel's switch, port and token change through its own commands only.
+    let current = state.settings().browser;
+    settings.browser.http_bridge = current.http_bridge;
+    settings.browser.http_port = current.http_port;
+    settings.browser.http_token = current.http_token;
     settings
         .save(&state.settings_path)
         .map_err(|e| Error::io(&e, state.settings_path.display()))?;

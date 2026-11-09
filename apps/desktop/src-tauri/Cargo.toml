@@ -26,7 +26,8 @@ omnidl-http.workspace = true
 # Linked so the dependency graph is fixed; empty until their phases.
 omnidl-ftp.workspace = true
 omnidl-bt.workspace = true
-omnidl-ipc.workspace = true
+# The browser bridge.
+omnidl-ipc = { workspace = true, features = ["tokio"] }
 tauri.workspace = true
 tauri-plugin-dialog.workspace = true
 tauri-plugin-opener.workspace = true
@@ -38,6 +39,13 @@ toml.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
+axum.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.100"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 
 [dev-dependencies]
 tempfile.workspace = true

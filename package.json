@@ -9,10 +9,12 @@
   "scripts": {
     "dev": "pnpm --filter omnidl-desktop tauri dev",
     "build": "pnpm --filter omnidl-desktop tauri build",
-    "lint": "pnpm --filter omnidl-desktop lint",
-    "eslint": "pnpm --filter omnidl-desktop eslint",
-    "test": "pnpm --filter omnidl-desktop test",
+    "lint": "pnpm -r lint",
+    "eslint": "pnpm -r eslint",
+    "test": "pnpm -r test",
     "sync:omni-ui": "node scripts/sync-omni-ui.mjs",
-    "icons": "pnpm --filter omnidl-desktop tauri icon ../../icons/app-icon.svg -o src-tauri/icons"
+    "icons": "pnpm --filter omnidl-desktop tauri icon ../../icons/app-icon.svg -o src-tauri/icons",
+    "ext:build": "pnpm --filter omnidl-extension build",
+    "ext:e2e": "pnpm --filter omnidl-extension e2e"
   }
 }

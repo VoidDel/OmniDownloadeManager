@@ -91,7 +91,7 @@ export function Dialogs() {
   if (!dialog) return null;
   switch (dialog.kind) {
     case 'new':
-      return <NewTaskDialog initial={dialog.text} />;
+      return <NewTaskDialog initial={dialog} />;
     case 'purge':
       return <PurgeDialog ids={dialog.ids} />;
     case 'speed':

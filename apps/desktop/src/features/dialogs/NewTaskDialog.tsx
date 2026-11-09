@@ -11,7 +11,7 @@ import { Modal, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { parseLinks, type Link } from '../../lib/links';
-import type { AppError, NewTask, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
+import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
 import { errorText } from '../../lib/words';
 import { useApp } from '../../store/app';
 
@@ -64,21 +64,24 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
   );
 }
 
-export function NewTaskDialog({ initial }: { initial: string }) {
+/** `initial`: the text pasted so far, and request details when the links came from a browser. */
+export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const settings = useApp((s) => s.settings);
   const defaultDir = useApp((s) => s.settings.downloadDir || s.defaultDir);
   const { closeDialog, run, toast, select, setFilter } = useApp.getState();
 
-  const [text, setText] = useState(initial);
+  const [text, setText] = useState(initial.text);
   const links = useMemo(() => parseLinks(text), [text]);
   const [probes, setProbes] = useState<Record<string, Probe>>({});
   const [dir, setDir] = useState(defaultDir);
   const [name, setName] = useState<string | null>(null);
   const [connections, setConnections] = useState(String(settings.engine.connections));
   const [limit, setLimit] = useState('');
-  const [referer, setReferer] = useState('');
-  const [cookies, setCookies] = useState('');
-  const [userAgent, setUserAgent] = useState('');
+  const [referer, setReferer] = useState(initial.referer ?? '');
+  const [cookies, setCookies] = useState(initial.cookies ?? '');
+  const [userAgent, setUserAgent] = useState(initial.userAgent ?? '');
+  // From a browser the request details are filled in: show them.
+  const [advancedOpen] = useState(Boolean(initial.referer || initial.cookies || initial.userAgent));
   const [proxyMode, setProxyMode] = useState<ProxyMode>('inherit');
   const [proxyUrl, setProxyUrl] = useState('');
   const [start, setStart] = useState(true);
@@ -240,7 +243,7 @@ export function NewTaskDialog({ initial }: { initial: string }) {
           />
         </div>
       </div>
-      <details className="nt-adv">
+      <details className="nt-adv" open={advancedOpen || undefined}>
         <summary>
           <Icon name="chevronRight" />
           高级

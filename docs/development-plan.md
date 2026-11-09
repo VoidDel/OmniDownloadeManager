@@ -1000,13 +1000,21 @@ OmniDownloadManager/
 
 ### Phase 2 — 浏览器扩展与 Native Messaging（2 周）
 
-- [ ] `omnidl-ipc` 协议、`omnidl-desktop` IPC 服务端、`omnidl-nm-host`
-- [ ] NM 清单写入（五种浏览器 × 三平台）、设置页集成状态与修复
-- [ ] WXT 扩展：拦截（Chromium / Firefox 两条路径）、右键菜单、Cookie 收集、popup、options
-- [ ] 本地 HTTP 备选通道 + 配对码
-- [ ] 扩展 E2E（Playwright 加载 unpacked）
+实现细节与对原方案的调整见 [ADR-002 实施记录](architecture/ADR-002-browser-bridge.md#实施记录phase-22026-11-09)。
 
-**验收**：三浏览器点击下载自动接管，带 Cookie 的登录态文件可下载；Omni 未运行时自动拉起。
+- [x] `omnidl-ipc` 协议（消息类型、长度前缀帧、每用户端点、阻塞客户端与 Tokio 服务端）、`omnidl-desktop` IPC 服务端、`omnidl-nm-host`（转发、按需以 `--background` 拉起应用）
+- [x] NM 清单写入（五种浏览器 × 三平台）、设置页「浏览器」：各浏览器状态、重新写入、接管前询问、不再询问的网站、备用通道与配对码
+- [x] 快捷下载框（置顶小窗，Enter 开始 / Esc 稍后 / 改用浏览器下载 / 此网站不再询问），用户的选择回传给扩展
+- [x] WXT 扩展：拦截（Chromium 用 `onDeterminingFilename`、Firefox 用阻塞式 `webRequest`，各有开始后接管的备用路径）、Alt+点击不接管、右键菜单（链接、媒体、本页文件链接）、Alt+Shift+D、Cookie 收集、popup、options
+- [x] 本地 HTTP 备选通道 + 配对码（默认关闭）
+- [x] Cookie 与请求头落库加密（AES-256-GCM，密钥文件在 Windows 上由 DPAPI 保护）
+- [x] 扩展 E2E（Playwright 加载 unpacked）：CI 中在 Chromium 跑接管、改用浏览器、小文件放行、popup、备用路径；`e2e/native.spec.ts` 用真实 Edge 与应用构建跑完整链路（本地可选）
+
+**验收**：三浏览器点击下载自动接管，带 Cookie 的登录态文件可下载；Omni 未运行时自动拉起。Windows 本机结果：
+
+- Edge 157（真实浏览器，加载未打包扩展）→ Native Messaging → host → 应用未运行时自动拉起（后台，不显示主窗口）→ 快捷下载框显示文件名、40 MB、支持断点续传、已附带 Cookie 与 Referer → 开始后 Edge 放弃自己的下载，应用带登录 Cookie 下载 40 MB 文件（无 Cookie 时服务器返回 403），内容逐字节核对一致（`OMNIDL_APP=… pnpm --filter omnidl-extension exec playwright test native`）。
+- Chromium 内核的接管、改用浏览器、小文件放行、备用路径与 popup 均由 Playwright 测试覆盖。
+- 本机没有安装 Chrome 与 Firefox，未在这两个浏览器中实测：Chrome 与 Edge 走同一套 Chromium 代码；Firefox 的阻塞式 `webRequest` 路径只经过构建与单元测试，需要在装有 Firefox 的机器上确认。
 
 ### Phase 3 — BitTorrent / 磁力（2–3 周）
 

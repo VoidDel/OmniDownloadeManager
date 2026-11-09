@@ -1,9 +1,12 @@
 //! The Omni Download desktop app (Tauri 2): the main window, the task manager behind its
-//! commands, and the bridge that streams task events to it. The tray and the IPC server for the
-//! browser bridge arrive with their phases (docs/development-plan.md §10).
+//! commands, the stream of task events to the window, and the browser bridge (local pipe for the
+//! Native Messaging host, HTTP fallback, quick-download window). The tray arrives with Phase 5
+//! (docs/development-plan.md §10).
 
-mod bridge;
+mod browser;
 mod commands;
+mod events;
+mod secrets;
 mod settings;
 mod state;
 
@@ -26,8 +29,12 @@ static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 pub fn run() {
     tauri::Builder::default()
         // First: a second launch hands over to this one and exits before anything else runs.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            focus_main(app);
+        // It shows the window, unless it is the browser bridge starting the app
+        // (`--background`) while it is already running.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if !argv.iter().any(|a| a == "--background") {
+                focus_main(app);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -50,11 +57,16 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("omni.db");
             let engine_config = settings.engine.clone();
+            // Cookies and headers from the browser are stored sealed with this key.
+            let sealing: Arc<dyn omnidl_core::Secrets> = match secrets::load_or_create(&data_dir) {
+                Some(key) => Arc::new(omnidl_core::AesSecrets::new(&key)),
+                None => Arc::new(omnidl_core::NoSecrets),
+            };
             let manager = tauri::async_runtime::block_on(async move {
                 let db = Db::open(&db_path).await?;
                 let engines: Vec<Arc<dyn omnidl_core::DownloadEngine>> =
                     vec![Arc::new(HttpEngine::new())];
-                TaskManager::open(db, engines, engine_config)
+                TaskManager::open_with_secrets(db, engines, engine_config, sealing)
                     .await
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
             })
@@ -62,7 +74,7 @@ pub fn run() {
                 tracing::error!("opening the task database: {e}");
                 e
             })?;
-            bridge::spawn(handle.clone(), &manager);
+            events::spawn(handle.clone(), &manager);
             app.manage(AppState {
                 manager,
                 settings: Mutex::new(settings),
@@ -70,8 +82,16 @@ pub fn run() {
                 default_dir,
                 log_dir: log_dir.to_string_lossy().into_owned(),
                 quitting: Default::default(),
+                background: std::env::args().any(|a| a == "--background").into(),
+                nm_dir: paths.app_local_data_dir()?.join("nm"),
+                bridge_ok: Default::default(),
+                http: Default::default(),
+                quick: Default::default(),
+                quick_seq: Default::default(),
+                seen: Default::default(),
             });
             main_window(handle)?;
+            browser::start(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -93,7 +113,22 @@ pub fn run() {
             commands::task_reveal,
             commands::folder_open,
             commands::disk_free,
+            browser::browser_status,
+            browser::browser_repair,
+            browser::http_bridge_set,
+            browser::http_bridge_new_token,
+            browser::quick_request,
+            browser::quick_resolve,
         ])
+        .on_window_event(|window, event| {
+            // A quick-download window closed without an answer cancels its download.
+            if let tauri::WindowEvent::Destroyed = event
+                && window.label().starts_with("quick-")
+                && let Some(state) = window.try_state::<AppState>()
+            {
+                browser::quick::closed(&state, window.label());
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building Omni Download")
         .run(|app, event| {
@@ -141,7 +176,7 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     b.build()
 }
 
-fn focus_main(app: &AppHandle) {
+pub(crate) fn focus_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();

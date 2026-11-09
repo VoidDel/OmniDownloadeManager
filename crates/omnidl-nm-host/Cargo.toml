@@ -8,5 +8,15 @@ license.workspace = true
 authors.workspace = true
 publish.workspace = true
 
+# Small and quick to start: the browser starts one for every message (no async runtime).
 [dependencies]
 omnidl-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[dev-dependencies]
+omnidl-ipc = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros"] }

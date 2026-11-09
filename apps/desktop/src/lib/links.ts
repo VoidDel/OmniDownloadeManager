@@ -50,3 +50,13 @@ export function hostOf(url: string): string {
     return '';
   }
 }
+
+/** The last path segment of a URL, decoded (`https://e.com/a%20b.zip?x` → `a b.zip`). */
+export function nameFromUrl(url: string): string | null {
+  try {
+    const last = new URL(url).pathname.split('/').filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : null;
+  } catch {
+    return null;
+  }
+}

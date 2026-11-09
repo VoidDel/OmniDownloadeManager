@@ -5,19 +5,19 @@
 import type { Platform, ToastItem, ToastTone } from 'omni-ui';
 import { create } from 'zustand';
 
-import { api, asError, listenTasks } from '../lib/api';
+import { api, asError, listenApp, listenTasks } from '../lib/api';
 import { applyTheme } from '../lib/theme';
-import type { AppError, Category, Settings, Stats, Task, TaskStatus } from '../lib/types';
+import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus } from '../lib/types';
 import { errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
 export type SortKey = 'added' | 'name' | 'size' | 'progress' | 'speed' | 'status';
-export type SettingsTab = 'general' | 'download' | 'network';
+export type SettingsTab = 'general' | 'download' | 'network' | 'browser';
 export type View = 'tasks' | 'settings';
 
 export type Dialog =
-  /** New downloads, with the text pasted or dropped so far. */
-  | { kind: 'new'; text: string }
+  /** New downloads, with the text pasted so far (and request details from a browser batch). */
+  | ({ kind: 'new' } & Prefill)
   /** Delete for good, optionally with the files. */
   | { kind: 'purge'; ids: string[] }
   /** A custom global speed limit. */
@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
     resumeOnStartup: true,
     syncWrites: true,
   },
+  browser: { quickDialog: true, silentSites: [], httpBridge: false, httpPort: 0, httpToken: '' },
 };
 
 interface State {
@@ -61,8 +62,12 @@ interface State {
   detailOpen: boolean;
   dialog: Dialog;
   toasts: ToastItem[];
+  /** Browsers whose extension has been in touch since the app started: [name, Unix ms]. */
+  seenBrowsers: [string, number][];
 
-  boot: (platform: Platform) => Promise<void>;
+  /** Loads settings and tasks and listens for changes. Resolves to whether the app was started
+   *  in the background by the browser bridge (the main window then stays hidden). */
+  boot: (platform: Platform) => Promise<boolean>;
   setView: (v: View) => void;
   setSettingsTab: (t: SettingsTab) => void;
   setFilter: (f: Filter) => void;
@@ -111,10 +116,17 @@ export const useApp = create<State>((set, get) => ({
   detailOpen: true,
   dialog: null,
   toasts: [],
+  seenBrowsers: [],
 
   boot: async (platform) => {
     set({ platform });
+    let background = false;
     try {
+      await listenApp({
+        newTask: (p) => set({ dialog: { kind: 'new', ...p }, view: 'tasks' }),
+        browserSeen: (seenBrowsers) => set({ seenBrowsers }),
+        settingsChanged: (settings) => set({ settings }),
+      });
       // Listen first: nothing that happens while the list loads is missed.
       await listenTasks({
         added: (t) => set((s) => ({ tasks: withTask(s.tasks, t) })),
@@ -159,13 +171,16 @@ export const useApp = create<State>((set, get) => ({
         logDir: boot.logDir,
         settings: boot.settings,
         tasks: Object.fromEntries(boot.tasks.map((t) => [t.id, t])),
+        seenBrowsers: boot.seenBrowsers,
       });
+      background = boot.background;
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.
       console.error('bootstrap', e);
     }
     applyTheme(get().settings.appearance, platform);
     set({ ready: true });
+    return background;
   },
 
   setView: (view) => set({ view }),

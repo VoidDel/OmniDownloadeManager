@@ -25,10 +25,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    Checkpoint, DownloadEngine, EngineConfig, Error, ErrorCode, EventBus, Job, JobOptions, Outcome,
-    Priority, ProbeInfo, Progress, ProgressItem, RateLimiter, Result, ResumeState, Segment,
-    SegmentView, Stats, Task, TaskEvent, TaskId, TaskKind, TaskOptions, TaskStatus, filename,
-    now_ms,
+    Checkpoint, DownloadEngine, EngineConfig, Error, ErrorCode, EventBus, Job, JobOptions,
+    NoSecrets, Outcome, Priority, ProbeInfo, Progress, ProgressItem, RateLimiter, Result,
+    ResumeState, Secrets, Segment, SegmentView, Stats, Task, TaskEvent, TaskId, TaskKind,
+    TaskOptions, TaskStatus, filename, now_ms,
 };
 
 /// How often running tasks are sampled and progress is published.
@@ -96,6 +96,7 @@ struct State {
 struct Inner {
     db: Db,
     engines: Vec<Arc<dyn DownloadEngine>>,
+    secrets: Arc<dyn Secrets>,
     bus: EventBus,
     config: RwLock<EngineConfig>,
     global_limit: RateLimiter,
@@ -122,11 +123,21 @@ impl TaskManager {
         engines: Vec<Arc<dyn DownloadEngine>>,
         config: EngineConfig,
     ) -> Result<Self> {
+        Self::open_with_secrets(db, engines, config, Arc::new(NoSecrets)).await
+    }
+
+    /// [`open`](Self::open), sealing stored cookies and headers with `secrets`.
+    pub async fn open_with_secrets(
+        db: Db,
+        engines: Vec<Arc<dyn DownloadEngine>>,
+        config: EngineConfig,
+        secrets: Arc<dyn Secrets>,
+    ) -> Result<Self> {
         let config = config.normalized();
         let mut state = State::default();
         for record in db.list_tasks().await? {
             let id = record.id.clone();
-            let Some(mut t) = Task::from_record(record) else {
+            let Some(mut t) = Task::from_record(record, &*secrets) else {
                 tracing::warn!("skipping unreadable task {id}");
                 continue;
             };
@@ -136,7 +147,7 @@ impl TaskManager {
                     _ if config.resume_on_startup => TaskStatus::Queued,
                     _ => TaskStatus::Paused,
                 };
-                db.update_task(&t.to_record()).await?;
+                db.update_task(&t.to_record(&*secrets)).await?;
             }
             state.next_order = state.next_order.max(t.sort_order + 1);
             state.tasks.insert(t.id, t);
@@ -144,6 +155,7 @@ impl TaskManager {
         let inner = Arc::new(Inner {
             db,
             engines,
+            secrets,
             bus: EventBus::new(1024),
             global_limit: RateLimiter::new(config.speed_limit),
             config: RwLock::new(config),
@@ -291,7 +303,10 @@ impl TaskManager {
                     last_modified: None,
                 }
             };
-            self.inner.db.insert_task(&task.to_record()).await?;
+            self.inner
+                .db
+                .insert_task(&task.to_record(&*self.inner.secrets))
+                .await?;
             self.inner.state.lock().tasks.insert(task.id, task.clone());
             self.inner.bus.emit(TaskEvent::Added { task: task.clone() });
             added.push(task);
@@ -524,7 +539,7 @@ impl Inner {
             let Some(task) = self.state.lock().tasks.get(&id).cloned() else {
                 return;
             };
-            if let Err(e) = self.db.update_task(&task.to_record()).await {
+            if let Err(e) = self.db.update_task(&task.to_record(&*self.secrets)).await {
                 tracing::error!("saving task {id}: {e}");
             }
             task
