@@ -1,0 +1,9 @@
+[package]
+name = "omnidl-storage"
+description = "Task and segment persistence (SQLite) and the file writer of Omni Download."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true

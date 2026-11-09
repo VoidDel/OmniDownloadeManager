@@ -1,0 +1,18 @@
+{
+  "name": "omnidl-workspace",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter omnidl-desktop tauri dev",
+    "build": "pnpm --filter omnidl-desktop tauri build",
+    "lint": "pnpm --filter omnidl-desktop lint",
+    "eslint": "pnpm --filter omnidl-desktop eslint",
+    "test": "pnpm --filter omnidl-desktop test",
+    "sync:omni-ui": "node scripts/sync-omni-ui.mjs",
+    "icons": "pnpm --filter omnidl-desktop tauri icon ../../icons/app-icon.svg -o src-tauri/icons"
+  }
+}

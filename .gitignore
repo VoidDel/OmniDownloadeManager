@@ -1,0 +1,28 @@
+# Rust
+/target/
+**/target/
+*.pdb
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# Tauri
+apps/desktop/src-tauri/gen/schemas/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.openidea/
+*.swp
+
+# Local
+.env
+.env.local
+# Signing keys stay out of the repository.
+*.pfx
+*.key

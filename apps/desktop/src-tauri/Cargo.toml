@@ -1,0 +1,30 @@
+[package]
+name = "omnidl-desktop"
+description = "Omni Download desktop application (Tauri 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+name = "omnidl_desktop_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "omnidl-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+# The engines are empty until their phases; linked now so the dependency graph is fixed.
+omnidl-core.workspace = true
+omnidl-storage.workspace = true
+omnidl-http.workspace = true
+omnidl-ftp.workspace = true
+omnidl-bt.workspace = true
+omnidl-ipc.workspace = true
+tauri.workspace = true

@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+# The protocol engines and their shared core (docs/development-plan.md §3.3), and the Tauri app.
+members = ["crates/*", "apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+authors = ["Omni Download Contributors"]
+publish = false
+
+[workspace.dependencies]
+omnidl-core = { path = "crates/omnidl-core" }
+omnidl-storage = { path = "crates/omnidl-storage" }
+omnidl-http = { path = "crates/omnidl-http" }
+omnidl-ftp = { path = "crates/omnidl-ftp" }
+omnidl-bt = { path = "crates/omnidl-bt" }
+omnidl-ipc = { path = "crates/omnidl-ipc" }
+
+tauri = "2"
+tauri-build = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "unwind"
+
+# Dependencies optimised in debug builds too: hashing, TLS and the BitTorrent engine are slow
+# unoptimised, and they are compiled once.
+[profile.dev.package."*"]
+opt-level = 2

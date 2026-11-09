@@ -1,0 +1,13 @@
+[package]
+name = "omnidl-bt"
+description = "BitTorrent and magnet engine of Omni Download (adapter over librqbit)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+omnidl-core.workspace = true
+omnidl-storage.workspace = true

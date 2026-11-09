@@ -1,0 +1,15 @@
+/* Omni Download's own styles (docs/development-plan.md §6). Tokens, base, the window shell and the
+   shared components come from omni-ui (`omni-ui/styles.css`), imported first in main.tsx. */
+
+/* The paste box in the title bar is wider than a search box: links are long. */
+.titlebar .omnibox { width: min(440px, 40vw); }
+.searchbox input:disabled { cursor: default; }
+
+.nav-item:disabled { color: var(--fg-disabled); cursor: default; }
+.nav-item:disabled:hover { background: none; }
+
+.statusbar .speed { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.statusbar .speed .ic { width: 12px; height: 12px; }
+
+.emptyst .empty-title { color: var(--fg-primary); font-weight: 600; font-size: 1rem; }
+.emptyst p { margin: 4px 0 0; font-size: .9rem; max-width: 420px; }

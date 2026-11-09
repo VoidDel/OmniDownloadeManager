@@ -1,0 +1,116 @@
+# Pull requests and main (docs/development-plan.md §11).
+# lint (Linux: themes, tsc, ESLint, rustfmt, clippy) ──► test (Windows, macOS, Linux)
+#
+# Kept cheap like OmniZip's: documentation-only changes do not run it, a newer push cancels the
+# run in progress, every job has a time limit, and only main saves build caches.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**/*.md", LICENSE]
+  pull_request:
+    paths-ignore: ["docs/**", "**/*.md", LICENSE]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # No debug info in test builds: faster to compile, and much smaller caches.
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # omni-ui is a git dependency and the lockfile names it by SSH, which runners have no key
+      # for: fetch it over HTTPS instead, with the OMNI_UI_TOKEN secret while the repo is private.
+      - name: Fetch omni-ui over HTTPS
+        shell: bash
+        env:
+          OMNI_UI_TOKEN: ${{ secrets.OMNI_UI_TOKEN }}
+        run: |
+          base="https://github.com/"
+          if [ -n "$OMNI_UI_TOKEN" ]; then base="https://x-access-token:${OMNI_UI_TOKEN}@github.com/"; fi
+          git config --global url."$base".insteadOf "ssh://git@github.com/"
+          git config --global --add url."$base".insteadOf "git@github.com:"
+      - run: pnpm install --frozen-lockfile
+      - name: Built-in themes match omni-ui
+        run: |
+          pnpm sync:omni-ui
+          git diff --exit-code -- themes
+      - name: TypeScript
+        run: pnpm lint
+      - name: ESLint
+        run: pnpm eslint
+      - name: rustfmt
+        run: cargo fmt --all --check
+      # The desktop crate embeds the built frontend, so build it before clippy.
+      - run: pnpm --filter omnidl-desktop build
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Fetch omni-ui over HTTPS
+        shell: bash
+        env:
+          OMNI_UI_TOKEN: ${{ secrets.OMNI_UI_TOKEN }}
+        run: |
+          base="https://github.com/"
+          if [ -n "$OMNI_UI_TOKEN" ]; then base="https://x-access-token:${OMNI_UI_TOKEN}@github.com/"; fi
+          git config --global url."$base".insteadOf "ssh://git@github.com/"
+          git config --global --add url."$base".insteadOf "git@github.com:"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter omnidl-desktop build
+      # Builds every crate and the app on each platform (the "blank window" check of Phase 0).
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Frontend tests
+        run: pnpm test
