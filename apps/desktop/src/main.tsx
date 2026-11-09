@@ -10,22 +10,28 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { nextFrame } from './lib/frame';
 import { detectPlatform } from './lib/platform';
-import { applyTheme, loadThemeMode } from './lib/theme';
+import { applyTheme } from './lib/theme';
+import { DEFAULT_SETTINGS, useApp } from './store/app';
 
 const platform = detectPlatform(navigator.userAgent);
-// Before the first render, so the first frame already has the right colours.
-applyTheme(loadThemeMode(), platform);
+// Something to paint with while the settings load (the window is still hidden).
+applyTheme(DEFAULT_SETTINGS.appearance, platform);
 
 // The WebView's own context menu is replaced by the app's menus (text fields keep theirs).
 document.addEventListener('contextmenu', (e) => {
   if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
 });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App platform={platform} />
-  </StrictMode>,
-);
-
-// The window is created hidden; show it once the first frame is painted (no white flash).
-if (isTauri()) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
+// Settings, theme and tasks first, so the first frame is the real one.
+void useApp
+  .getState()
+  .boot(platform)
+  .finally(() => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <App platform={platform} />
+      </StrictMode>,
+    );
+    // The window is created hidden; show it once the first frame is painted (no white flash).
+    if (isTauri()) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
+  });

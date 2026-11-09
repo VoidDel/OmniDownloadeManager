@@ -1,9 +1,39 @@
 //! The download domain of Omni Download (docs/development-plan.md §4.1, §4.5).
 //!
-//! - `Task`, `TaskStatus` and the state machine (queued, probing, downloading, paused, seeding,
-//!   completed, failed, removed).
-//! - The `DownloadEngine` / `TaskHandle` traits the protocol crates implement.
-//! - The scheduler (priority queue, concurrency slots, retries), token-bucket rate limiters and
-//!   the event bus the app relays to the window.
-//!
-//! Lands in Phase 1. Builds on `omnidl-storage`; the engines build on this crate.
+//! - [`Task`], [`TaskStatus`] and its state machine; [`TaskOptions`] and [`EngineConfig`].
+//! - [`segments`]: the segment table shared by the multi-connection engines (HTTP now, FTP in
+//!   Phase 4), with work stealing.
+//! - [`filename`]: cleaning names for every file system, numbering duplicates, categories.
+//! - [`RateLimiter`]: token buckets for the global and per-task limits.
+//! - [`DownloadEngine`]: what a protocol crate implements; [`TaskManager`] schedules tasks onto
+//!   engines, persists them through `omnidl-storage` and publishes [`TaskEvent`]s.
+
+mod config;
+mod engine;
+mod error;
+mod events;
+pub mod filename;
+mod manager;
+mod options;
+mod ratelimit;
+pub mod segments;
+mod task;
+
+pub use config::{ConflictPolicy, EngineConfig, default_user_agent};
+pub use engine::{
+    Checkpoint, DownloadEngine, Job, JobOptions, Outcome, ProbeInfo, Progress, ResumeState,
+};
+pub use error::{Error, ErrorCode, Result};
+pub use events::{EventBus, ProgressItem, Stats, TaskEvent};
+pub use manager::{NewTask, TaskDetail, TaskManager};
+pub use options::{ProxyConfig, TaskOptions};
+pub use ratelimit::RateLimiter;
+pub use segments::{Segment, SegmentTable, SegmentView};
+pub use task::{Category, Priority, Task, TaskId, TaskKind, TaskStatus};
+
+/// Milliseconds since the Unix epoch.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
+}

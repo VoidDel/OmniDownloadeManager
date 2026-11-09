@@ -1,15 +1,147 @@
 /* Omni Download's own styles (docs/development-plan.md §6). Tokens, base, the window shell and the
-   shared components come from omni-ui (`omni-ui/styles.css`), imported first in main.tsx. */
+   shared components come from omni-ui (`omni-ui/styles.css`), imported first in main.tsx; this file
+   only has what the downloader adds: the task table columns, progress bars, the details panel and
+   the new-download dialog. */
 
-/* The paste box in the title bar is wider than a search box: links are long. */
+/* ---------------------------------------------------------------- title bar, sidebar */
+/* The paste box is wider than a search box: links are long. */
 .titlebar .omnibox { width: min(440px, 40vw); }
-.searchbox input:disabled { cursor: default; }
+.titlebar .ttl span { font-variant-numeric: tabular-nums; }
 
-.nav-item:disabled { color: var(--fg-disabled); cursor: default; }
-.nav-item:disabled:hover { background: none; }
+.nav-item .cnt { margin-left: auto; font-size: .78rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.nav-item[aria-current="true"] .cnt { color: inherit; opacity: .8; }
+.sb-label { padding: 14px 12px 4px; font-size: .75rem; font-weight: 500; color: var(--fg-muted); }
+.task-sum .sum-pct { font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 
-.statusbar .speed { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
-.statusbar .speed .ic { width: 12px; height: 12px; }
+/* ---------------------------------------------------------------- command bar */
+.btn.subtle { color: var(--fg-secondary); }
+.btn .chev { width: 14px; height: 14px; color: var(--fg-muted); }
+.btn.primary.danger-fill { background: var(--danger); }
+.btn.primary.danger-fill:hover { background: color-mix(in srgb, var(--danger) 88%, black); }
+.btn.danger .ic { color: var(--danger); }
 
+/* ---------------------------------------------------------------- work area */
+.workarea { flex: 1; min-height: 0; display: flex; }
+.workarea > .content { flex: 1; min-width: 0; container-type: inline-size; }
+
+/* ---------------------------------------------------------------- task table */
+/* Columns: name, progress, size, speed, remaining, status. Narrow panes drop the least needed. */
+/* At the default window size with the details panel open (about 620 px) size and speed stay. */
+.task-table {
+  --task-cols: minmax(200px, 1fr) 170px 84px 96px 84px 96px;
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+}
+@container (max-width: 860px) {
+  .task-table { --task-cols: minmax(140px, 1fr) 110px 72px 84px 76px; }
+  .task-table .c-eta { display: none; }
+}
+@container (max-width: 590px) {
+  .task-table { --task-cols: minmax(130px, 1fr) 100px 84px 76px; }
+  .task-table .c-eta, .task-table .c-size { display: none; }
+}
+@container (max-width: 470px) {
+  .task-table { --task-cols: minmax(120px, 1fr) 90px 76px; }
+  .task-table .c-eta, .task-table .c-size, .task-table .c-speed { display: none; }
+}
+.task-table .thead { flex: none; }
+.task-table .thead > span { white-space: nowrap; }
+.tscroll { flex: 1; min-height: 0; overflow: auto; outline: 0; }
+.tbody { position: relative; margin: 4px 10px 12px; }
+.task-row { top: 0; cursor: default; user-select: none; }
+.task-row .nm .fi { width: 20px; height: 20px; }
+.task-row .nm-txt { flex: 0 1 auto; }
+.task-row .badge { flex: none; }
+
+.prog { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.prog .bar { position: relative; flex: 1; height: 6px; border-radius: 3px; background: var(--bg-pressed); overflow: hidden; }
+.prog .bar > i { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; transition: width 240ms linear; }
+.prog .bar.indeterminate > i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+.prog .pct { width: 34px; flex: none; text-align: end; font-size: .8rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+
+/* Protocol badges: HTTP neutral, FTP informational, BitTorrent its own violet (`--bt`). */
+.badge.proto-http { --badge-bg: var(--bg-subtle); --badge-fg: var(--fg-secondary); }
+.badge.proto-ftp { --badge-bg: color-mix(in srgb, var(--info) 14%, transparent); --badge-fg: var(--info); }
+.badge.proto-torrent { --badge-bg: color-mix(in srgb, var(--bt, #7a5af8) 14%, transparent); --badge-fg: var(--bt, #7a5af8); }
+
+/* ---------------------------------------------------------------- details panel */
+.detail { flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); }
+.det-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px 16px; flex: none; }
+.det-top h2 { margin: 0; font-size: 1rem; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.det-meta { display: flex; align-items: center; gap: 8px; padding: 0 16px 6px; font-size: .8rem; color: var(--fg-secondary); min-width: 0; }
+.det-meta .st { font-size: .8rem; }
+.detail .tabs { padding: 0 8px; flex: none; }
+.det-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; user-select: text; }
+.det-dl { margin: 0; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px 12px; font-size: .9rem; }
+.det-dl dt { color: var(--fg-secondary); }
+.det-dl dd { margin: 0; min-width: 0; }
+.det-dl .num { font-variant-numeric: tabular-nums; }
+.det-dl .path { font-size: .8rem; word-break: break-all; }
+.det-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: .8rem; font-weight: 500; }
+.det-head .muted, .det-head .num { font-weight: 400; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+.det-note { margin: 0; font-size: .86rem; }
+.blocks { display: flex; gap: 2px; height: 20px; }
+.blocks > span { flex: 1; border-radius: 2px; transition: background 200ms; }
+.blockmap { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; }
+.blockmap > span { height: 14px; border-radius: 2px; transition: background 200ms; }
+.legend { display: flex; gap: 14px; margin-top: 8px; font-size: .75rem; color: var(--fg-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; }
+.seglist { display: flex; flex-direction: column; gap: 6px; }
+.segrow { display: grid; grid-template-columns: 30px minmax(0, 1fr) 44px; gap: 10px; align-items: center; font-size: .8rem; }
+.segrow .num { font-variant-numeric: tabular-nums; text-align: end; }
+.segrow .segmid { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--fg-secondary); }
+.segrow .segmid .num { text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.segrow[data-active="true"] .segmid .num { color: var(--fg-primary); }
+.minibar { position: relative; display: block; height: 3px; border-radius: 2px; background: var(--bg-pressed); }
+.minibar > i { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; background: var(--accent); }
+.spark { display: block; width: 100%; height: 56px; border-radius: var(--radius-md); background: var(--bg-subtle); }
+.det-err { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size: .86rem; }
+.det-err .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.det-err div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.det-err small { color: var(--fg-secondary); word-break: break-word; }
+.det-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); flex: none; }
+.det-foot .btn.grow { flex: 1; justify-content: center; }
+.iconbtn.outline { width: var(--ctrl-h); height: var(--ctrl-h); border: 1px solid var(--border-default); background: var(--bg-surface); }
+
+/* ---------------------------------------------------------------- new-download dialog */
+.nt-urls { min-height: 72px; line-height: 1.55; }
+.hint { font-size: .8rem; color: var(--fg-secondary); }
+.nt-list { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); overflow: auto; max-height: 220px; flex: none; }
+.nt-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; font-size: .9rem; }
+.nt-row + .nt-row { border-top: 1px solid var(--border-subtle); }
+.nt-row[data-off="true"] { opacity: .75; }
+.nt-row .fi { width: 20px; height: 20px; }
+.nt-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nt-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-sub { font-size: .8rem; color: var(--fg-secondary); display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nt-sub > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.warn-text { color: var(--warning); }
+.err-text { color: var(--danger); }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .pulse { animation: nt-pulse 1.6s ease-in-out infinite; }
+  @keyframes nt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+}
+.nt-nums .inp { flex: 0 0 88px; min-width: 0; }
+.nt-nums > label { font-size: .86rem; color: var(--fg-secondary); }
+.nt-adv summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--fg-secondary); width: fit-content; }
+.nt-adv summary::-webkit-details-marker { display: none; }
+.nt-adv summary .ic { width: 14px; height: 14px; transition: transform var(--dur); }
+.nt-adv[open] summary .ic { transform: rotate(90deg); }
+.nt-adv summary small { color: var(--fg-muted); font-size: .8rem; margin-left: 4px; }
+.nt-adv .frow { padding-top: 12px; }
+.nt-sum { font-size: .8rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+.nt-sum b { color: var(--fg-primary); font-weight: 600; }
+.inp[aria-invalid="true"] { border-color: var(--danger); }
+.dlg-text { margin: 0; color: var(--fg-secondary); font-size: .9rem; line-height: 1.6; }
+
+/* ---------------------------------------------------------------- settings */
+.set-row.col .ctl > .inline { flex: 1; }
+.set-text { flex: 1; min-width: 200px; }
+.set-row .lab small.mono, .set-row .lab small .mono { font-size: .76rem; word-break: break-all; }
+
+/* ---------------------------------------------------------------- empty states */
 .emptyst .empty-title { color: var(--fg-primary); font-weight: 600; font-size: 1rem; }
 .emptyst p { margin: 4px 0 0; font-size: .9rem; max-width: 420px; }

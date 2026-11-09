@@ -11,3 +11,20 @@ publish.workspace = true
 [dependencies]
 omnidl-core.workspace = true
 omnidl-storage.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+httpdate.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "signal"] }
+uuid.workspace = true

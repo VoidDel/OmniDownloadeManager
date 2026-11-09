@@ -2,7 +2,7 @@
 
 - 状态：已采纳
 - 日期：2026-11-09
-- 相关：[开发方案](../development-plan.md) §2、§3、§9
+- 相关：[开发方案](../development-plan.md) §2、§3、§9；[ADR-003](ADR-003-download-engine.md)
 
 ## 背景
 
@@ -37,7 +37,7 @@ BitTorrent 选 **librqbit** 而不是 libtorrent-rasterbar：纯 Rust，免去 C
 - **React 19 + TypeScript + Vite**，状态用 Zustand，列表虚拟化用 TanStack Virtual（与 OmniZip 相同）。
 - **样式与组件来自共享包 [omni-ui](https://github.com/VoidDel/omni-ui)**：设计令牌、12 套内置主题、窗口骨架样式、基础组件与图标，与 OmniZip 共用一份代码。不使用 Tailwind 与 shadcn/ui，它们与令牌体系重复且风格不同。
 - 应用通过 `components/ui.tsx`、`components/Icon.tsx` 两个薄适配层引用 omni-ui，视图代码不直接 import omni-ui，便于接入翻译与 store。
-- omni-ui 以 git 依赖分发（TS / CSS 源码，由应用的 Vite 编译）。内置主题 JSON 用 `pnpm sync:omni-ui` 复制到 `themes/`，供 Rust 主题服务 `include_str!`（Phase 1），CI 校验副本未过期。
+- omni-ui 以 git 依赖分发（TS / CSS 源码，由应用的 Vite 编译）。内置主题 JSON 用 `pnpm sync:omni-ui` 复制到 `themes/`，供日后的 Rust 主题服务 `include_str!`（Phase 5），CI 校验副本未过期。
 - 质量工具：`tsc`（strict）、ESLint（JS / TS 推荐规则 + React Hooks 规则）、Vitest。
 
 ### 工程
@@ -62,4 +62,5 @@ BitTorrent 选 **librqbit** 而不是 libtorrent-rasterbar：纯 Rust，免去 C
 
 - 改 UI 令牌或基础组件要在 omni-ui 里改，再在两个应用 `pnpm update omni-ui`。
 - omni-ui 是公开仓库。锁文件把它记为 SSH 地址，CI 在安装前把 GitHub 的 SSH 地址改写为 HTTPS 匿名拉取；若日后改回私有，给 CI 配置 `OMNI_UI_TOKEN` 密钥（对 omni-ui 有读权限的令牌）即可。
-- Phase 0 的主题在页面里用 omni-ui 的 `resolveTheme` 解析，只有默认的晨光 / 午夜两套；Phase 1 换成 Rust 主题服务后才支持全部主题、强调色与窗口材质。
+- 主题在页面里用 omni-ui 的 `resolveTheme` 解析（与 OmniZip 的 Rust 主题服务同一套规则），Phase 1 起设置页可选全部 12 套内置主题；用户主题文件、强调色与窗口材质要等 Phase 5 引入 Rust 主题服务（见 [ADR-003](ADR-003-download-engine.md)）。
+- 前后端类型手写（`lib/types.ts` 对照 Rust 的 serde 结构），不用仍是 RC 的 tauri-specta，同 OmniZip；见 ADR-003。

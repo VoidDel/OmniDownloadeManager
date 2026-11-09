@@ -276,24 +276,31 @@ pub enum TaskStatus {
                  (retry 回到 Queued)
 ```
 
-引擎抽象：
+引擎抽象（Phase 1 实现，见 [ADR-003](architecture/ADR-003-download-engine.md)）：一次运行跑到底，暂停 / 删除 / 退出都是取消同一个令牌，引擎不知道原因，也不接触数据库与界面。
 
 ```rust
 #[async_trait]
-pub trait DownloadEngine: Send + Sync {
+pub trait DownloadEngine: Send + Sync + 'static {
     fn kind(&self) -> TaskKind;
-    /// 探测元信息：大小、是否支持续传、文件名、种子文件列表
-    async fn probe(&self, source: &str, opts: &TaskOptions) -> Result<ProbeResult>;
-    /// 启动或恢复任务；返回句柄用于控制
-    async fn start(&self, task: Task, resume: Option<ResumeState>) -> Result<Box<dyn TaskHandle>>;
+    /// 探测元信息：大小、是否支持续传、文件名（新建对话框用）
+    async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo>;
+    /// 下载到完成、失败或 job.cancel 被取消
+    async fn run(&self, job: Job) -> Outcome;
 }
 
-#[async_trait]
-pub trait TaskHandle: Send + Sync {
-    async fn pause(&self) -> Result<ResumeState>;   // 返回可持久化的续传状态
-    async fn cancel(&self, delete_files: bool) -> Result<()>;
-    fn set_speed_limit(&self, bps: Option<u64>);
-    fn subscribe(&self) -> broadcast::Receiver<TaskEvent>;
+pub struct Job {            // 管理器交给引擎的一次运行
+    pub resume: Option<ResumeState>,   // 名称、校验字段、分片表；None 表示首次开始
+    pub cancel: CancellationToken,
+    pub progress: Arc<Progress>,       // 原子计数：已下载、总大小、连接数、分片视图
+    pub task_limit: RateLimiter, pub global_limit: RateLimiter,
+    pub checkpoint: Arc<dyn Checkpoint>, // started()：文件已就绪；save()：每秒的已落盘进度
+    /* id、source、save_dir、file_name、options … */
+}
+
+pub enum Outcome {
+    Completed { file_name: String, total: u64 },
+    Stopped(ResumeState),                       // 被取消，磁盘上已有的进度
+    Failed(Error, Option<ResumeState>),
 }
 ```
 
@@ -481,12 +488,13 @@ CREATE TABLE tasks (
 CREATE TABLE segments (
     task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     idx         INTEGER NOT NULL,
-    start       INTEGER NOT NULL,
-    end         INTEGER NOT NULL,
+    start_pos   INTEGER NOT NULL,           -- `end` 是 SQL 关键字，列名加 _pos
+    end_pos     INTEGER,                    -- 含；长度未知时为 NULL
     downloaded  INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (task_id, idx)
 );
 
+-- Phase 3 的迁移再建（0001 不含）
 CREATE TABLE torrent_meta (
     task_id       TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
     info_hash     TEXT NOT NULL,
@@ -500,8 +508,9 @@ CREATE INDEX idx_tasks_created ON tasks(created_at DESC);
 ```
 
 - 开启 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;`。
-- 使用 `sqlx::migrate!` 管理版本；应用升级自动迁移。
-- 数据库位于 `app_data_dir/omni.db`；敏感字段（Cookie、认证头）使用主程序生成的本地密钥（存于系统凭据管理器：Windows Credential Manager / macOS Keychain / Linux Secret Service，`keyring` crate）做 AES-GCM 加密。
+- 使用 `sqlx::migrate!` 管理版本；应用升级自动迁移。实际迁移见 `crates/omnidl-storage/migrations/0001_init.sql`（`tasks` 另有 `prev_status`，回收站还原用）。
+- 进度每秒保存一次：先快照分片表，再让写入线程 flush（并 `sync_data`），最后写库，数据库里的进度不会超前于磁盘（[ADR-003](architecture/ADR-003-download-engine.md)）。
+- 数据库位于 `app_data_dir/omni.db`；敏感字段（Cookie、认证头）使用主程序生成的本地密钥（存于系统凭据管理器：Windows Credential Manager / macOS Keychain / Linux Secret Service，`keyring` crate）做 AES-GCM 加密。Phase 1 尚未加密（Cookie 只能在新建对话框里手动填写），Phase 2 扩展开始传 Cookie 时加上。
 
 ### 4.7 文件系统平台差异
 
@@ -757,33 +766,34 @@ apps/desktop/src/
 └─ styles/app.css       只放下载器特有样式（任务表格列宽、分片地图、快捷下载框）；令牌与组件样式来自 omni-ui/styles.css
 ```
 
-#### Tauri 命令（节选，经 tauri-specta 导出）
+#### Tauri 命令（Phase 1 已实现；类型手写在 `lib/types.ts`、包装在 `lib/api.ts`，见 ADR-003）
 
 ```ts
-commands.addTasks(requests: NewTaskRequest[]): Promise<Result<TaskId[], AppError>>
-commands.probeUrl(url: string, opts?: ProbeOptions): Promise<Result<ProbeResult, AppError>>
-commands.parseTorrent(source: TorrentSource): Promise<Result<TorrentPreview, AppError>>
-commands.pauseTasks(ids: TaskId[]) / resumeTasks / removeTasks(ids, deleteFiles)
-commands.listTasks(filter: TaskFilter): Promise<Task[]>
-commands.getTaskDetail(id): Promise<TaskDetail>          // 分片、peers、trackers
-commands.setTaskOptions(id, patch: Partial<TaskOptions>)
-commands.reorderTasks(ids: TaskId[])
-commands.getSettings() / setSettings(patch)
-commands.setGlobalSpeedLimit(down?: number, up?: number)
-commands.openFile(id) / showInFolder(id)
-commands.getBrowserIntegrationStatus() / repairBrowserIntegration(browsers)
+api.bootstrap(): Bootstrap                       // 设置、全部任务、版本、系统下载目录、日志目录
+api.listTasks(): Task[]                          // 事件丢失后重新同步
+api.setSettings(settings) / setSpeedLimit(bytesPerSec | null)
+api.probe(url, options): ProbeInfo               // 新建对话框的实时探测
+api.add(items: NewTask[]): Task[]
+api.pause(ids) / resume(ids) / restart(ids)      // restart：远端文件变更后从头下载
+api.remove(ids) / restore(ids) / purge(ids, deleteFiles)   // 回收站
+api.detail(id): TaskDetail                       // 分片视图
+api.setTaskSpeedLimit(id, limit)
+api.open(id) / reveal(id) / openFolder(path) / diskFree(path)
+// 后续阶段：parseTorrent、reorderTasks、getBrowserIntegrationStatus / repairBrowserIntegration
 ```
+
+失败统一返回 `{ code, message, status? }`，界面按 `code` 选择中文提示（`lib/words.ts`）。
 
 #### 事件
 
 | 事件 | 频率 | 载荷 |
 |---|---|---|
-| `task:progress-batch` | ≤ 4 次/s | `{ items: [{ id, downloaded, uploaded, speed, eta, peers? }] }` |
-| `task:changed` | 状态变化时 | 完整 `Task` |
-| `task:added` / `task:removed` | 即时 | `Task` / `TaskId` |
-| `engine:stats` | 1 次/s | 全局速度、活动数、磁盘 |
-| `browser:status` | 变化时 | 哪个浏览器 host 连接中 |
-| `deep-link` | 即时 | 由单实例 / 深链接插件转发的 URL，前端弹出新建对话框 |
+| `task:progress` | 4 次/s（有任务运行时） | `{ items: [{ id, downloaded, total, speed, eta, connections }], stats: { downloadSpeed, running } }`，管理器已合并 |
+| `task:changed` | 状态、名称、大小或错误变化时 | 完整 `Task` |
+| `task:added` / `task:deleted` | 即时 | `Task` / `TaskId[]`（彻底删除；回收站是状态） |
+| `task:resync` | 事件积压丢失时 | 无；前端重新 `listTasks` |
+| `browser:status` | 变化时（Phase 2） | 哪个浏览器 host 连接中 |
+| `deep-link` | 即时（Phase 3） | 由单实例 / 深链接插件转发的 URL，前端弹出新建对话框 |
 
 ### 6.5 性能策略
 
@@ -968,18 +978,25 @@ OmniDownloadManager/
 - [x] 确定图标、名称、bundle identifier、许可证：Omni Download、`omnidl-` 前缀、`app.omnidownload.desktop`、MIT，图标 `icons/app-icon.svg`（见 ADR-001）
 - [x] [ADR-001 技术选型与命名](architecture/ADR-001-tech-stack.md)、[ADR-002 浏览器桥方案](architecture/ADR-002-browser-bridge.md)
 
-**验收**：空白 Tauri 窗口三平台可运行，CI 绿。Windows 本机已验证（tsc、ESLint、Vitest、rustfmt、clippy、cargo test 通过，调试版窗口启动并正常渲染）；macOS / Linux 的编译与测试需推送到 GitHub 后由 CI 确认。
+**验收**：空白 Tauri 窗口三平台可运行，CI 绿。已达成：Windows 本机验证通过，首次推送的 CI（run 42568639421）lint 与 Windows / macOS / Linux 测试全部通过。
 
 ### Phase 1 — HTTP 引擎 + 核心 UI（3–4 周）
 
-- [ ] `omnidl-core`：Task 模型、状态机、Scheduler、EventBus、RateLimiter
-- [ ] `omnidl-storage`：sqlx 迁移、仓储、Writer actor、预分配
-- [ ] `omnidl-http`：探测、文件名推断、分片 + 动态窃取、续传、重试、代理、限速
-- [ ] `omnidl-desktop`：命令 / 事件（tauri-specta）、单实例、日志
-- [ ] 前端：自绘标题栏、导航、虚拟任务列表、新建对话框、详情面板（概览 / 分片 / 速度）、设置页（常规 / 下载 / 网络）、深浅主题
-- [ ] 集成测试：本地支持 Range 的 mock 服务器（`axum` + `tower-http` 或 `wiremock`），覆盖续传、服务器不支持 Range、文件变更
+设计决定与偏离原方案之处见 [ADR-003 下载引擎与任务管理](architecture/ADR-003-download-engine.md)。
 
-**验收**：可下载 5 GB 文件，8 连接打满带宽，崩溃重启后续传成功，1000 条任务列表流畅。
+- [x] `omnidl-core`：Task 模型与状态机、`TaskManager`（优先级 + 列表顺序调度、并发槽位、持久化、退出前保存）、分片表与动态窃取（属性测试）、文件名清洗 / 重名编号 / 分类、令牌桶限速（全局 + 任务串联）、EventBus（进度每 250 ms 合并一次）
+- [x] `omnidl-storage`：sqlx 迁移与仓储、写入线程（合并相邻块，`sync_data` 在克隆句柄上异步执行）、预分配（Windows 稀疏文件，Linux / macOS `fallocate`）、剩余空间
+- [x] `omnidl-http`：探测（HEAD，被拒或信息不全时 `Range: bytes=0-0`）、文件名推断（RFC 6266 / 5987、URL、Content-Type）、分片 + 动态窃取、续传前校验 ETag / Last-Modified / 大小、指数退避重试、429 / 503 让出连接、忽略 Range 时降级单连接、系统 / 自定义代理、限速、按 Last-Modified 设置文件时间
+- [x] `omnidl-desktop`：命令 / 事件（类型手写，未用仍是 RC 的 tauri-specta，见 ADR-003）、单实例、日志（按天滚动，保留 7 天）、设置文件（TOML）、退出时等待任务保存进度
+- [x] 前端：自绘标题栏（粘贴框识别链接）、导航与分类计数、虚拟任务列表（排序、多选、右键菜单、快捷键）、新建对话框（逐条实时探测）、详情面板（概览 / 分片 / 近 2 分钟速度）、设置页（常规 / 下载 / 网络）、12 套内置主题与密度、回收站、全局限速
+- [x] 集成测试：`axum` mock 服务器（`crates/omnidl-http/tests/common`，内容按偏移生成），覆盖多连接、不支持 Range、HEAD 被拒、断流重试、暂停续传、强杀后从检查点续传、远端文件变更、404、重名、未知长度与空文件、限速，以及管理器 + 真实引擎的退出重启续传；`cargo run -p omnidl-http --example test_server` 可手动试用
+
+**验收**：可下载 5 GB 文件，8 连接打满带宽，崩溃重启后续传成功，1000 条任务列表流畅。Windows 本机结果：
+
+- 5 GiB 文件 8 连接（本机回环，`cargo test -p omnidl-http --release --test download -- --ignored large_file`）约 720 MiB/s；下载到 40% 时强杀，从上一个检查点续传完成，逐字节校验一致。
+- 界面中关闭窗口或强杀进程后重新启动，未完成的任务自动从保存的位置继续。
+- 1005 条任务的列表 3 秒内从头滚到尾再回来，平均每帧 6.3 ms、最长 6.4 ms，DOM 中只有约 32 行；1000 个链接一次添加用时 0.9 s。
+- 真实网络上的带宽占用需在实际网络环境中确认；macOS / Linux 由 CI 验证。
 
 ### Phase 2 — 浏览器扩展与 Native Messaging（2 周）
 

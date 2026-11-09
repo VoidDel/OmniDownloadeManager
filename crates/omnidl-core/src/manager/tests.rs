@@ -1,0 +1,333 @@
+//! The manager against a fake engine that "downloads" in steps.
+
+use std::sync::atomic::AtomicU64;
+
+use super::*;
+
+/// Counts `step` bytes every `delay` up to `size`; resumes from the saved segment.
+struct FakeEngine {
+    size: u64,
+    step: u64,
+    delay: Duration,
+    fail_at: Option<u64>,
+    /// Bytes already done when the last run started.
+    resumed_from: AtomicU64,
+}
+
+impl FakeEngine {
+    fn new(size: u64, step: u64, delay_ms: u64) -> Arc<Self> {
+        Arc::new(Self {
+            size,
+            step,
+            delay: Duration::from_millis(delay_ms),
+            fail_at: None,
+            resumed_from: AtomicU64::new(0),
+        })
+    }
+}
+
+#[async_trait]
+impl DownloadEngine for FakeEngine {
+    fn kind(&self) -> TaskKind {
+        TaskKind::Http
+    }
+
+    async fn probe(&self, source: &str, _: &JobOptions) -> Result<ProbeInfo> {
+        Ok(ProbeInfo {
+            final_url: source.into(),
+            file_name: filename::from_url(source).unwrap_or_default(),
+            total: Some(self.size),
+            resumable: true,
+            content_type: None,
+            etag: None,
+            last_modified: None,
+        })
+    }
+
+    async fn run(&self, job: Job) -> Outcome {
+        let size = self.size;
+        let name = job
+            .resume
+            .as_ref()
+            .map(|r| r.file_name.clone())
+            .or(job.file_name.clone())
+            .unwrap_or_else(|| filename::from_url(&job.source).unwrap());
+        let mut done = job.resume.as_ref().map_or(0, ResumeState::downloaded);
+        self.resumed_from.store(done, Ordering::SeqCst);
+        let state = |done| ResumeState {
+            file_name: name.clone(),
+            total: Some(size),
+            resumable: true,
+            segments: vec![Segment {
+                start: 0,
+                end: Some(size - 1),
+                downloaded: done,
+            }],
+            ..Default::default()
+        };
+        job.checkpoint.started(&state(done)).await.unwrap();
+        job.progress.set_total(Some(size));
+        job.progress.set_downloaded(done);
+        job.progress.set_connections(1);
+        while done < size {
+            tokio::select! {
+                _ = job.cancel.cancelled() => return Outcome::Stopped(state(done)),
+                _ = tokio::time::sleep(self.delay) => {}
+            }
+            done = (done + self.step).min(size);
+            job.progress.set_downloaded(done);
+            job.checkpoint.save(&state(done)).await.unwrap();
+            if self.fail_at.is_some_and(|f| done >= f) {
+                let e = Error::new(ErrorCode::Network, "connection reset");
+                return Outcome::Failed(e, Some(state(done)));
+            }
+        }
+        Outcome::Completed {
+            file_name: name,
+            total: size,
+        }
+    }
+}
+
+fn new_task(url: &str, start: bool) -> NewTask {
+    NewTask {
+        source: url.into(),
+        save_dir: std::env::temp_dir().to_string_lossy().into_owned(),
+        options: TaskOptions::default(),
+        start,
+        probe: None,
+    }
+}
+
+async fn manager(engine: Arc<FakeEngine>, db: Db, max_concurrent: u32) -> TaskManager {
+    let config = EngineConfig {
+        max_concurrent,
+        ..Default::default()
+    };
+    TaskManager::open(db, vec![engine], config).await.unwrap()
+}
+
+/// Polls until `pred` holds for task `id`.
+async fn wait_for(m: &TaskManager, id: TaskId, pred: impl Fn(&Task) -> bool) -> Task {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let t = m.get(id).expect("task exists");
+        if pred(&t) {
+            return t;
+        }
+        assert!(Instant::now() < deadline, "timed out; task is {t:#?}");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_a_task_to_completion_and_publishes_it() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(1000, 100, 2), db.clone(), 3).await;
+    let mut events = m.subscribe();
+    let t = m
+        .add(vec![new_task("https://example.com/a.iso", true)])
+        .await
+        .unwrap()
+        .remove(0);
+    assert_eq!(t.file_name, "a.iso");
+    assert_eq!(t.category, crate::Category::DiskImage);
+    let done = wait_for(&m, t.id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(done.downloaded_bytes, 1000);
+    assert!(done.started_at.is_some() && done.completed_at.is_some());
+
+    let row = db.get_task(&t.id.to_string()).await.unwrap().unwrap();
+    assert_eq!(row.status, "completed");
+    assert!(db.segments(&t.id.to_string()).await.unwrap().is_empty());
+
+    let mut seen = Vec::new();
+    while let Ok(e) = events.try_recv() {
+        match e {
+            TaskEvent::Added { .. } => seen.push("added".to_owned()),
+            TaskEvent::Changed { task } => seen.push(task.status.as_str().to_owned()),
+            _ => {}
+        }
+    }
+    seen.dedup();
+    assert_eq!(seen, ["added", "probing", "downloading", "completed"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_no_more_than_max_concurrent() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(500, 100, 2), db, 2).await;
+    let ids: Vec<TaskId> = m
+        .add(
+            (0..5)
+                .map(|i| new_task(&format!("https://e.com/{i}.bin"), true))
+                .collect(),
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let list = m.list();
+        let running = list.iter().filter(|t| t.status.is_running()).count();
+        assert!(running <= 2, "{running} running");
+        if list.iter().all(|t| t.status == TaskStatus::Completed) {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    // List order is kept.
+    let order: Vec<TaskId> = m.list().iter().map(|t| t.id).collect();
+    assert_eq!(order, ids);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pauses_and_resumes_from_saved_progress() {
+    let db = Db::memory().await.unwrap();
+    let engine = FakeEngine::new(100_000, 1000, 5);
+    let m = manager(engine.clone(), db.clone(), 3).await;
+    let id = m
+        .add(vec![new_task("https://e.com/big.bin", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, id, |t| t.downloaded_bytes >= 3000).await;
+    m.pause(&[id]).await.unwrap();
+    let paused = wait_for(&m, id, |t| t.status == TaskStatus::Paused).await;
+    assert!(paused.downloaded_bytes >= 3000);
+    let saved = db.segments(&id.to_string()).await.unwrap();
+    assert_eq!(saved[0].downloaded as u64, paused.downloaded_bytes);
+
+    m.resume(&[id]).await.unwrap();
+    wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
+    assert_eq!(
+        engine.resumed_from.load(Ordering::SeqCst),
+        paused.downloaded_bytes
+    );
+    m.pause(&[id]).await.unwrap();
+    wait_for(&m, id, |t| t.status == TaskStatus::Paused).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn moves_tasks_through_the_recycle_bin() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(1000, 10, 1), db.clone(), 3).await;
+    let id = m
+        .add(vec![new_task("https://e.com/x.zip", false)])
+        .await
+        .unwrap()[0]
+        .id;
+    assert_eq!(m.get(id).unwrap().status, TaskStatus::Paused);
+    m.remove(&[id]).await.unwrap();
+    assert_eq!(m.get(id).unwrap().status, TaskStatus::Removed);
+    m.restore(&[id]).await.unwrap();
+    assert_eq!(m.get(id).unwrap().status, TaskStatus::Paused);
+
+    let mut events = m.subscribe();
+    m.purge(&[id], false).await.unwrap();
+    assert!(m.get(id).is_none());
+    assert!(db.get_task(&id.to_string()).await.unwrap().is_none());
+    assert!(matches!(events.recv().await.unwrap(), TaskEvent::Deleted { ids } if ids == [id]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_running_task_stops_it_first() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(1_000_000, 100, 5), db, 3).await;
+    let id = m
+        .add(vec![new_task("https://e.com/r.bin", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
+    m.remove(&[id]).await.unwrap();
+    let t = wait_for(&m, id, |t| t.status == TaskStatus::Removed).await;
+    assert_eq!(t.prev_status, Some(TaskStatus::Paused));
+    m.restore(&[id]).await.unwrap();
+    assert_eq!(m.get(id).unwrap().status, TaskStatus::Paused);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_failures_and_retries_them() {
+    let db = Db::memory().await.unwrap();
+    let engine = Arc::new(FakeEngine {
+        fail_at: Some(300),
+        ..Arc::into_inner(FakeEngine::new(1000, 100, 1)).unwrap()
+    });
+    let m = manager(engine, db, 3).await;
+    let id = m
+        .add(vec![new_task("https://e.com/f.bin", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    let t = wait_for(&m, id, |t| t.status == TaskStatus::Failed).await;
+    assert_eq!(t.error.unwrap().code, ErrorCode::Network);
+    assert_eq!(t.downloaded_bytes, 300);
+    m.resume(&[id]).await.unwrap();
+    let t = m.get(id).unwrap();
+    assert!(t.error.is_none() && t.status != TaskStatus::Failed);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumes_running_downloads_after_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("omni.db");
+    let id = {
+        let m = manager(
+            FakeEngine::new(1_000_000, 1000, 5),
+            Db::open(&path).await.unwrap(),
+            3,
+        )
+        .await;
+        let id = m
+            .add(vec![new_task("https://e.com/restart.bin", true)])
+            .await
+            .unwrap()[0]
+            .id;
+        wait_for(&m, id, |t| t.downloaded_bytes >= 5000).await;
+        m.shutdown().await;
+        id
+    };
+    let engine = FakeEngine::new(1_000_000, 1000, 5);
+    let m = manager(engine.clone(), Db::open(&path).await.unwrap(), 3).await;
+    wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
+    assert!(engine.resumed_from.load(Ordering::SeqCst) >= 5000);
+    m.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_links_it_cannot_fetch() {
+    let m = manager(FakeEngine::new(1, 1, 1), Db::memory().await.unwrap(), 3).await;
+    let e = m
+        .add(vec![new_task("ftp://e.com/a", true)])
+        .await
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    let e = m.add(vec![new_task("not a url", true)]).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidUrl);
+    let e = m
+        .add(vec![NewTask {
+            save_dir: " ".into(),
+            ..new_task("https://e.com/a", true)
+        }])
+        .await
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(m.list().is_empty());
+}
+
+#[test]
+fn measures_speed_over_a_window() {
+    let mut m = SpeedMeter::default();
+    let t0 = Instant::now();
+    assert_eq!(m.sample(t0, 0), 0);
+    assert_eq!(m.sample(t0 + Duration::from_secs(1), 1000), 1000);
+    assert_eq!(m.sample(t0 + Duration::from_secs(2), 3000), 1500);
+    // Old samples fall out of the window.
+    let s = m.sample(t0 + Duration::from_secs(5), 3000);
+    assert_eq!(s, 0);
+    // A restart (fewer bytes) starts a new window.
+    assert_eq!(m.sample(t0 + Duration::from_secs(6), 0), 0);
+}

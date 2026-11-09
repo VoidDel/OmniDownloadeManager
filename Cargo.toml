@@ -21,6 +21,46 @@ omnidl-ipc = { path = "crates/omnidl-ipc" }
 
 tauri = "2"
 tauri-build = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+
+# Async runtime and plumbing.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-util = "0.7"
+async-trait = "0.1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+bytes = "1"
+parking_lot = "0.12"
+
+# HTTP: rustls with the platform verifier (system trust store). HTTP/1.1 only: HTTP/2 would carry
+# every connection of a download over one TCP stream. No decompression features, so no
+# Accept-Encoding is sent and Content-Length matches the bytes written to disk.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "system-proxy", "socks", "stream"] }
+url = "2"
+httpdate = "1"
+percent-encoding = "2"
+
+# Persistence: runtime queries only (no compile-time checked macros, no DATABASE_URL); migrations
+# are embedded with sqlx::migrate!.
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "migrate", "macros"] }
+fs4 = "1"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+uuid = { version = "1", features = ["v4", "serde"] }
+directories = "6"
+toml = "1"
+
+# Tests.
+axum = "0.8"
+proptest = "1"
+sha2 = "0.10"
+tempfile = "3"
 
 [profile.release]
 lto = "thin"

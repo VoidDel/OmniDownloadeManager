@@ -2,7 +2,7 @@
 
 跨平台（Windows、macOS、Linux）下载管理器：HTTP / FTP 多连接与断点续传、BitTorrent 与磁力链接，以及 Chrome、Edge、Firefox 扩展。Rust + Tauri 2 + React，界面与 [OmniZip](https://github.com/VoidDel/OmniZip) 同属 Omni 家族，共用设计系统 [omni-ui](https://github.com/VoidDel/omni-ui)。
 
-> 当前处于 **Phase 0**：仓库骨架、窗口框架与 CI。下载引擎从 Phase 1 开始，路线图见 [开发方案](docs/development-plan.md) §10。
+> 当前进度：**Phase 1**（HTTP / HTTPS 多连接下载、断点续传、任务列表、详情面板、设置）已完成。FTP、BitTorrent 与浏览器扩展在后续阶段，路线图见 [开发方案](docs/development-plan.md) §10。
 
 ## 目录
 
@@ -38,6 +38,20 @@ pnpm --filter omnidl-desktop build   # clippy / cargo test 前需要先构建前
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+手动试下载不必依赖外网：引擎测试用的本地服务器可以单独启动，内容按偏移生成，任意大小都有。
+
+```bash
+cargo run -p omnidl-http --release --example test_server -- 127.0.0.1:18080
+# 然后在应用里添加，例如：
+#   http://127.0.0.1:18080/dl/3221225472/ubuntu.iso      每个连接约 1 MB/s，便于观察进度
+#   http://127.0.0.1:18080/get/52428800/node.zip         全速
+
+# Phase 1 验收用的大文件测试（写 5 GiB，中途强杀后续传并逐字节校验；OMNIDL_LARGE_GIB 改大小）
+cargo test -p omnidl-http --release --test download -- --ignored large_file --nocapture
+```
+
+数据位置：数据库 `omni.db` 与 `settings.toml` 在系统的应用数据目录（Windows 为 `%APPDATA%\app.omnidownload.desktop`），日志按天写在应用日志目录（设置 › 常规 › 日志）。
 
 ## 界面与 omni-ui
 
