@@ -200,6 +200,8 @@
 
 /* ---------------------------------------------------------------- quick-download window */
 html:has(.quick), body:has(.quick) { overflow: hidden; }
+/* With a window material the whole quick window is material, under a veil of the canvas. */
+:root[data-material="true"] .quick { background: var(--canvas-material); }
 .quick { height: 100vh; display: flex; flex-direction: column; background: var(--bg-canvas); color: var(--fg-primary); font-variant-numeric: tabular-nums; border: 1px solid var(--border-subtle); box-sizing: border-box; }
 .quick header { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding-left: 14px; }
 .quick header h1 { margin: 0; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; }

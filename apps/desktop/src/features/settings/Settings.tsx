@@ -5,18 +5,23 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { builtinThemes, summarize, type ThemeSummary } from 'omni-ui';
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { Density, Settings as S, ThemeMode } from '../../lib/types';
+import type { Density, MaterialKind, Settings as S, ThemeMode } from '../../lib/types';
 import { useApp } from '../../store/app';
+import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
 import { SETTINGS_TABS } from '../shell/Chrome';
 import { BrowserSettings } from './BrowserSettings';
 import { TorrentSettings } from './TorrentSettings';
 
 const THEMES: ThemeSummary[] = builtinThemes.map((t) => summarize(t, true));
+
+/** Accent presets, as in OmniZip. */
+const ACCENTS = ['#2F6FED', '#5B8CFF', '#7A5AF8', '#C2410C', '#B8641B', '#D4587A', '#DB2777', '#0E9F8E', '#1E9E63', '#4D7C0F', '#0891B2', '#64748B'];
 
 function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; col?: boolean }) {
   return (
@@ -30,14 +35,14 @@ function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNod
   );
 }
 
-/** A select over numbers. */
-function NumberSelect({ value, options, onChange, label, unit = '' }: { value: number; options: number[]; onChange: (v: number) => void; label: string; unit?: string }) {
+/** A select over numbers; `format` turns a number into its option text (with a unit, say). */
+function NumberSelect({ value, options, onChange, label, format = String }: { value: number; options: number[]; onChange: (v: number) => void; label: string; format?: (n: number) => string }) {
   const list = options.includes(value) ? options : [...options, value].sort((a, b) => a - b);
   return (
     <Select
       value={String(value)}
       label={label}
-      options={list.map((n): [string, string] => [String(n), `${n}${unit}`])}
+      options={list.map((n): [string, string] => [String(n), format(n)])}
       onChange={(v) => onChange(Number(v))}
     />
   );
@@ -69,7 +74,8 @@ function TextSetting({ value, onSave, label, placeholder, mono }: { value: strin
 
 function ThemeCard({ th, selected, onPick }: { th: ThemeSummary; selected: boolean; onPick: () => void }) {
   const c = th.colors;
-  const name = th.name['zh-CN'] ?? th.name['en-US'];
+  const { i18n } = useTranslation();
+  const name = th.name[i18n.language] ?? th.name['en-US'];
   return (
     <button type="button" className="tcard" aria-pressed={selected} title={name} onClick={onPick}>
       <div className="prev" style={{ background: c['bg.canvas'] }}>
@@ -97,57 +103,117 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const version = useApp((st) => st.version);
   const logDir = useApp((st) => st.logDir);
   const run = useApp((st) => st.run);
+  const platform = useApp((st) => st.platform);
+  const materialSupported = useApp((st) => st.materialSupported);
+  const systemAccent = useApp((st) => st.systemAccent);
+  const { t } = useTranslation();
   const a = s.appearance;
+  const accentIsCustom = a.accent.startsWith('#');
+  const accentIsPicked = accentIsCustom && !ACCENTS.includes(a.accent.toUpperCase());
   return (
     <>
       <div className="set-group">
-        <Row label="外观">
+        <Row label={t('settings.language.ui')}>
+          <Select
+            label={t('settings.language.ui')}
+            value={s.language || 'auto'}
+            onChange={(v) => set((x) => (x.language = v))}
+            options={[['auto', t('settings.language.auto', { lang: LANGUAGE_NAMES[systemLang()] })], ...SUPPORTED.map((l): [string, string] => [l, LANGUAGE_NAMES[l]])]}
+          />
+        </Row>
+      </div>
+      <div className="set-group">
+        <Row label={t('settings.appearance.mode')}>
           <Segmented<ThemeMode>
             value={a.mode}
-            label="外观"
+            label={t('settings.appearance.mode')}
             onChange={(v) => set((x) => (x.appearance.mode = v))}
             options={[
-              ['light', '浅色'],
-              ['dark', '深色'],
-              ['system', '跟随系统'],
+              ['light', t('settings.appearance.modes.light')],
+              ['dark', t('settings.appearance.modes.dark')],
+              ['system', t('settings.appearance.modes.system')],
             ]}
           />
         </Row>
-        <Row col label="浅色主题" hint="外观为浅色，或跟随系统且系统为浅色时使用">
+        <Row col label={t('settings.appearance.lightTheme')} hint={t('settings.appearance.lightThemeHint')}>
           <div className="themes">
             {THEMES.filter((t) => t.appearance === 'light').map((th) => (
               <ThemeCard key={th.id} th={th} selected={a.lightTheme === th.id} onPick={() => set((x) => (x.appearance.lightTheme = th.id))} />
             ))}
           </div>
         </Row>
-        <Row col label="深色主题">
+        <Row col label={t('settings.appearance.darkTheme')}>
           <div className="themes">
             {THEMES.filter((t) => t.appearance === 'dark').map((th) => (
               <ThemeCard key={th.id} th={th} selected={a.darkTheme === th.id} onPick={() => set((x) => (x.appearance.darkTheme = th.id))} />
             ))}
           </div>
         </Row>
-        <Row label="列表密度" hint="任务列表每行的高度">
+        <Row col label={t('settings.appearance.accent')}>
+          <div className="swatches">
+            <Segmented<string>
+              value={accentIsCustom ? 'custom' : a.accent}
+              label={t('settings.appearance.accent')}
+              onChange={(v) => v !== 'custom' && set((x) => (x.appearance.accent = v))}
+              options={[
+                ['theme', t('settings.appearance.accentTheme')],
+                ['system', t('settings.appearance.accentSystem'), !systemAccent],
+              ]}
+            />
+            <span style={{ width: 8 }} />
+            {ACCENTS.map((c) => (
+              <button key={c} type="button" className="sw" style={{ background: c }} aria-pressed={a.accent.toUpperCase() === c} aria-label={c} onClick={() => set((x) => (x.appearance.accent = c))} />
+            ))}
+            {/* A native colour input, invisible over a rainbow swatch; a colour not among the presets shows in its middle. */}
+            <label className={'sw sw-custom' + (accentIsPicked ? ' on' : '')} title={t('settings.appearance.accentCustom')} style={accentIsPicked ? ({ '--c': a.accent } as CSSProperties) : undefined}>
+              <input type="color" aria-label={t('settings.appearance.accentCustom')} value={accentIsCustom ? a.accent : '#2F6FED'} onChange={(e) => set((x) => (x.appearance.accent = e.target.value.toUpperCase()))} />
+            </label>
+          </div>
+        </Row>
+        {/* As in OmniZip: on Windows 11 one choice for both "whether" and "which". */}
+        <Row label={t('settings.appearance.material')} hint={materialSupported ? t('settings.appearance.materialHint') : t('settings.appearance.materialUnavailable')}>
+          {platform === 'win' && materialSupported ? (
+            <Segmented<'off' | MaterialKind>
+              value={a.material ? a.materialKind : 'off'}
+              label={t('settings.appearance.material')}
+              onChange={(v) =>
+                set((x) => {
+                  x.appearance.material = v !== 'off';
+                  if (v !== 'off') x.appearance.materialKind = v;
+                })
+              }
+              options={[
+                ['off', t('settings.appearance.materialKinds.off')],
+                ['mica', t('settings.appearance.materialKinds.mica')],
+                ['mica-alt', t('settings.appearance.materialKinds.micaAlt')],
+                ['acrylic', t('settings.appearance.materialKinds.acrylic')],
+              ]}
+            />
+          ) : (
+            <Switch label={t('settings.appearance.material')} disabled={!materialSupported} checked={a.material && materialSupported} onChange={(v) => set((x) => (x.appearance.material = v))} />
+          )}
+        </Row>
+        <Row label={t('settings.appearance.density')} hint={t('settings.appearance.densityHint')}>
           <Segmented<Density>
             value={a.density}
-            label="列表密度"
+            label={t('settings.appearance.density')}
             onChange={(v) => set((x) => (x.appearance.density = v))}
             options={[
-              ['compact', '紧凑'],
-              ['comfortable', '舒适'],
-              ['spacious', '宽松'],
+              ['compact', t('settings.appearance.densities.compact')],
+              ['comfortable', t('settings.appearance.densities.comfortable')],
+              ['spacious', t('settings.appearance.densities.spacious')],
             ]}
           />
         </Row>
       </div>
       <div className="set-group">
-        <Row label="版本">
+        <Row label={t('settings.general.version')}>
           <span className="muted">Omni Download {version}</span>
         </Row>
-        <Row label="日志" hint={<span className="mono">{logDir}</span>}>
+        <Row label={t('settings.general.logs')} hint={<span className="mono">{logDir}</span>}>
           <button type="button" className="btn outline" disabled={!logDir || !isTauri()} onClick={() => void run(() => api.openFolder(logDir))}>
             <Icon name="folderOpen" />
-            打开文件夹
+            {t('settings.general.openFolder')}
           </button>
         </Row>
       </div>
@@ -158,50 +224,51 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
 function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const defaultDir = useApp((st) => st.defaultDir);
   const run = useApp((st) => st.run);
+  const { t } = useTranslation();
   const e = s.engine;
   const dir = s.downloadDir || defaultDir;
   const browse = async () => {
-    const picked = await open({ directory: true, defaultPath: dir || undefined, title: '选择默认下载文件夹' }).catch(() => null);
+    const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('settings.download.folderPick') }).catch(() => null);
     if (typeof picked === 'string') set((x) => (x.downloadDir = picked));
   };
   return (
     <>
       <div className="set-group">
-        <Row col label="默认下载文件夹" hint={s.downloadDir ? undefined : '系统的“下载”文件夹'}>
+        <Row col label={t('settings.download.folder')} hint={s.downloadDir ? undefined : t('settings.download.folderDefault')}>
           <div className="inline">
-            <TextSetting mono label="默认下载文件夹" value={dir} onSave={(v) => set((x) => (x.downloadDir = v === defaultDir ? '' : v))} />
+            <TextSetting mono label={t('settings.download.folder')} value={dir} onSave={(v) => set((x) => (x.downloadDir = v === defaultDir ? '' : v))} />
             <button type="button" className="btn outline" onClick={() => void browse()}>
-              浏览
+              {t('settings.download.browse')}
             </button>
             <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void run(() => api.openFolder(dir))}>
-              打开
+              {t('settings.download.open')}
             </button>
           </div>
         </Row>
-        <Row label="同时下载的任务数" hint="其余任务排队等待">
-          <NumberSelect label="同时下载的任务数" value={e.maxConcurrent} options={[1, 2, 3, 4, 5, 6, 8, 10]} onChange={(v) => set((x) => (x.engine.maxConcurrent = v))} />
+        <Row label={t('settings.download.maxConcurrent')} hint={t('settings.download.maxConcurrentHint')}>
+          <NumberSelect label={t('settings.download.maxConcurrent')} value={e.maxConcurrent} options={[1, 2, 3, 4, 5, 6, 8, 10]} onChange={(v) => set((x) => (x.engine.maxConcurrent = v))} />
         </Row>
-        <Row label="每个任务的连接数" hint="服务器支持分段下载时同时打开的连接，可在新建下载时单独设置">
-          <NumberSelect label="每个任务的连接数" value={e.connections} options={[1, 2, 4, 8, 16, 32]} onChange={(v) => set((x) => (x.engine.connections = v))} />
+        <Row label={t('settings.download.connections')} hint={t('settings.download.connectionsHint')}>
+          <NumberSelect label={t('settings.download.connections')} value={e.connections} options={[1, 2, 4, 8, 16, 32]} onChange={(v) => set((x) => (x.engine.connections = v))} />
         </Row>
-        <Row label="文件已存在时">
+        <Row label={t('settings.download.conflict')}>
           <Segmented<'rename' | 'overwrite'>
             value={e.conflict}
-            label="文件已存在时"
+            label={t('settings.download.conflict')}
             onChange={(v) => set((x) => (x.engine.conflict = v))}
             options={[
-              ['rename', '自动重命名'],
-              ['overwrite', '覆盖'],
+              ['rename', t('settings.download.conflictRename')],
+              ['overwrite', t('settings.download.conflictOverwrite')],
             ]}
           />
         </Row>
       </div>
       <div className="set-group">
-        <Row label="启动时继续未完成的下载" hint="退出时正在下载的任务，下次启动后自动继续">
-          <Switch label="启动时继续未完成的下载" checked={e.resumeOnStartup} onChange={(v) => set((x) => (x.engine.resumeOnStartup = v))} />
+        <Row label={t('settings.download.resumeOnStartup')} hint={t('settings.download.resumeOnStartupHint')}>
+          <Switch label={t('settings.download.resumeOnStartup')} checked={e.resumeOnStartup} onChange={(v) => set((x) => (x.engine.resumeOnStartup = v))} />
         </Row>
-        <Row label="每秒把进度写入磁盘" hint="断电或系统崩溃后也能从准确的位置继续；关闭可以减少磁盘写入">
-          <Switch label="每秒把进度写入磁盘" checked={e.syncWrites} onChange={(v) => set((x) => (x.engine.syncWrites = v))} />
+        <Row label={t('settings.download.syncWrites')} hint={t('settings.download.syncWritesHint')}>
+          <Switch label={t('settings.download.syncWrites')} checked={e.syncWrites} onChange={(v) => set((x) => (x.engine.syncWrites = v))} />
         </Row>
       </div>
     </>
@@ -211,33 +278,35 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
 type ProxyMode = 'system' | 'none' | 'custom';
 
 function Network({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
+  const { t } = useTranslation();
   const e = s.engine;
   // "Custom" is saved once it has an address; until then it is only shown here.
   const [mode, setMode] = useState<ProxyMode>(e.proxy.mode);
   const [customUrl, setCustomUrl] = useState(e.proxy.mode === 'custom' ? e.proxy.url : '');
+  const seconds = (n: number) => t('settings.network.seconds', { n });
   return (
     <>
       <div className="set-group">
-        <Row col label="代理" hint="HTTP、HTTPS 或 SOCKS5 代理，用于 HTTP 下载；socks5h:// 由代理解析域名">
+        <Row col label={t('settings.network.proxy')} hint={t('settings.network.proxyHint')}>
           <div className="inline">
             <Segmented<ProxyMode>
               value={mode}
-              label="代理"
+              label={t('settings.network.proxy')}
               onChange={(v) => {
                 setMode(v);
                 if (v !== 'custom') set((x) => (x.engine.proxy = { mode: v }));
                 else if (customUrl.trim()) set((x) => (x.engine.proxy = { mode: 'custom', url: customUrl.trim() }));
               }}
               options={[
-                ['system', '系统代理'],
-                ['none', '不使用'],
-                ['custom', '自定义'],
+                ['system', t('settings.network.proxyModes.system')],
+                ['none', t('settings.network.proxyModes.none')],
+                ['custom', t('settings.network.proxyModes.custom')],
               ]}
             />
             {mode === 'custom' && (
               <TextSetting
                 mono
-                label="代理地址"
+                label={t('settings.network.proxyUrl')}
                 value={customUrl}
                 placeholder="http://127.0.0.1:7890"
                 onSave={(v) => {
@@ -248,36 +317,36 @@ function Network({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             )}
           </div>
         </Row>
-        <Row col label="User-Agent" hint="默认使用桌面版 Chrome 的标识；有的网站会拒绝陌生的客户端">
+        <Row col label="User-Agent" hint={t('settings.network.userAgentHint')}>
           <div className="inline">
             <TextSetting mono label="User-Agent" value={e.userAgent} onSave={(v) => set((x) => (x.engine.userAgent = v))} />
             <button type="button" className="btn outline" onClick={() => set((x) => (x.engine.userAgent = ''))}>
-              恢复默认
+              {t('settings.network.resetDefault')}
             </button>
           </div>
         </Row>
-        <Row label="连接超时">
-          <NumberSelect label="连接超时" unit=" 秒" value={e.connectTimeoutSecs} options={[5, 10, 15, 30, 60]} onChange={(v) => set((x) => (x.engine.connectTimeoutSecs = v))} />
+        <Row label={t('settings.network.connectTimeout')}>
+          <NumberSelect label={t('settings.network.connectTimeout')} format={seconds} value={e.connectTimeoutSecs} options={[5, 10, 15, 30, 60]} onChange={(v) => set((x) => (x.engine.connectTimeoutSecs = v))} />
         </Row>
-        <Row label="无响应超时" hint="连接这么久收不到数据就断开重连">
-          <NumberSelect label="无响应超时" unit=" 秒" value={e.readTimeoutSecs} options={[10, 20, 30, 60, 120]} onChange={(v) => set((x) => (x.engine.readTimeoutSecs = v))} />
+        <Row label={t('settings.network.readTimeout')} hint={t('settings.network.readTimeoutHint')}>
+          <NumberSelect label={t('settings.network.readTimeout')} format={seconds} value={e.readTimeoutSecs} options={[10, 20, 30, 60, 120]} onChange={(v) => set((x) => (x.engine.readTimeoutSecs = v))} />
         </Row>
-        <Row label="失败重试次数" hint="网络错误或服务器 5xx 时，每个连接按 1、2、4… 秒的间隔重试">
-          <NumberSelect label="失败重试次数" unit=" 次" value={e.maxRetries} options={[0, 3, 5, 10, 20]} onChange={(v) => set((x) => (x.engine.maxRetries = v))} />
+        <Row label={t('settings.network.retries')} hint={t('settings.network.retriesHint')}>
+          <NumberSelect label={t('settings.network.retries')} format={(n) => t('settings.network.times', { n })} value={e.maxRetries} options={[0, 3, 5, 10, 20]} onChange={(v) => set((x) => (x.engine.maxRetries = v))} />
         </Row>
       </div>
       <div className="set-group">
-        <Row label="FTP 会话数" hint="每个 FTP 任务同时登录的会话；很多服务器限制每个用户的连接数">
-          <NumberSelect label="FTP 会话数" value={e.ftpConnections} options={[1, 2, 3, 4, 6, 8]} onChange={(v) => set((x) => (x.engine.ftpConnections = v))} />
+        <Row label={t('settings.network.ftpSessions')} hint={t('settings.network.ftpSessionsHint')}>
+          <NumberSelect label={t('settings.network.ftpSessions')} value={e.ftpConnections} options={[1, 2, 3, 4, 6, 8]} onChange={(v) => set((x) => (x.engine.ftpConnections = v))} />
         </Row>
-        <Row label="FTP 传输模式" hint="被动模式适合大多数网络；主动模式需要服务器能连回本机">
+        <Row label={t('settings.network.ftpMode')} hint={t('settings.network.ftpModeHint')}>
           <Segmented<'passive' | 'active'>
             value={e.ftpActive ? 'active' : 'passive'}
-            label="FTP 传输模式"
+            label={t('settings.network.ftpMode')}
             onChange={(v) => set((x) => (x.engine.ftpActive = v === 'active'))}
             options={[
-              ['passive', '被动'],
-              ['active', '主动'],
+              ['passive', t('settings.network.ftpPassive')],
+              ['active', t('settings.network.ftpActive')],
             ]}
           />
         </Row>
@@ -292,14 +361,16 @@ export function Settings() {
   const setTab = useApp((st) => st.setSettingsTab);
   const save = useApp((st) => st.saveSettings);
   const set = (f: (s: S) => void) => void save(f);
-  const label = SETTINGS_TABS.find(([id]) => id === tab)?.[1] ?? '';
+  const { t } = useTranslation();
+  const current = SETTINGS_TABS.find(([id]) => id === tab)?.[1];
+  const label = current ? t(current) : '';
   return (
     <div className="settings">
       <nav className="set-nav">
-        {SETTINGS_TABS.map(([id, text, icon]) => (
+        {SETTINGS_TABS.map(([id, key, icon]) => (
           <button key={id} type="button" className="nav-item" aria-current={tab === id} onClick={() => setTab(id)}>
             <Icon name={icon} />
-            <span className="lbl">{text}</span>
+            <span className="lbl">{t(key)}</span>
           </button>
         ))}
       </nav>

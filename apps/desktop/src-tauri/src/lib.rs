@@ -8,6 +8,7 @@ mod browser;
 mod commands;
 mod events;
 mod links;
+mod material;
 mod secrets;
 mod settings;
 mod state;
@@ -211,6 +212,7 @@ fn quit(app: &AppHandle, api: &tauri::ExitRequestApi) {
 /// Main window: hidden until the page has drawn (it shows itself), own title bar except on
 /// macOS, where the traffic lights sit over the sidebar.
 fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let settings = app.state::<AppState>().settings();
     let b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Omni Download")
         .inner_size(1200.0, 760.0)
@@ -224,7 +226,7 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .traffic_light_position(tauri::LogicalPosition::new(13.0, 22.5));
     #[cfg(not(target_os = "macos"))]
     let b = b.decorations(false);
-    let w = b.build()?;
+    let w = material::prepare(b, &settings).build()?;
     window_icons(&w.as_ref().window());
     Ok(w)
 }

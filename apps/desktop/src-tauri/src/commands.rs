@@ -25,6 +25,10 @@ pub struct Bootstrap {
     background: bool,
     /// Browsers whose extension has been in touch: name and Unix milliseconds.
     seen_browsers: Vec<(String, i64)>,
+    /// Window materials exist on this system (Windows 11, macOS).
+    material_supported: bool,
+    /// The system's accent colour (`#RRGGBB`), for the "follow the system" accent.
+    system_accent: Option<String>,
     /// Magnet links and `.torrent` files the app was started with: the new-download dialog
     /// opens with them.
     open_links: Vec<String>,
@@ -51,6 +55,8 @@ pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -
         log_dir: state.log_dir.clone(),
         background: main && state.background.swap(false, Ordering::SeqCst),
         seen_browsers: state.seen_browsers(),
+        material_supported: crate::material::supported(),
+        system_accent: crate::material::system_accent(),
         open_links,
     }
 }
@@ -62,10 +68,15 @@ pub fn task_list(state: State<'_, AppState>) -> Vec<Task> {
 }
 
 #[tauri::command]
-pub async fn settings_set(state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
+pub async fn settings_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> Result<Settings> {
     let mut settings = settings.normalized();
+    let before = state.settings();
     // The HTTP channel's switch, port and token change through its own commands only.
-    let current = state.settings().browser;
+    let current = before.browser;
     settings.browser.http_bridge = current.http_bridge;
     settings.browser.http_port = current.http_port;
     settings.browser.http_token = current.http_token;
@@ -78,15 +89,23 @@ pub async fn settings_set(state: State<'_, AppState>, settings: Settings) -> Res
         .set_upload_limit(settings.engine.upload_limit)
         .await;
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
+    let a = (&settings.appearance, &before.appearance);
+    if a.0.material != a.1.material || a.0.material_kind != a.1.material_kind {
+        crate::material::apply(&app, &settings);
+    }
     Ok(settings)
 }
 
 /// The global download limit in bytes per second; `null` is unlimited. Saved with the settings.
 #[tauri::command]
-pub async fn speed_limit_set(state: State<'_, AppState>, limit: Option<u64>) -> Result<Settings> {
+pub async fn speed_limit_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    limit: Option<u64>,
+) -> Result<Settings> {
     let mut settings = state.settings();
     settings.engine.speed_limit = limit.filter(|&l| l > 0);
-    settings_set(state, settings).await
+    settings_set(app, state, settings).await
 }
 
 #[tauri::command]

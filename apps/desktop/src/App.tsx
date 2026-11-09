@@ -5,6 +5,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { onSystemThemeChange, type Platform } from 'omni-ui';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Toasts } from './components/ui';
 import { Dialogs } from './features/dialogs/Dialogs';
@@ -66,6 +67,7 @@ function useTorrentDrop() {
 }
 
 export function App({ platform }: { platform: Platform }) {
+  const { t } = useTranslation();
   const view = useApp((s) => s.view);
   const appearance = useApp((s) => s.settings.appearance);
   const shown = useApp(detailTask);
@@ -97,7 +99,7 @@ export function App({ platform }: { platform: Platform }) {
         <StatusBar />
       </div>
       <Dialogs />
-      <Toasts toasts={toasts} onDismiss={dismiss} closeLabel="关闭" />
+      <Toasts toasts={toasts} onDismiss={dismiss} closeLabel={t('shell.window.close')} />
       <ResizeEdges platform={platform} />
     </div>
   );

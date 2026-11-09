@@ -6,7 +6,8 @@ import type { Platform, ToastItem, ToastTone } from 'omni-ui';
 import { create } from 'zustand';
 
 import { api, asError, listenApp, listenTasks } from '../lib/api';
-import { applyTheme } from '../lib/theme';
+import { initI18n, resolveLang, setLanguage } from '../i18n';
+import { applyTheme, setSystemLook } from '../lib/theme';
 import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus } from '../lib/types';
 import { errorText } from '../lib/words';
 
@@ -25,7 +26,8 @@ export type Dialog =
   | null;
 
 export const DEFAULT_SETTINGS: Settings = {
-  appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable' },
+  language: 'auto',
+  appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
   engine: {
     maxConcurrent: 3,
@@ -77,6 +79,10 @@ interface State {
   toasts: ToastItem[];
   /** Browsers whose extension has been in touch since the app started: [name, Unix ms]. */
   seenBrowsers: [string, number][];
+  /** Window materials exist on this system. */
+  materialSupported: boolean;
+  /** The system's accent colour, when known. */
+  systemAccent: string | null;
 
   /** Loads settings and tasks and listens for changes. Resolves to whether the app was started
    *  in the background by the browser bridge (the main window then stays hidden). */
@@ -160,6 +166,8 @@ export const useApp = create<State>((set, get) => ({
   dialog: null,
   toasts: [],
   seenBrowsers: [],
+  materialSupported: false,
+  systemAccent: null,
 
   boot: async (platform) => {
     set({ platform });
@@ -224,7 +232,10 @@ export const useApp = create<State>((set, get) => ({
         settings: boot.settings,
         tasks: Object.fromEntries(boot.tasks.map((t) => [t.id, t])),
         seenBrowsers: boot.seenBrowsers,
+        materialSupported: boot.materialSupported,
+        systemAccent: boot.systemAccent,
       });
+      setSystemLook(boot);
       // Opened with magnet links or .torrent files.
       if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
       background = boot.background;
@@ -232,6 +243,7 @@ export const useApp = create<State>((set, get) => ({
       // Outside the app (the page in a browser) or a failed start: an empty list.
       console.error('bootstrap', e);
     }
+    await initI18n(resolveLang(get().settings.language));
     applyTheme(get().settings.appearance, platform);
     set({ ready: true });
     return background;
@@ -286,11 +298,13 @@ export const useApp = create<State>((set, get) => ({
     if (next.appearance !== before.appearance && JSON.stringify(next.appearance) !== JSON.stringify(before.appearance)) {
       applyTheme(next.appearance, get().platform, true);
     }
+    if (next.language !== before.language) void setLanguage(resolveLang(next.language));
     const saved = await get().run(() => api.setSettings(next));
     if (saved) set({ settings: saved });
     else {
       set({ settings: before });
       applyTheme(before.appearance, get().platform);
+      void setLanguage(resolveLang(before.language));
     }
   },
 

@@ -174,6 +174,7 @@ export interface ProgressBatch {
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type Density = 'compact' | 'comfortable' | 'spacious';
+export type MaterialKind = 'mica' | 'mica-alt' | 'acrylic';
 
 export interface EngineConfig {
   maxConcurrent: number;
@@ -209,11 +210,19 @@ export interface BrowserSettings {
 }
 
 export interface Settings {
+  /** `auto` (the system's) or a supported language tag. */
+  language: string;
   appearance: {
     mode: ThemeMode;
     lightTheme: string;
     darkTheme: string;
     density: Density;
+    /** Window material where the system has one. */
+    material: boolean;
+    /** Windows 11: which material (macOS always uses vibrancy). */
+    materialKind: MaterialKind;
+    /** `theme`, `system` or `#RRGGBB`. */
+    accent: string;
   };
   downloadDir: string;
   engine: EngineConfig;
@@ -232,6 +241,10 @@ export interface Bootstrap {
   seenBrowsers: [string, number][];
   /** Magnet links and .torrent files the app was opened with. */
   openLinks: string[];
+  /** Window materials exist on this system (Windows 11, macOS). */
+  materialSupported: boolean;
+  /** The system's accent colour, when known. */
+  systemAccent: string | null;
 }
 
 export interface MagnetHandler {

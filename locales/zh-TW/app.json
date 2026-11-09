@@ -1,0 +1,529 @@
+{
+  "status": {
+    "queued": "等候中",
+    "probing": "連線中",
+    "downloading": "下載中",
+    "paused": "已暫停",
+    "seeding": "做種中",
+    "completed": "已完成",
+    "failed": "失敗",
+    "removed": "已刪除",
+    "fetchingTorrent": "取得種子資訊"
+  },
+  "category": {
+    "video": "影片",
+    "audio": "音樂",
+    "document": "文件",
+    "archive": "壓縮檔",
+    "program": "程式",
+    "disk_image": "映像檔",
+    "image": "圖片",
+    "other": "其他"
+  },
+  "errors": {
+    "invalid_url": "不是可以下載的連結",
+    "unsupported": "這類下載將在後續版本中支援",
+    "network": "網路連線失敗",
+    "timeout": "連線逾時",
+    "tls": "安全連線失敗，憑證無效",
+    "http_status": "伺服器傳回錯誤 {status}",
+    "http_statusNoStatus": "伺服器傳回錯誤",
+    "ftp_reply": "FTP 伺服器拒絕了要求（{status}）",
+    "ftp_replyNoStatus": "FTP 伺服器拒絕了要求",
+    "not_found": "伺服器上沒有這個檔案",
+    "auth_required": "需要登入或授權，帳號或密碼不正確",
+    "forbidden": "伺服器拒絕存取",
+    "remote_changed": "伺服器上的檔案已變更，需要重新下載",
+    "file_missing": "檔案遺失或無法讀取",
+    "disk_full": "磁碟空間不足",
+    "io": "讀寫檔案失敗",
+    "internal": "發生內部錯誤"
+  },
+  "format": {
+    "s": "{s} 秒",
+    "ms": "{m} 分 {s} 秒",
+    "m": "{m} 分",
+    "hm": "{h} 小時 {m} 分",
+    "h": "{h} 小時",
+    "dh": "{d} 天 {h} 小時",
+    "d": "{d} 天",
+    "yesterday": "昨天 {time}"
+  },
+  "settings": {
+    "appearance": {
+      "accent": "強調色",
+      "accentTheme": "主題預設",
+      "accentSystem": "跟隨系統",
+      "accentCustom": "自訂",
+      "material": "視窗材質",
+      "materialHint": "同樣用於快速下載視窗；macOS 為毛玻璃",
+      "materialUnavailable": "目前系統不支援",
+      "materialKinds": {
+        "off": "關閉",
+        "mica": "Mica",
+        "micaAlt": "Mica Alt",
+        "acrylic": "壓克力"
+      },
+      "mode": "外觀",
+      "modes": {
+        "light": "淺色",
+        "dark": "深色",
+        "system": "跟隨系統"
+      },
+      "lightTheme": "淺色主題",
+      "lightThemeHint": "外觀為淺色，或跟隨系統且系統為淺色時使用",
+      "darkTheme": "深色主題",
+      "density": "清單密度",
+      "densityHint": "任務清單每列的高度",
+      "densities": {
+        "compact": "緊湊",
+        "comfortable": "舒適",
+        "spacious": "寬鬆"
+      }
+    },
+    "language": {
+      "ui": "介面語言",
+      "auto": "跟隨系統（{lang}）"
+    },
+    "general": {
+      "version": "版本",
+      "logs": "記錄檔",
+      "openFolder": "開啟資料夾"
+    },
+    "download": {
+      "folder": "預設下載資料夾",
+      "folderPick": "選擇預設下載資料夾",
+      "folderDefault": "系統的「下載」資料夾",
+      "browse": "瀏覽",
+      "open": "開啟",
+      "maxConcurrent": "同時下載的任務數",
+      "maxConcurrentHint": "其餘任務排隊等候",
+      "connections": "每個任務的連線數",
+      "connectionsHint": "伺服器支援分段下載時同時開啟的連線，可在新增下載時個別設定",
+      "conflict": "檔案已存在時",
+      "conflictRename": "自動重新命名",
+      "conflictOverwrite": "覆寫",
+      "resumeOnStartup": "啟動時繼續未完成的下載",
+      "resumeOnStartupHint": "結束時正在下載的任務，下次啟動後自動繼續",
+      "syncWrites": "每秒將進度寫入磁碟",
+      "syncWritesHint": "斷電或系統當機後也能從準確的位置繼續；關閉可以減少磁碟寫入"
+    },
+    "network": {
+      "proxy": "代理伺服器",
+      "proxyHint": "HTTP、HTTPS 或 SOCKS5 代理伺服器，用於 HTTP 下載；socks5h:// 由代理伺服器解析網域名稱",
+      "proxyModes": {
+        "system": "系統代理伺服器",
+        "none": "不使用",
+        "custom": "自訂"
+      },
+      "proxyUrl": "代理伺服器位址",
+      "userAgentHint": "預設使用桌面版 Chrome 的識別字串；有些網站會拒絕陌生的用戶端",
+      "resetDefault": "還原預設值",
+      "connectTimeout": "連線逾時",
+      "readTimeout": "無回應逾時",
+      "readTimeoutHint": "連線這麼久都收不到資料就中斷並重新連線",
+      "retries": "失敗重試次數",
+      "retriesHint": "網路錯誤或伺服器 5xx 時，每個連線依 1、2、4… 秒的間隔重試",
+      "seconds": "{n} 秒",
+      "times": "{n} 次",
+      "ftpSessions": "FTP 工作階段數",
+      "ftpSessionsHint": "每個 FTP 任務同時登入的工作階段；許多伺服器會限制每個使用者的連線數",
+      "ftpMode": "FTP 傳輸模式",
+      "ftpModeHint": "被動模式適用於大多數網路；主動模式需要伺服器能連回本機",
+      "ftpPassive": "被動",
+      "ftpActive": "主動"
+    },
+    "torrent": {
+      "seeding": "下載完成後做種",
+      "seedingHint": "繼續將檔案上傳給其他下載者；暫停做種中的任務即可停止",
+      "seedRatio": "分享率達到時停止",
+      "seedRatioHint": "上傳量達到檔案大小的這個倍數",
+      "seedTime": "做種時間",
+      "seedTimeHint": "從下載完成時起算，與分享率以先達到者為準",
+      "uploadLimit": "上傳限速",
+      "uploadLimitHint": "所有 BT 任務合計",
+      "unlimited": "不限",
+      "hours": "{n} 小時",
+      "days": "{n} 天",
+      "weeks": "{n} 週",
+      "port": "監聽連接埠",
+      "portHint": "其他節點連入的連接埠，0 由系統選擇；重新啟動應用程式後生效",
+      "dht": "DHT 網路",
+      "dhtHint": "沒有 Tracker 時靠它尋找節點，大多數磁力連結都需要；重新啟動應用程式後生效",
+      "upnp": "UPnP 連接埠對應",
+      "upnpHint": "請路由器轉送監聽連接埠，讓更多節點連得進來；重新啟動應用程式後生效",
+      "magnet": "磁力連結",
+      "magnetSet": "已設為開啟磁力連結的程式",
+      "magnetHintInstalled": "安裝後的應用程式會自動關聯磁力連結與種子檔案",
+      "magnetHint": "在瀏覽器中點選 magnet: 連結時以 Omni Download 開啟",
+      "magnetRegistered": "已關聯",
+      "magnetReregister": "重新關聯",
+      "magnetRegister": "設為預設程式"
+    },
+    "browser": {
+      "state": {
+        "connected": "已連線 · {when}",
+        "ready": "已就緒",
+        "otherInstall": "指向另一份安裝",
+        "unregistered": "未註冊",
+        "notInstalled": "未安裝"
+      },
+      "extension": "瀏覽器擴充功能",
+      "extensionHint": "安裝 Omni Download 擴充功能後，在瀏覽器中點選下載會自動交給 Omni Download。",
+      "hostMissing": "找不到瀏覽器通訊程式 omnidl-nm-host，請重新安裝 Omni Download。",
+      "repaired": "已重新寫入瀏覽器通訊設定",
+      "repair": "重新寫入通訊設定",
+      "bridge": "本機通訊",
+      "bridgeBusy": "另一個 Omni Download 正在佔用瀏覽器通訊，這個視窗收不到瀏覽器的下載。",
+      "unavailable": "無法使用",
+      "quickDialog": "接管前詢問",
+      "quickDialogHint": "瀏覽器交來下載時，先在小視窗中確認檔名和儲存位置",
+      "silentSites": "不再詢問的網站",
+      "silentSitesHint": "這些網站的下載會直接開始；按 × 恢復詢問",
+      "silentSitesEmpty": "在詢問視窗中勾選「不再詢問」的網站會列在這裡",
+      "silentSiteRemove": "恢復詢問 {site}",
+      "httpBridge": "備用通道",
+      "httpBridgeHint": "Snap、Flatpak 等無法使用本機通訊的瀏覽器，改用本機 HTTP 介面；需要在擴充功能選項中填入配對碼",
+      "pairingCode": "配對碼",
+      "pairingCodeHint": "只在本機有效；重新產生後，已配對的擴充功能需要重新填寫",
+      "copied": "已複製配對碼",
+      "copy": "複製",
+      "regenerate": "重新產生"
+    }
+  },
+  "shell": {
+    "settings": "設定",
+    "taskCount": "{count} 個任務",
+    "paste": "貼上下載連結",
+    "filters": {
+      "all": "全部任務",
+      "active": "進行中",
+      "done": "已完成",
+      "torrent": "種子",
+      "failed": "失敗",
+      "trash": "回收筒"
+    },
+    "settingsTabs": {
+      "general": "一般",
+      "download": "下載",
+      "network": "網路",
+      "torrent": "BT",
+      "browser": "瀏覽器"
+    },
+    "window": {
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "還原",
+      "close": "關閉"
+    },
+    "theme": {
+      "title": "外觀",
+      "light": "淺色",
+      "dark": "深色",
+      "system": "跟隨系統"
+    },
+    "summary": {
+      "title": "檢視進行中的任務",
+      "running": "{count} 個任務下載中"
+    },
+    "sidebar": {
+      "filters": "任務篩選",
+      "categories": "分類"
+    },
+    "speedLimit": {
+      "title": "全域下載限速",
+      "unlimited": "不限速",
+      "limited": "限速 {speed}",
+      "custom": "自訂…",
+      "customValue": "自訂（{speed}）"
+    },
+    "sort": {
+      "added": "依加入時間",
+      "name": "依名稱",
+      "size": "依大小",
+      "progress": "依進度",
+      "speed": "依速度",
+      "status": "依狀態"
+    },
+    "cmd": {
+      "newDownload": "新增下載",
+      "start": "開始",
+      "pause": "暫停",
+      "delete": "刪除",
+      "openFolder": "開啟資料夾",
+      "startAll": "全部開始",
+      "pauseAll": "全部暫停",
+      "restore": "還原",
+      "purge": "永久刪除",
+      "emptyTrash": "清空回收筒",
+      "detailPanel": "詳細資料窗格",
+      "showDetail": "顯示詳細資料",
+      "detailPinned": "詳細資料窗格已固定，選取任務時會自動顯示（按一下取消）"
+    },
+    "status": {
+      "running": "下載中 {count}",
+      "waiting": "等候 {count}",
+      "seeding": "做種 {count}",
+      "selected": "已選 {count}",
+      "downloadSpeed": "下載速度",
+      "uploadSpeed": "上傳速度（做種與下載中的種子）",
+      "extensionConnected": "瀏覽器擴充功能已連線",
+      "browsersConnected": "{names} 已連線",
+      "listSeparator": "、"
+    }
+  },
+  "empty": {
+    "all": {
+      "title": "還沒有下載任務",
+      "hint": "將下載連結貼到上方的方塊中，或按「新增下載」。"
+    },
+    "active": {
+      "title": "沒有進行中的任務",
+      "hint": "正在下載、等候中和已暫停的任務會顯示在這裡。"
+    },
+    "done": {
+      "title": "還沒有已完成的任務",
+      "hint": "下載完成的檔案會顯示在這裡，按兩下即可開啟。"
+    },
+    "torrent": {
+      "title": "還沒有種子任務",
+      "hint": "貼上磁力連結、開啟種子檔案，或將 .torrent 檔案拖曳到視窗中。"
+    },
+    "failed": {
+      "title": "沒有失敗的任務",
+      "hint": "下載出錯的任務會顯示在這裡，可以重試。"
+    },
+    "trash": {
+      "title": "回收筒是空的",
+      "hint": "刪除的任務會先放在這裡，可以還原。"
+    },
+    "category": {
+      "title": "這個分類中還沒有任務",
+      "hint": "下載的檔案會依副檔名自動分類。"
+    }
+  },
+  "fileTree": {
+    "all": "全部檔案",
+    "chosen": "已選 {chosen} / {count} 個檔案 · {size}"
+  },
+  "detail": {
+    "label": "任務詳細資料",
+    "close": "關閉詳細資料",
+    "pin": "固定詳細資料窗格",
+    "pinTip": "固定詳細資料窗格：選取任務時自動顯示",
+    "unpinTip": "取消固定：選取任務時不再自動顯示詳細資料",
+    "tabs": "詳細資料",
+    "openFolder": "開啟資料夾",
+    "copyLink": "複製連結",
+    "copied": "已複製連結",
+    "tab": {
+      "overview": "概觀",
+      "files": "檔案",
+      "peers": "節點",
+      "segments": "分段"
+    },
+    "chart": {
+      "title": "速度 · 近 2 分鐘",
+      "label": "最近兩分鐘的下載速度"
+    },
+    "overview": {
+      "size": "大小",
+      "downloaded": "已下載",
+      "speed": "速度",
+      "eta": "剩餘時間",
+      "connections": "連線",
+      "connectionCount": "{count} 個連線",
+      "peers": "節點",
+      "peerCount": "{count} 個節點",
+      "uploadSpeed": "上傳速度",
+      "uploaded": "已上傳",
+      "uploadedValue": "{size} · 分享率 {ratio}",
+      "files": "檔案",
+      "filesValue": "{selected} / {count} 個 · {pieces} 個區塊 × {pieceSize}",
+      "infoHash": "資訊雜湊值",
+      "resume": "斷點續傳",
+      "resumeUnknown": "開始後確定",
+      "resumeYes": "支援",
+      "resumeNo": "不支援（暫停後需要重新下載）",
+      "added": "加入時間",
+      "completed": "完成時間",
+      "saveTo": "儲存到",
+      "link": "連結",
+      "segmentProgress": "分段進度",
+      "segmentCount": "{count} 個分段"
+    },
+    "segments": {
+      "merged": "下載已完成，分段已合併為完整檔案。",
+      "notStarted": "開始下載後顯示分段。",
+      "none": "沒有分段資訊。",
+      "map": "分段地圖",
+      "active": "{count} 個連線運作中",
+      "done": "已完成",
+      "partial": "部分完成",
+      "pending": "未開始",
+      "title": "分段"
+    },
+    "files": {
+      "pending": "取得種子資訊後顯示檔案。",
+      "none": "沒有檔案資訊。"
+    },
+    "peers": {
+      "title": "節點",
+      "stats": "已連線 {connected} · 已發現 {seen}",
+      "searching": "正在尋找節點…",
+      "idle": "任務執行時會顯示已連線的節點。",
+      "address": "位址",
+      "client": "用戶端"
+    },
+    "trackers": {
+      "title": "Tracker",
+      "count": "{count} 個",
+      "none": "沒有 Tracker，靠 DHT 與節點交換尋找節點。"
+    },
+    "action": {
+      "pause": "暫停",
+      "resume": "繼續",
+      "redownload": "重新下載",
+      "retry": "重試",
+      "stopSeeding": "停止做種",
+      "openFile": "開啟檔案",
+      "restore": "還原"
+    }
+  },
+  "table": {
+    "label": "下載任務",
+    "column": {
+      "name": "名稱",
+      "progress": "進度",
+      "size": "大小",
+      "speed": "速度",
+      "eta": "剩餘",
+      "status": "狀態"
+    },
+    "menu": {
+      "details": "詳細資料",
+      "restore": "還原",
+      "purge": "永久刪除…",
+      "open": "開啟",
+      "start": "開始",
+      "pause": "暫停",
+      "stopSeeding": "停止做種",
+      "redownload": "重新下載",
+      "openFolder": "開啟資料夾",
+      "copyLink": "複製連結",
+      "copied": "已複製連結",
+      "copiedMany": "已複製 {count} 個連結",
+      "delete": "刪除"
+    }
+  },
+  "newTask": {
+    "title": "新增下載",
+    "close": "關閉",
+    "cancel": "取消",
+    "add": "加入",
+    "addAndStart": "加入並開始",
+    "summary": "{count} 個任務",
+    "addedMany": "已加入 {count} 個任務",
+    "addedOne": "已加入 {name}",
+    "links": "連結",
+    "linksPlaceholder": "https://example.com/file.zip 或 magnet:?xt=…",
+    "linksHint": "每行一個：HTTP、FTP 連結、磁力連結或種子檔案的路徑。",
+    "openTorrents": "開啟種子檔案",
+    "pickTorrents": "選擇種子檔案",
+    "pickDir": "選擇儲存位置",
+    "fileName": "檔名",
+    "fileNamePlaceholder": "使用伺服器提供的名稱",
+    "saveTo": "儲存到",
+    "browse": "瀏覽",
+    "connections": "連線數",
+    "limit": "限速",
+    "limitPlaceholder": "不限",
+    "limitHint": "例如 500K、2M；留空即不限速",
+    "ftpAccount": "FTP 帳號",
+    "ftpAnonymous": "留空為匿名登入",
+    "password": "密碼",
+    "showPassword": "顯示密碼",
+    "transferMode": "傳輸模式",
+    "followSettings": "依照設定",
+    "ftpPassive": "被動",
+    "ftpActive": "主動",
+    "insecureTls": "接受未驗證的憑證",
+    "advanced": "進階",
+    "advancedSummary": "Referer · Cookie · User-Agent · 代理伺服器",
+    "proxy": "代理伺服器",
+    "proxySystem": "系統代理伺服器",
+    "proxyNone": "不使用代理伺服器",
+    "proxyCustom": "自訂",
+    "proxyUrl": "代理伺服器位址",
+    "startNow": "加入後立即開始",
+    "badge": {
+      "magnet": "磁力",
+      "torrent": "種子"
+    },
+    "row": {
+      "unsupported": "這類連結暫不支援，這一行不會加入",
+      "later": "開始下載時取得檔案資訊",
+      "probingMagnet": "正在向節點取得種子資訊…",
+      "probing": "正在取得檔案資訊…",
+      "probeFailed": "{error}，仍可加入，開始時會重試",
+      "sizeUnknown": "大小不明",
+      "files": "{count} 個檔案",
+      "singleFile": "單一檔案",
+      "resumable": "支援斷點續傳",
+      "notResumable": "不支援斷點續傳",
+      "connections": "將使用 {count} 個連線",
+      "sessions": "將使用 {count} 個工作階段"
+    }
+  },
+  "dialogs": {
+    "close": "關閉",
+    "cancel": "取消",
+    "ok": "確定",
+    "purge": {
+      "titleMany": "要永久刪除 {count} 個任務嗎？",
+      "titleOne": "要永久刪除這個任務嗎？",
+      "confirm": "永久刪除",
+      "text": "任務記錄和未完成的暫存檔會被刪除，無法還原。",
+      "deleteFiles": "同時刪除已下載完成的檔案"
+    },
+    "speed": {
+      "title": "全域限速",
+      "label": "所有任務合計的最高下載速度",
+      "placeholder": "不限速",
+      "invalid": "無法辨識，例如 500K、2M、1.5MB/s",
+      "empty": "留空表示不限速",
+      "perSecond": "每秒 {size}"
+    }
+  },
+  "quick": {
+    "fromBrowser": "來自 {browser} 的下載",
+    "fromAnyBrowser": "來自瀏覽器的下載",
+    "close": "關閉",
+    "closeTitle": "關閉（不下載）",
+    "fileName": "檔名",
+    "sizeUnknown": "大小不明",
+    "probing": "正在取得檔案資訊…",
+    "resumable": "支援斷點續傳",
+    "notResumable": "不支援斷點續傳",
+    "connectionsUsed": "將使用 {count} 個連線",
+    "attached": {
+      "both": "已附帶 Cookie 與 Referer",
+      "cookie": "已附帶 Cookie",
+      "referer": "已附帶 Referer"
+    },
+    "saveTo": "儲存到",
+    "browse": "瀏覽",
+    "pickDir": "選擇儲存位置",
+    "connections": "連線數",
+    "limit": "限速",
+    "limitPlaceholder": "不限",
+    "limitHint": "例如 500K、2M；留空即不限速",
+    "remember": "{site} 的下載以後不再詢問，直接依這裡的設定開始",
+    "rememberAnySite": "這個網站的下載以後不再詢問，直接依這裡的設定開始",
+    "keyStart": "開始",
+    "keyLater": "稍後",
+    "useBrowser": "改用瀏覽器下載",
+    "later": "稍後下載",
+    "start": "開始下載"
+  }
+}

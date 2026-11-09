@@ -6,6 +6,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { FileIcon, Icon, Logo } from '../../components/Icon';
 import { api, asError } from '../../lib/api';
@@ -18,6 +19,7 @@ import { errorText } from '../../lib/words';
 const BROWSER: Record<string, string> = { chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave', chromium: 'Chromium' };
 
 export function QuickApp() {
+  const { t } = useTranslation();
   const [req, setReq] = useState<QuickRequest | null>(null);
   const [name, setName] = useState('');
   const [dir, setDir] = useState('');
@@ -107,7 +109,7 @@ export function QuickApp() {
   }, []);
 
   const browse = async () => {
-    const picked = await open({ directory: true, defaultPath: dir || undefined, title: '选择保存位置' }).catch(() => null);
+    const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('quick.pickDir') }).catch(() => null);
     if (typeof picked === 'string') setDir(picked);
   };
 
@@ -116,24 +118,32 @@ export function QuickApp() {
   const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || req.connections));
   const parts: string[] = [];
   if (probe) {
-    parts.push(probe.resumable ? '支持断点续传' : '不支持断点续传');
-    if (probe.resumable && probe.total != null) parts.push(`将使用 ${Math.max(1, Math.min(conn, Math.floor(probe.total / 1048576) || 1))} 个连接`);
+    parts.push(probe.resumable ? t('quick.resumable') : t('quick.notResumable'));
+    if (probe.resumable && probe.total != null) parts.push(t('quick.connectionsUsed', { count: Math.max(1, Math.min(conn, Math.floor(probe.total / 1048576) || 1)) }));
   }
-  const extras = [req.hasCookies && 'Cookie', req.hasReferer && 'Referer'].filter(Boolean).join(' 与 ');
+  const extras =
+    req.hasCookies && req.hasReferer
+      ? t('quick.attached.both')
+      : req.hasCookies
+        ? t('quick.attached.cookie')
+        : req.hasReferer
+          ? t('quick.attached.referer')
+          : '';
+  const browser = BROWSER[req.browser ?? ''];
   return (
     <div className="quick">
       <header data-tauri-drag-region>
         <Logo size={18} />
         <h1 data-tauri-drag-region>
-          来自 {BROWSER[req.browser ?? ''] ?? '浏览器'} 的下载
+          {browser ? t('quick.fromBrowser', { browser }) : t('quick.fromAnyBrowser')}
           <span>{req.site}</span>
         </h1>
-        <button type="button" className="q-close" aria-label="关闭" title="关闭（不下载）" onClick={() => decide('cancel')}>
+        <button type="button" className="q-close" aria-label={t('quick.close')} title={t('quick.closeTitle')} onClick={() => decide('cancel')}>
           <Icon name="x" />
         </button>
       </header>
       <div className="q-body">
-        <label htmlFor="qa-name">文件名</label>
+        <label htmlFor="qa-name">{t('quick.fileName')}</label>
         <div className="q-name">
           <FileIcon name={name || 'file'} isDir={false} />
           <input
@@ -149,12 +159,12 @@ export function QuickApp() {
         </div>
         <span />
         <div className="q-info">
-          <b>{size != null ? fmt.bytes(size) : '大小未知'}</b>
+          <b>{size != null ? fmt.bytes(size) : t('quick.sizeUnknown')}</b>
           <span className="badge proto-http">HTTP</span>
           {!probe && !probeError && (
             <span className="q-probing">
               <span className="pulse" aria-hidden="true" />
-              正在获取文件信息…
+              {t('quick.probing')}
             </span>
           )}
           {probeError && (
@@ -170,42 +180,50 @@ export function QuickApp() {
           {extras && (
             <span className="q-ok">
               <Icon name="check" />
-              已附带 {extras}
+              {extras}
             </span>
           )}
         </div>
-        <label htmlFor="qa-dir">保存到</label>
+        <label htmlFor="qa-dir">{t('quick.saveTo')}</label>
         <div className="inline">
           <input id="qa-dir" className="inp mono" value={dir} onChange={(e) => setDir(e.target.value)} />
           <button type="button" className="btn outline" onClick={() => void browse()}>
-            浏览
+            {t('quick.browse')}
           </button>
         </div>
-        <label htmlFor="qa-conn">连接数</label>
+        <label htmlFor="qa-conn">{t('quick.connections')}</label>
         <div className="inline q-nums">
           <input id="qa-conn" className="inp" type="number" min={1} max={64} value={connections} onChange={(e) => setConnections(e.target.value)} />
-          <label htmlFor="qa-limit">限速</label>
-          <input id="qa-limit" className="inp" value={limit} placeholder="不限" aria-invalid={speed === undefined} title="例如 500K、2M；留空不限速" onChange={(e) => setLimit(e.target.value)} />
+          <label htmlFor="qa-limit">{t('quick.limit')}</label>
+          <input
+            id="qa-limit"
+            className="inp"
+            value={limit}
+            placeholder={t('quick.limitPlaceholder')}
+            aria-invalid={speed === undefined}
+            title={t('quick.limitHint')}
+            onChange={(e) => setLimit(e.target.value)}
+          />
         </div>
         <span />
         <label className="chk q-remember">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          {req.site || '这个网站'} 的下载以后不再询问，直接按这里的设置开始
+          {req.site ? t('quick.remember', { site: req.site }) : t('quick.rememberAnySite')}
         </label>
       </div>
       <footer>
         <span className="q-keys">
-          <kbd>Enter</kbd> 开始 · <kbd>Esc</kbd> 稍后
+          <kbd>Enter</kbd> {t('quick.keyStart')} · <kbd>Esc</kbd> {t('quick.keyLater')}
         </span>
         <button type="button" className="btn subtle" onClick={() => decide('browser')}>
-          改用浏览器下载
+          {t('quick.useBrowser')}
         </button>
         <button type="button" className="btn outline" onClick={() => decide('later')}>
-          稍后下载
+          {t('quick.later')}
         </button>
         <button type="button" className="btn primary" data-autofocus onClick={() => decide('start')}>
           <Icon name="download" />
-          开始下载
+          {t('quick.start')}
         </button>
       </footer>
     </div>

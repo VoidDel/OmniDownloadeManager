@@ -64,6 +64,8 @@ jobs:
         run: |
           pnpm sync:omni-ui
           git diff --exit-code -- themes
+      - name: Translations (same keys and placeholders in every language)
+        run: pnpm check:locales
       - name: TypeScript
         run: pnpm lint
       - name: ESLint

@@ -4,10 +4,12 @@
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 import { FileIcon, Icon } from '../../components/Icon';
 import { ContextMenu, type MenuItem } from '../../components/ui';
+import i18n from '../../i18n';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { ROW_HEIGHT } from '../../lib/theme';
@@ -16,14 +18,14 @@ import { STATUS_COLOR, errorText, statusText } from '../../lib/words';
 import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
-/** Header cells: sort key, label, class (numbers align right; c-* drop in narrow panes). */
+/** Header cells: sort key, label (a translation key), class (numbers align right; c-* drop in narrow panes). */
 const COLUMNS: [SortKey, string, string][] = [
-  ['name', '名称', ''],
-  ['progress', '进度', ''],
-  ['size', '大小', 'num c-size'],
-  ['speed', '速度', 'num c-speed'],
-  ['added', '剩余', 'num c-eta'],
-  ['status', '状态', ''],
+  ['name', 'table.column.name', ''],
+  ['progress', 'table.column.progress', ''],
+  ['size', 'table.column.size', 'num c-size'],
+  ['speed', 'table.column.speed', 'num c-speed'],
+  ['added', 'table.column.eta', 'num c-eta'],
+  ['status', 'table.column.status', ''],
 ];
 
 const PROTO: Record<Task['kind'], string> = { http: 'HTTP', ftp: 'FTP', torrent: 'BT' };
@@ -35,12 +37,12 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   if (!list.length) return [];
   const one = list.length === 1 ? list[0] : null;
   // Shows the details panel for the task (once, unless it is pinned).
-  const details: MenuItem[] = one ? [{ label: '详情', icon: 'info', run: () => openDetail(one.id) }] : [];
+  const details: MenuItem[] = one ? [{ label: i18n.t('table.menu.details'), icon: 'info', run: () => openDetail(one.id) }] : [];
   if (list.every((t) => t.status === 'removed')) {
     return [
-      { label: '还原', icon: 'refresh', run: () => void run(() => api.restore(ids)) },
+      { label: i18n.t('table.menu.restore'), icon: 'refresh', run: () => void run(() => api.restore(ids)) },
       ...details,
-      { label: '彻底删除…', icon: 'trash', danger: true, run: () => openDialog({ kind: 'purge', ids }) },
+      { label: i18n.t('table.menu.purge'), icon: 'trash', danger: true, run: () => openDialog({ kind: 'purge', ids }) },
     ];
   }
   const canPause = list.some((t) => ['queued', 'probing', 'downloading'].includes(t.status));
@@ -48,22 +50,25 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   const seeding = list.filter((t) => t.status === 'seeding').map((t) => t.id);
   const changed = list.filter((t) => t.error?.code === 'remote_changed').map((t) => t.id);
   const items: MenuItem[] = [];
-  if (one?.status === 'completed' || one?.status === 'seeding') items.push({ label: '打开', icon: 'external', kbd: 'Enter', run: () => void run(() => api.open(one.id)) });
-  if (canResume) items.push({ label: '开始', icon: 'play', run: () => void run(() => api.resume(ids)) });
-  if (canPause) items.push({ label: '暂停', icon: 'pause', run: () => void run(() => api.pause(ids)) });
-  if (seeding.length) items.push({ label: '停止做种', icon: 'stop', run: () => void run(() => api.pause(seeding)) });
-  if (changed.length) items.push({ label: '重新下载', icon: 'refresh', run: () => void run(() => api.restart(changed)) });
+  if (one?.status === 'completed' || one?.status === 'seeding') items.push({ label: i18n.t('table.menu.open'), icon: 'external', kbd: 'Enter', run: () => void run(() => api.open(one.id)) });
+  if (canResume) items.push({ label: i18n.t('table.menu.start'), icon: 'play', run: () => void run(() => api.resume(ids)) });
+  if (canPause) items.push({ label: i18n.t('table.menu.pause'), icon: 'pause', run: () => void run(() => api.pause(ids)) });
+  if (seeding.length) items.push({ label: i18n.t('table.menu.stopSeeding'), icon: 'stop', run: () => void run(() => api.pause(seeding)) });
+  if (changed.length) items.push({ label: i18n.t('table.menu.redownload'), icon: 'refresh', run: () => void run(() => api.restart(changed)) });
   items.push(
     { separator: true },
     ...details,
-    { label: '打开文件夹', icon: 'folderOpen', disabled: !one, run: () => one && void run(() => api.reveal(one.id)) },
+    { label: i18n.t('table.menu.openFolder'), icon: 'folderOpen', disabled: !one, run: () => one && void run(() => api.reveal(one.id)) },
     {
-      label: '复制链接',
+      label: i18n.t('table.menu.copyLink'),
       icon: 'copy',
-      run: () => void navigator.clipboard.writeText(list.map((t) => t.source).join('\n')).then(() => useApp.getState().toast('success', list.length > 1 ? `已复制 ${list.length} 个链接` : '已复制链接')),
+      run: () =>
+        void navigator.clipboard
+          .writeText(list.map((t) => t.source).join('\n'))
+          .then(() => useApp.getState().toast('success', list.length > 1 ? i18n.t('table.menu.copiedMany', { count: list.length }) : i18n.t('table.menu.copied'))),
     },
     { separator: true },
-    { label: '删除', icon: 'trash', kbd: 'Del', run: () => void run(() => api.remove(ids)) },
+    { label: i18n.t('table.menu.delete'), icon: 'trash', kbd: 'Del', run: () => void run(() => api.remove(ids)) },
   );
   return items;
 }
@@ -131,6 +136,7 @@ export function TaskTable() {
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   // The keyboard cursor; the selection follows it unless Ctrl is held.
   const [focus, setFocus] = useState<string | null>(null);
+  const { t: tr } = useTranslation();
 
   // The React Compiler cannot memoize around the virtualizer's functions and skips this
   // component; that is expected (rows are memoized themselves).
@@ -251,14 +257,14 @@ export function TaskTable() {
 
   const items = v.getVirtualItems();
   return (
-    <div className="task-table" role="grid" aria-label="下载任务" aria-rowcount={ids.length} aria-multiselectable="true">
+    <div className="task-table" role="grid" aria-label={tr('table.label')} aria-rowcount={ids.length} aria-multiselectable="true">
       <div className="thead" role="row" style={{ gridTemplateColumns: cols }}>
         {COLUMNS.map(([key, label, cls], i) => {
           // "剩余" is not sortable (it changes every tick); its slot keeps the grid.
           if (i === 4) {
             return (
               <span key="eta" className={cls} role="columnheader">
-                {label}
+                {tr(label)}
               </span>
             );
           }
@@ -272,7 +278,7 @@ export function TaskTable() {
               aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}
               onClick={() => setSort(key)}
             >
-              {label}
+              {tr(label)}
               <Icon name={active && sort.desc ? 'chevronDown' : 'chevronUp'} />
             </button>
           );

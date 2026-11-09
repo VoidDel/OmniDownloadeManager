@@ -132,7 +132,8 @@ pub fn closed(state: &AppState, label: &str) {
 
 /// Hidden until the page has drawn (it shows and focuses itself), its own title bar.
 fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
-    let w = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+    let settings = app.state::<AppState>().settings();
+    let b = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title("Omni Download")
         .inner_size(560.0, 304.0)
         .resizable(false)
@@ -142,8 +143,8 @@ fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
         .skip_taskbar(true)
         .decorations(false)
         .center()
-        .visible(false)
-        .build()?;
+        .visible(false);
+    let w = crate::material::prepare(b, &settings).build()?;
     crate::window_icons(&w.as_ref().window());
     Ok(())
 }

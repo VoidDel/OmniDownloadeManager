@@ -6,6 +6,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { FileIcon, Icon } from '../../components/Icon';
 import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
@@ -25,11 +26,12 @@ const PROBE_MAX = 20;
 type ProxyMode = 'inherit' | 'system' | 'none' | 'custom';
 type FtpMode = 'inherit' | 'passive' | 'active';
 
-const BADGE: Record<Link['kind'], [string, string]> = {
-  http: ['HTTP', 'proto-http'],
-  ftp: ['FTP', 'proto-ftp'],
-  magnet: ['磁力', 'proto-torrent'],
-  torrent: ['种子', 'proto-torrent'],
+/** Badge class per kind; HTTP and FTP are shown as is, the others translated where rendered. */
+const BADGE: Record<Link['kind'], string> = {
+  http: 'proto-http',
+  ftp: 'proto-ftp',
+  magnet: 'proto-torrent',
+  torrent: 'proto-torrent',
 };
 
 /** `previewed`: within the links probed here (the rest are probed when they start). */
@@ -37,30 +39,38 @@ const BADGE: Record<Link['kind'], [string, string]> = {
 const SUPPORTED: ReadonlySet<Link['kind']> = new Set(['http', 'ftp', 'magnet', 'torrent']);
 
 function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: Probe; previewed: boolean; connections: number }) {
+  const { t } = useTranslation();
   const supported = SUPPORTED.has(link.kind);
   const torrent = link.kind === 'magnet' || link.kind === 'torrent';
   const name = probe?.state === 'ok' ? probe.info.fileName : link.url;
   let sub: ReactNode;
-  if (!supported) sub = <span className="warn-text">这类链接暂不支持，这一行不会添加</span>;
-  else if (!probe && !previewed) sub = '开始下载时获取文件信息';
+  if (!supported) sub = <span className="warn-text">{t('newTask.row.unsupported')}</span>;
+  else if (!probe && !previewed) sub = t('newTask.row.later');
   else if (!probe || probe.state === 'probing')
     sub = (
       <>
         <span className="pulse" aria-hidden="true" />
-        {link.kind === 'magnet' ? '正在向节点获取种子信息…' : '正在获取文件信息…'}
+        {link.kind === 'magnet' ? t('newTask.row.probingMagnet') : t('newTask.row.probing')}
       </>
     );
-  else if (probe.state === 'error') sub = <span className="err-text" title={probe.error.message}>{errorText(probe.error)}，仍可添加，开始时会重试</span>;
+  else if (probe.state === 'error')
+    sub = (
+      <span className="err-text" title={probe.error.message}>
+        {t('newTask.row.probeFailed', { error: errorText(probe.error) })}
+      </span>
+    );
   else if (torrent) {
     const i = probe.info;
     const files = i.files?.length ?? 1;
-    sub = [i.total != null ? fmt.bytes(i.total) : '大小未知', files > 1 ? `${files} 个文件` : '单个文件'].join(' · ');
+    sub = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), files > 1 ? t('newTask.row.files', { count: files }) : t('newTask.row.singleFile')].join(' · ');
   } else {
     const i = probe.info;
-    const parts = [i.total != null ? fmt.bytes(i.total) : '大小未知', i.resumable ? '支持断点续传' : '不支持断点续传'];
+    const parts = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), i.resumable ? t('newTask.row.resumable') : t('newTask.row.notResumable')];
     const most = link.kind === 'ftp' ? Math.min(connections, 8) : connections;
-    const unit = link.kind === 'ftp' ? '会话' : '连接';
-    if (i.resumable && i.total != null) parts.push(`将使用 ${Math.max(1, Math.min(most, Math.floor(i.total / 1048576) || 1))} 个${unit}`);
+    if (i.resumable && i.total != null) {
+      const count = Math.max(1, Math.min(most, Math.floor(i.total / 1048576) || 1));
+      parts.push(link.kind === 'ftp' ? t('newTask.row.sessions', { count }) : t('newTask.row.connections', { count }));
+    }
     sub = parts.join(' · ');
   }
   const many = probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1;
@@ -73,13 +83,14 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
         </span>
         <span className="nt-sub">{sub}</span>
       </span>
-      <span className={`badge ${BADGE[link.kind][1]}`}>{BADGE[link.kind][0]}</span>
+      <span className={`badge ${BADGE[link.kind]}`}>{link.kind === 'http' ? 'HTTP' : link.kind === 'ftp' ? 'FTP' : t(`newTask.badge.${link.kind}`)}</span>
     </div>
   );
 }
 
 /** `initial`: the text pasted so far, and request details when the links came from a browser. */
 export function NewTaskDialog({ initial }: { initial: Prefill }) {
+  const { t } = useTranslation();
   const settings = useApp((s) => s.settings);
   const defaultDir = useApp((s) => s.settings.downloadDir || s.defaultDir);
   const { closeDialog, run, toast, select, setFilter } = useApp.getState();
@@ -151,7 +162,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
     if (!isTauri()) return;
     const todo = addable.slice(0, PROBE_MAX).filter((l) => !probes[keyOf(l)]);
     if (!todo.length) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setProbes((p) => ({ ...p, ...Object.fromEntries(todo.map((l) => [keyOf(l), { state: 'probing' } as Probe])) }));
       for (const l of todo) {
         const key = keyOf(l);
@@ -161,7 +172,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
         );
       }
     }, 350);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [addable, probes, options, keyOf]);
 
   // The name field starts with the server's name for a single link.
@@ -175,13 +186,13 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim());
 
   const addTorrentFiles = async () => {
-    const files = await open({ multiple: true, title: '选择种子文件', filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
+    const files = await open({ multiple: true, title: t('newTask.pickTorrents'), filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
     const list = Array.isArray(files) ? files : typeof files === 'string' ? [files] : [];
-    if (list.length) setText((t) => [t.trim(), ...list].filter(Boolean).join('\n'));
+    if (list.length) setText((prev) => [prev.trim(), ...list].filter(Boolean).join('\n'));
   };
 
   const browse = async () => {
-    const picked = await open({ directory: true, defaultPath: dir || undefined, title: '选择保存位置' }).catch(() => null);
+    const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('newTask.pickDir') }).catch(() => null);
     if (typeof picked === 'string') setDir(picked);
   };
 
@@ -209,10 +220,10 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
     closeDialog();
     if (useApp.getState().filter === 'trash' || useApp.getState().view !== 'tasks') setFilter('all');
     select(
-      added.map((t) => t.id),
+      added.map((task) => task.id),
       added[0]?.id ?? null,
     );
-    toast('success', added.length > 1 ? `已添加 ${added.length} 个任务` : `已添加 ${added[0].fileName}`);
+    toast('success', added.length > 1 ? t('newTask.addedMany', { count: added.length }) : t('newTask.addedOne', { name: added[0].fileName }));
   };
 
   const footer = (
@@ -220,24 +231,24 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <span className="grow nt-sum">
         {addable.length > 0 && (
           <>
-            <b>{addable.length} 个任务</b>
+            <b>{t('newTask.summary', { count: addable.length })}</b>
             {totalKnown > 0 && ` · ${fmt.bytes(totalKnown)}`}
           </>
         )}
       </span>
       <button type="button" className="btn outline" onClick={closeDialog}>
-        取消
+        {t('newTask.cancel')}
       </button>
       <button type="button" className="btn primary" disabled={!addable.length || invalid || busy} onClick={() => void submit()}>
-        {start ? '添加并开始' : '添加'}
+        {start ? t('newTask.addAndStart') : t('newTask.add')}
       </button>
     </>
   );
 
   return (
-    <Modal title="新建下载" onClose={closeDialog} footer={footer} width={640} closeLabel="关闭">
+    <Modal title={t('newTask.title')} onClose={closeDialog} footer={footer} width={640} closeLabel={t('newTask.close')}>
       <div className="field">
-        <label htmlFor="nt-urls">链接</label>
+        <label htmlFor="nt-urls">{t('newTask.links')}</label>
         <textarea
           id="nt-urls"
           ref={textRef}
@@ -246,7 +257,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           rows={3}
           spellCheck={false}
           value={text}
-          placeholder="https://example.com/file.zip 或 magnet:?xt=…"
+          placeholder={t('newTask.linksPlaceholder')}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -256,10 +267,10 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           }}
         />
         <div className="nt-hintrow">
-          <small className="hint">每行一个：HTTP、FTP 链接，磁力链接或种子文件的路径。</small>
+          <small className="hint">{t('newTask.linksHint')}</small>
           <button type="button" className="btn subtle sm" onClick={() => void addTorrentFiles()}>
             <Icon name="folderOpen" />
-            打开种子文件
+            {t('newTask.openTorrents')}
           </button>
         </div>
       </div>
@@ -274,18 +285,18 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <div className="frow">
         {single?.kind === 'http' && (
           <>
-            <label htmlFor="nt-name">文件名</label>
-            <input id="nt-name" className="inp" value={shownName} placeholder="按服务器提供的名称" onChange={(e) => setName(e.target.value)} />
+            <label htmlFor="nt-name">{t('newTask.fileName')}</label>
+            <input id="nt-name" className="inp" value={shownName} placeholder={t('newTask.fileNamePlaceholder')} onChange={(e) => setName(e.target.value)} />
           </>
         )}
-        <label htmlFor="nt-dir">保存到</label>
+        <label htmlFor="nt-dir">{t('newTask.saveTo')}</label>
         <div className="inline">
           <input id="nt-dir" className="inp mono" value={dir} onChange={(e) => setDir(e.target.value)} />
           <button type="button" className="btn outline" onClick={() => void browse()}>
-            浏览
+            {t('newTask.browse')}
           </button>
         </div>
-        <label htmlFor={hasHttp || hasFtp ? 'nt-conn' : 'nt-limit'}>{hasHttp || hasFtp ? '连接数' : '限速'}</label>
+        <label htmlFor={hasHttp || hasFtp ? 'nt-conn' : 'nt-limit'}>{hasHttp || hasFtp ? t('newTask.connections') : t('newTask.limit')}</label>
         <div className="inline nt-nums">
           {(hasHttp || hasFtp) && (
             <>
@@ -299,43 +310,43 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
                 placeholder={String(defaultConnections)}
                 onChange={(e) => setConnections(e.target.value)}
               />
-              <label htmlFor="nt-limit">限速</label>
+              <label htmlFor="nt-limit">{t('newTask.limit')}</label>
             </>
           )}
           <input
             id="nt-limit"
             className="inp"
             value={limit}
-            placeholder="不限"
+            placeholder={t('newTask.limitPlaceholder')}
             aria-invalid={speed === undefined}
-            title="例如 500K、2M；留空不限速"
+            title={t('newTask.limitHint')}
             onChange={(e) => setLimit(e.target.value)}
           />
         </div>
       </div>
       {hasFtp && (
         <div className="frow">
-          <label htmlFor="nt-user">FTP 账号</label>
+          <label htmlFor="nt-user">{t('newTask.ftpAccount')}</label>
           <div className="inline">
-            <input id="nt-user" className="inp" value={username} placeholder="留空为匿名登录" autoComplete="off" spellCheck={false} onChange={(e) => setUsername(e.target.value)} />
-            {username.trim() && <PasswordInput id="nt-pass" label="密码" toggleLabel="显示密码" value={password} onChange={setPassword} />}
+            <input id="nt-user" className="inp" value={username} placeholder={t('newTask.ftpAnonymous')} autoComplete="off" spellCheck={false} onChange={(e) => setUsername(e.target.value)} />
+            {username.trim() && <PasswordInput id="nt-pass" label={t('newTask.password')} toggleLabel={t('newTask.showPassword')} value={password} onChange={setPassword} />}
           </div>
-          <label>传输模式</label>
+          <label>{t('newTask.transferMode')}</label>
           <div className="inline">
             <Segmented<FtpMode>
               value={ftpMode}
-              label="传输模式"
+              label={t('newTask.transferMode')}
               onChange={setFtpMode}
               options={[
-                ['inherit', '跟随设置'],
-                ['passive', '被动'],
-                ['active', '主动'],
+                ['inherit', t('newTask.followSettings')],
+                ['passive', t('newTask.ftpPassive')],
+                ['active', t('newTask.ftpActive')],
               ]}
             />
             {addable.some((l) => l.kind === 'ftp' && l.url.toLowerCase().startsWith('ftps:')) && (
               <label className="chk">
                 <input type="checkbox" checked={insecureTls} onChange={(e) => setInsecureTls(e.target.checked)} />
-                接受未验证的证书
+                {t('newTask.insecureTls')}
               </label>
             )}
           </div>
@@ -344,8 +355,8 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <details className="nt-adv" open={advancedOpen || undefined}>
         <summary>
           <Icon name="chevronRight" />
-          高级
-          <small>Referer · Cookie · User-Agent · 代理</small>
+          {t('newTask.advanced')}
+          <small>{t('newTask.advancedSummary')}</small>
         </summary>
         <div className="frow">
           <label htmlFor="nt-ref">Referer</label>
@@ -353,27 +364,29 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           <label htmlFor="nt-cookie">Cookie</label>
           <input id="nt-cookie" className="inp mono" value={cookies} placeholder="name=value; other=value" onChange={(e) => setCookies(e.target.value)} />
           <label htmlFor="nt-ua">User-Agent</label>
-          <input id="nt-ua" className="inp mono" value={userAgent} placeholder="跟随设置" onChange={(e) => setUserAgent(e.target.value)} />
-          <label htmlFor="nt-proxy">代理</label>
+          <input id="nt-ua" className="inp mono" value={userAgent} placeholder={t('newTask.followSettings')} onChange={(e) => setUserAgent(e.target.value)} />
+          <label htmlFor="nt-proxy">{t('newTask.proxy')}</label>
           <div className="inline">
             <Select<ProxyMode>
               id="nt-proxy"
               value={proxyMode}
               onChange={setProxyMode}
               options={[
-                ['inherit', '跟随设置'],
-                ['system', '系统代理'],
-                ['none', '不使用代理'],
-                ['custom', '自定义'],
+                ['inherit', t('newTask.followSettings')],
+                ['system', t('newTask.proxySystem')],
+                ['none', t('newTask.proxyNone')],
+                ['custom', t('newTask.proxyCustom')],
               ]}
             />
-            {proxyMode === 'custom' && <input className="inp mono" value={proxyUrl} placeholder="socks5h://127.0.0.1:1080" aria-label="代理地址" onChange={(e) => setProxyUrl(e.target.value)} />}
+            {proxyMode === 'custom' && (
+              <input className="inp mono" value={proxyUrl} placeholder="socks5h://127.0.0.1:1080" aria-label={t('newTask.proxyUrl')} onChange={(e) => setProxyUrl(e.target.value)} />
+            )}
           </div>
         </div>
       </details>
       <label className="chk">
         <input type="checkbox" checked={start} onChange={(e) => setStart(e.target.checked)} />
-        添加后立即开始
+        {t('newTask.startNow')}
       </label>
     </Modal>
   );

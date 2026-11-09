@@ -1,31 +1,34 @@
 // Window chrome (docs/development-plan.md §6.2): title bar with the paste box and window buttons,
 // sidebar with filters, categories and settings sections, the command bar and the status bar.
-// Same structure and classes as OmniZip's (omni-ui shell.css); labels are Chinese literals until
-// i18n lands in Phase 5.
+// Same structure and classes as OmniZip's (omni-ui shell.css); labels come from locales/*/app.json
+// (`shell`).
 
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Platform } from 'omni-ui';
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icon, Logo, type IconName } from '../../components/Icon';
 import { ContextMenu, ProgressBar, type MenuItem } from '../../components/ui';
+import i18n from '../../i18n';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { hasLink } from '../../lib/links';
 import { isDark } from '../../lib/theme';
 import type { Category, ThemeMode } from '../../lib/types';
-import { CATEGORY_LABEL } from '../../lib/words';
+import { categoryLabel } from '../../lib/words';
 import { countAll, detailTask, inFilter, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
 
-export const FILTERS: readonly { id: Filter; label: string; icon: IconName }[] = [
-  { id: 'all', label: '全部任务', icon: 'list' },
-  { id: 'active', label: '进行中', icon: 'download' },
-  { id: 'done', label: '已完成', icon: 'checkCircle' },
-  { id: 'torrent', label: '种子', icon: 'magnet' },
-  { id: 'failed', label: '失败', icon: 'alert' },
-  { id: 'trash', label: '回收站', icon: 'trash' },
+/** The fixed filters; their labels are `shell.filters.<id>` (see `filterLabel`). */
+export const FILTERS: readonly { id: Filter; icon: IconName }[] = [
+  { id: 'all', icon: 'list' },
+  { id: 'active', icon: 'download' },
+  { id: 'done', icon: 'checkCircle' },
+  { id: 'torrent', icon: 'magnet' },
+  { id: 'failed', icon: 'alert' },
+  { id: 'trash', icon: 'trash' },
 ];
 
 /** Categories always listed; the others appear once something is in them. */
@@ -42,17 +45,28 @@ const CATEGORY_ICON: Record<Category, IconName> = {
   other: 'file',
 };
 
+/** The settings sections: id, translation key of the label, icon. For labels use
+ *  `settingsTabs()` or `settingsTabLabel(id)`. */
 export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
-  ['general', '常规', 'layout'],
-  ['download', '下载', 'download'],
-  ['network', '网络', 'globe'],
-  ['torrent', 'BT', 'magnet'],
-  ['browser', '浏览器', 'plug'],
+  ['general', 'shell.settingsTabs.general', 'layout'],
+  ['download', 'shell.settingsTabs.download', 'download'],
+  ['network', 'shell.settingsTabs.network', 'globe'],
+  ['torrent', 'shell.settingsTabs.torrent', 'magnet'],
+  ['browser', 'shell.settingsTabs.browser', 'plug'],
 ];
 
+export function settingsTabLabel(id: SettingsTab): string {
+  return i18n.t(`shell.settingsTabs.${id}`);
+}
+
+/** `SETTINGS_TABS` with the labels in the UI language: id, label, icon. */
+export function settingsTabs(): [SettingsTab, string, IconName][] {
+  return SETTINGS_TABS.map(([id, key, icon]) => [id, i18n.t(key), icon]);
+}
+
 export function filterLabel(f: Filter): string {
-  if (f.startsWith('cat:')) return CATEGORY_LABEL[f.slice(4) as Category];
-  return FILTERS.find((x) => x.id === f)?.label ?? '';
+  if (f.startsWith('cat:')) return categoryLabel(f.slice(4) as Category);
+  return FILTERS.some((x) => x.id === f) ? i18n.t(`shell.filters.${f}`) : '';
 }
 
 /** A menu opened from a button, below it (`up`: above it, from the status bar). A second press
@@ -121,19 +135,20 @@ export function ResizeEdges({ platform }: { platform: Platform }) {
 }
 
 function WindowControls() {
+  const { t } = useTranslation();
   const max = useMaximized(true);
   const run = (f: (w: ReturnType<typeof getCurrentWindow>) => Promise<void>) => () => {
     if (isTauri()) void f(getCurrentWindow());
   };
   return (
     <div className="winctl">
-      <button type="button" aria-label="最小化" onClick={run((w) => w.minimize())}>
+      <button type="button" aria-label={t('shell.window.minimize')} onClick={run((w) => w.minimize())}>
         <Icon name="minus" />
       </button>
-      <button type="button" aria-label={max ? '还原' : '最大化'} onClick={run((w) => w.toggleMaximize())}>
+      <button type="button" aria-label={max ? t('shell.window.restore') : t('shell.window.maximize')} onClick={run((w) => w.toggleMaximize())}>
         <Icon name={max ? 'restore' : 'square'} />
       </button>
-      <button type="button" className="close" aria-label="关闭" onClick={run((w) => w.close())}>
+      <button type="button" className="close" aria-label={t('shell.window.close')} onClick={run((w) => w.close())}>
         <Icon name="x" />
       </button>
     </div>
@@ -142,18 +157,19 @@ function WindowControls() {
 
 /** Title-bar button for light / dark / system. */
 function ThemeMenu() {
+  const { t } = useTranslation();
   const mode = useApp((s) => s.settings.appearance.mode);
   const save = useApp((s) => s.saveSettings);
   const menu = useMenu();
   const pick = (m: ThemeMode) => () => void save((s) => (s.appearance.mode = m));
   const items: MenuItem[] = [
-    { label: '浅色', icon: 'sun', checked: mode === 'light', run: pick('light') },
-    { label: '深色', icon: 'moon', checked: mode === 'dark', run: pick('dark') },
-    { label: '跟随系统', icon: 'monitor', checked: mode === 'system', run: pick('system') },
+    { label: t('shell.theme.light'), icon: 'sun', checked: mode === 'light', run: pick('light') },
+    { label: t('shell.theme.dark'), icon: 'moon', checked: mode === 'dark', run: pick('dark') },
+    { label: t('shell.theme.system'), icon: 'monitor', checked: mode === 'system', run: pick('system') },
   ];
   return (
     <>
-      <button type="button" className="iconbtn" title="外观" aria-label="外观" aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e)}>
+      <button type="button" className="iconbtn" title={t('shell.theme.title')} aria-label={t('shell.theme.title')} aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e)}>
         <Icon name={isDark(mode) ? 'moon' : 'sun'} />
       </button>
       {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items} anchor={menu.at.anchor} onClose={menu.close} />}
@@ -163,6 +179,7 @@ function ThemeMenu() {
 
 /** The paste box: a link pasted or typed here (Enter) opens the new-download dialog with it. */
 function PasteBox({ platform }: { platform: Platform }) {
+  const { t } = useTranslation();
   const openDialog = useApp((s) => s.openDialog);
   const [value, setValue] = useState('');
   const submit = (text: string) => {
@@ -176,8 +193,8 @@ function PasteBox({ platform }: { platform: Platform }) {
         id="pastebox"
         type="text"
         value={value}
-        placeholder="粘贴下载链接"
-        aria-label="粘贴下载链接"
+        placeholder={t('shell.paste')}
+        aria-label={t('shell.paste')}
         spellCheck={false}
         onChange={(e) => setValue(e.target.value)}
         onPaste={(e) => {
@@ -198,6 +215,7 @@ function PasteBox({ platform }: { platform: Platform }) {
 }
 
 export function TitleBar({ platform }: { platform: Platform }) {
+  const { t } = useTranslation();
   const view = useApp((s) => s.view);
   const filter = useApp((s) => s.filter);
   const count = useApp((s) => Object.values(s.tasks).reduce((n, t) => n + (inFilter(t, s.filter) ? 1 : 0), 0));
@@ -206,11 +224,11 @@ export function TitleBar({ platform }: { platform: Platform }) {
       <div className="tb-side" data-tauri-drag-region>
         <div className="ttl" data-tauri-drag-region>
           {view === 'settings' ? (
-            <b>设置</b>
+            <b>{t('shell.settings')}</b>
           ) : (
             <>
               <b>{filterLabel(filter)}</b>
-              <span>{count} 个任务</span>
+              <span>{t('shell.taskCount', { count })}</span>
             </>
           )}
         </div>
@@ -237,6 +255,7 @@ function Brand({ version }: { version: string }) {
 
 /** Running downloads at the bottom of the sidebar: how many, overall progress. */
 function TaskSummary() {
+  const { t } = useTranslation();
   const setFilter = useApp((s) => s.setFilter);
   const { running, done, total, unknown } = useApp(
     useShallow((s) => {
@@ -256,10 +275,10 @@ function TaskSummary() {
   );
   if (!running) return null;
   return (
-    <button type="button" className="task-sum" title="查看进行中的任务" onClick={() => setFilter('active')}>
+    <button type="button" className="task-sum" title={t('shell.summary.title')} onClick={() => setFilter('active')}>
       <div className="row">
         <Icon name="download" />
-        <span className="lbl grow">{running} 个任务下载中</span>
+        <span className="lbl grow">{t('shell.summary.running', { count: running })}</span>
         {!unknown && <span className="lbl sum-pct">{fmt.percent(done, total)}</span>}
       </div>
       <ProgressBar value={total ? done / total : 0} indeterminate={unknown} />
@@ -268,6 +287,7 @@ function TaskSummary() {
 }
 
 export function Sidebar({ platform }: { platform: Platform }) {
+  const { t } = useTranslation();
   const view = useApp((s) => s.view);
   const filter = useApp((s) => s.filter);
   const settingsTab = useApp((s) => s.settingsTab);
@@ -304,17 +324,17 @@ export function Sidebar({ platform }: { platform: Platform }) {
           <Brand version={version} />
         </div>
       )}
-      <nav className="sb-nav" aria-label="任务筛选">
-        {FILTERS.map((f) => item(f.id, f.label, f.icon))}
-        <div className="sb-label lbl">分类</div>
-        {categories.map((c) => item(`cat:${c}`, CATEGORY_LABEL[c], CATEGORY_ICON[c]))}
+      <nav className="sb-nav" aria-label={t('shell.sidebar.filters')}>
+        {FILTERS.map((f) => item(f.id, filterLabel(f.id), f.icon))}
+        <div className="sb-label lbl">{t('shell.sidebar.categories')}</div>
+        {categories.map((c) => item(`cat:${c}`, categoryLabel(c), CATEGORY_ICON[c]))}
       </nav>
       <div className="sb-bottom">
         <TaskSummary />
         {/* The settings sections unfold upwards from the Settings item while settings are shown. */}
-        <div id="sb-settings" className="sb-sub" data-open={inSettings} role="group" aria-label="设置" inert={!inSettings}>
+        <div id="sb-settings" className="sb-sub" data-open={inSettings} role="group" aria-label={t('shell.settings')} inert={!inSettings}>
           <div>
-            {SETTINGS_TABS.map(([id, label, icon]) => (
+            {settingsTabs().map(([id, label, icon]) => (
               <button key={id} type="button" className="nav-item" aria-current={inSettings && settingsTab === id} title={label} onClick={() => setSettingsTab(id)}>
                 <Icon name={icon} />
                 <span className="lbl">{label}</span>
@@ -322,9 +342,9 @@ export function Sidebar({ platform }: { platform: Platform }) {
             ))}
           </div>
         </div>
-        <button type="button" className="nav-item" aria-expanded={inSettings} aria-controls="sb-settings" title="设置" onClick={() => setView(inSettings ? 'tasks' : 'settings')}>
+        <button type="button" className="nav-item" aria-expanded={inSettings} aria-controls="sb-settings" title={t('shell.settings')} onClick={() => setView(inSettings ? 'tasks' : 'settings')}>
           <Icon name="gear" />
-          <span className="lbl grow">设置</span>
+          <span className="lbl grow">{t('shell.settings')}</span>
           <Icon name="chevronUp" className="chev" />
         </button>
       </div>
@@ -336,6 +356,7 @@ const SPEED_PRESETS = [512 * 1024, 1024 ** 2, 2 * 1024 ** 2, 5 * 1024 ** 2, 10 *
 
 /** The global download limit, in the status bar: presets and a custom value. */
 function SpeedLimitMenu() {
+  const { t } = useTranslation();
   const limit = useApp((s) => s.settings.engine.speedLimit);
   const { run, openDialog } = useApp(useShallow((s) => ({ run: s.run, openDialog: s.openDialog })));
   const menu = useMenu();
@@ -345,11 +366,11 @@ function SpeedLimitMenu() {
       useApp.setState({ settings });
     });
   const items: MenuItem[] = [
-    { label: '不限速', checked: limit == null, run: set(null) },
+    { label: t('shell.speedLimit.unlimited'), checked: limit == null, run: set(null) },
     { separator: true },
     ...SPEED_PRESETS.map((p): MenuItem => ({ label: fmt.speed(p), checked: limit === p, run: set(p) })),
     { separator: true },
-    { label: limit != null && !SPEED_PRESETS.includes(limit) ? `自定义（${fmt.speed(limit)}）` : '自定义…', checked: limit != null && !SPEED_PRESETS.includes(limit), run: () => openDialog({ kind: 'speed' }) },
+    { label: limit != null && !SPEED_PRESETS.includes(limit) ? t('shell.speedLimit.customValue', { speed: fmt.speed(limit) }) : t('shell.speedLimit.custom'), checked: limit != null && !SPEED_PRESETS.includes(limit), run: () => openDialog({ kind: 'speed' }) },
   ];
   return (
     <>
@@ -359,11 +380,11 @@ function SpeedLimitMenu() {
         data-on={limit != null}
         aria-haspopup="menu"
         aria-expanded={menu.at !== null}
-        title="全局下载限速"
+        title={t('shell.speedLimit.title')}
         onClick={(e) => menu.toggle(e, true, true)}
       >
         <Icon name="gauge" />
-        {limit == null ? '不限速' : `限速 ${fmt.speed(limit)}`}
+        {limit == null ? t('shell.speedLimit.unlimited') : t('shell.speedLimit.limited', { speed: fmt.speed(limit) })}
         <Icon name="chevronUp" className="chev" />
       </button>
       {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items} anchor={menu.at.anchor} onClose={menu.close} />}
@@ -371,24 +392,19 @@ function SpeedLimitMenu() {
   );
 }
 
-const SORTS: [SortKey, string][] = [
-  ['added', '按添加时间'],
-  ['name', '按名称'],
-  ['size', '按大小'],
-  ['progress', '按进度'],
-  ['speed', '按速度'],
-  ['status', '按状态'],
-];
+/** The sort orders; their labels are `shell.sort.<key>`. */
+const SORTS: SortKey[] = ['added', 'name', 'size', 'progress', 'speed', 'status'];
 
 function SortMenu() {
+  const { t } = useTranslation();
   const sort = useApp((s) => s.sort);
   const setSort = useApp((s) => s.setSort);
   const menu = useMenu();
-  const items: MenuItem[] = SORTS.map(([k, label]) => ({ label, checked: sort.key === k, run: () => setSort(k) }));
+  const items: MenuItem[] = SORTS.map((k) => ({ label: t(`shell.sort.${k}`), checked: sort.key === k, run: () => setSort(k) }));
   return (
     <>
       <button type="button" className="btn subtle sort" aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e, true)}>
-        <span className="lbl">{SORTS.find(([k]) => k === sort.key)?.[1]}</span>
+        <span className="lbl">{SORTS.includes(sort.key) ? t(`shell.sort.${sort.key}`) : undefined}</span>
         <Icon name="chevronDown" className="chev" />
       </button>
       {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items} anchor={menu.at.anchor} onClose={menu.close} />}
@@ -398,6 +414,7 @@ function SortMenu() {
 
 /** Commands for the selection, or for every task when nothing is selected. */
 export function CommandBar() {
+  const { t } = useTranslation();
   const filter = useApp((s) => s.filter);
   const selection = useApp((s) => s.selection);
   const pinned = useApp((s) => s.detailPinned);
@@ -418,17 +435,17 @@ export function CommandBar() {
   if (filter === 'trash') {
     return (
       <div className="cmdbar">
-        <button type="button" title="还原" className="btn" disabled={!sel} onClick={() => void run(() => api.restore(selection))}>
+        <button type="button" title={t('shell.cmd.restore')} className="btn" disabled={!sel} onClick={() => void run(() => api.restore(selection))}>
           <Icon name="refresh" />
-          <span className="lbl">还原</span>
+          <span className="lbl">{t('shell.cmd.restore')}</span>
         </button>
-        <button type="button" title="彻底删除" className="btn danger" disabled={!sel} onClick={() => openDialog({ kind: 'purge', ids: selection })}>
+        <button type="button" title={t('shell.cmd.purge')} className="btn danger" disabled={!sel} onClick={() => openDialog({ kind: 'purge', ids: selection })}>
           <Icon name="trash" />
-          <span className="lbl">彻底删除</span>
+          <span className="lbl">{t('shell.cmd.purge')}</span>
         </button>
         <span className="grow" />
         <button type="button" className="btn subtle" disabled={allIds.length === 0} onClick={() => openDialog({ kind: 'purge', ids: allIds })}>
-          <span className="lbl">清空回收站</span>
+          <span className="lbl">{t('shell.cmd.emptyTrash')}</span>
         </button>
       </div>
     );
@@ -438,36 +455,36 @@ export function CommandBar() {
     <div className="cmdbar">
       <button type="button" className="btn" onClick={() => openDialog({ kind: 'new', text: '' })}>
         <Icon name="plus" />
-        <span className="lbl">新建下载</span>
+        <span className="lbl">{t('shell.cmd.newDownload')}</span>
       </button>
       {sel ? (
         <>
-          <button type="button" title="开始" className="btn" disabled={!canResume} onClick={() => void run(() => api.resume(selection))}>
+          <button type="button" title={t('shell.cmd.start')} className="btn" disabled={!canResume} onClick={() => void run(() => api.resume(selection))}>
             <Icon name="play" />
-            <span className="lbl">开始</span>
+            <span className="lbl">{t('shell.cmd.start')}</span>
           </button>
-          <button type="button" title="暂停" className="btn" disabled={!canPause} onClick={() => void run(() => api.pause(selection))}>
+          <button type="button" title={t('shell.cmd.pause')} className="btn" disabled={!canPause} onClick={() => void run(() => api.pause(selection))}>
             <Icon name="pause" />
-            <span className="lbl">暂停</span>
+            <span className="lbl">{t('shell.cmd.pause')}</span>
           </button>
-          <button type="button" title="删除" className="btn" onClick={() => void run(() => api.remove(selection))}>
+          <button type="button" title={t('shell.cmd.delete')} className="btn" onClick={() => void run(() => api.remove(selection))}>
             <Icon name="trash" />
-            <span className="lbl">删除</span>
+            <span className="lbl">{t('shell.cmd.delete')}</span>
           </button>
-          <button type="button" title="打开文件夹" className="btn" disabled={!single} onClick={() => single && void run(() => api.reveal(single))}>
+          <button type="button" title={t('shell.cmd.openFolder')} className="btn" disabled={!single} onClick={() => single && void run(() => api.reveal(single))}>
             <Icon name="folderOpen" />
-            <span className="lbl">打开文件夹</span>
+            <span className="lbl">{t('shell.cmd.openFolder')}</span>
           </button>
         </>
       ) : (
         <>
-          <button type="button" title="全部开始" className="btn" disabled={!anyResumable} onClick={() => void run(() => api.resume(Object.values(useApp.getState().tasks).filter((t) => t.status === 'paused').map((t) => t.id)))}>
+          <button type="button" title={t('shell.cmd.startAll')} className="btn" disabled={!anyResumable} onClick={() => void run(() => api.resume(Object.values(useApp.getState().tasks).filter((t) => t.status === 'paused').map((t) => t.id)))}>
             <Icon name="play" />
-            <span className="lbl">全部开始</span>
+            <span className="lbl">{t('shell.cmd.startAll')}</span>
           </button>
-          <button type="button" title="全部暂停" className="btn" disabled={!anyPausable} onClick={() => void run(() => api.pause(Object.keys(useApp.getState().tasks)))}>
+          <button type="button" title={t('shell.cmd.pauseAll')} className="btn" disabled={!anyPausable} onClick={() => void run(() => api.pause(Object.keys(useApp.getState().tasks)))}>
             <Icon name="pause" />
-            <span className="lbl">全部暂停</span>
+            <span className="lbl">{t('shell.cmd.pauseAll')}</span>
           </button>
         </>
       )}
@@ -482,8 +499,8 @@ export function CommandBar() {
           className="iconbtn"
           aria-pressed={pinned}
           disabled={!pinned && !single}
-          title={pinned ? '详情面板已固定，选中任务时自动显示（点击取消）' : '显示详情'}
-          aria-label="详情面板"
+          title={pinned ? t('shell.cmd.detailPinned') : t('shell.cmd.showDetail')}
+          aria-label={t('shell.cmd.detailPanel')}
           onClick={() => (pinned ? setDetailPinned(false) : single && openDetail(single))}
         >
           <Icon name="sidebar" />
@@ -494,6 +511,7 @@ export function CommandBar() {
 }
 
 export function StatusBar() {
+  const { t } = useTranslation();
   const speed = useApp((s) => s.stats.downloadSpeed);
   const upload = useApp((s) => s.stats.uploadSpeed);
   const selected = useApp((s) => s.selection.length);
@@ -515,19 +533,19 @@ export function StatusBar() {
   );
   const seen = useApp((s) => s.seenBrowsers);
   const names = seen.map(([b]) => ({ chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave', chromium: 'Chromium' })[b] ?? b);
-  const parts = [`${all} 个任务`];
-  if (running) parts.push(`下载中 ${running}`);
-  if (waiting) parts.push(`等待 ${waiting}`);
-  if (seeding) parts.push(`做种 ${seeding}`);
-  if (selected) parts.push(`已选 ${selected}`);
+  const parts = [t('shell.taskCount', { count: all })];
+  if (running) parts.push(t('shell.status.running', { count: running }));
+  if (waiting) parts.push(t('shell.status.waiting', { count: waiting }));
+  if (seeding) parts.push(t('shell.status.seeding', { count: seeding }));
+  if (selected) parts.push(t('shell.status.selected', { count: selected }));
   return (
     <footer className="statusbar">
       <div className="lft">
-        <span className="speed" title="下载速度">
+        <span className="speed" title={t('shell.status.downloadSpeed')}>
           <Icon name="arrowDown" />
           {fmt.speed(speed)}
         </span>
-        <span className="speed" title="上传速度（做种与下载中的种子）">
+        <span className="speed" title={t('shell.status.uploadSpeed')}>
           <Icon name="arrowUp" />
           {fmt.speed(upload)}
         </span>
@@ -535,9 +553,9 @@ export function StatusBar() {
       <div className="mid">{parts.join(' · ')}</div>
       <div className="rgt">
         {names.length > 0 && (
-          <span className="seen" title="浏览器扩展已连接">
+          <span className="seen" title={t('shell.status.extensionConnected')}>
             <i aria-hidden="true" />
-            {names.join('、')} 已连接
+            {t('shell.status.browsersConnected', { names: names.join(t('shell.status.listSeparator')) })}
           </span>
         )}
         <SpeedLimitMenu />

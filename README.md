@@ -15,6 +15,7 @@
 | `crates/omnidl-http` · `omnidl-ftp` · `omnidl-bt` | 各协议下载引擎 |
 | `crates/omnidl-ipc` · `omnidl-nm-host` | 浏览器桥的消息协议与 Native Messaging host |
 | `themes/` | omni-ui 内置主题的副本（`pnpm sync:omni-ui`），供 Rust 嵌入 |
+| `locales/` | 界面文字：简体中文（源）、繁體中文、English、日本語（i18next + ICU，与 OmniZip 相同） |
 | `icons/app-icon.svg` | 应用图标源文件（`pnpm icons` 生成各平台尺寸） |
 | `docs/` | 开发方案与架构决策记录（`docs/architecture/ADR-*.md`） |
 
@@ -31,6 +32,7 @@ pnpm build            # 打包安装程序
 检查（与 CI 相同）：
 
 ```bash
+pnpm check:locales   # 各语言的键与占位符与简体中文一致，代码用到的键都存在
 pnpm lint             # TypeScript
 pnpm eslint
 pnpm test             # Vitest

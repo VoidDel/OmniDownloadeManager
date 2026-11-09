@@ -1,0 +1,529 @@
+{
+  "status": {
+    "queued": "等待中",
+    "probing": "连接中",
+    "downloading": "下载中",
+    "paused": "已暂停",
+    "seeding": "做种中",
+    "completed": "已完成",
+    "failed": "失败",
+    "removed": "已删除",
+    "fetchingTorrent": "获取种子信息"
+  },
+  "category": {
+    "video": "视频",
+    "audio": "音乐",
+    "document": "文档",
+    "archive": "压缩包",
+    "program": "程序",
+    "disk_image": "镜像",
+    "image": "图片",
+    "other": "其他"
+  },
+  "errors": {
+    "invalid_url": "不是可以下载的链接",
+    "unsupported": "这类下载将在后续版本支持",
+    "network": "网络连接失败",
+    "timeout": "连接超时",
+    "tls": "安全连接失败，证书无效",
+    "http_status": "服务器返回错误 {status}",
+    "http_statusNoStatus": "服务器返回错误",
+    "ftp_reply": "FTP 服务器拒绝了请求（{status}）",
+    "ftp_replyNoStatus": "FTP 服务器拒绝了请求",
+    "not_found": "服务器上没有这个文件",
+    "auth_required": "需要登录或授权，账号或密码不对",
+    "forbidden": "服务器拒绝访问",
+    "remote_changed": "服务器上的文件已变更，需要重新下载",
+    "file_missing": "文件丢失或无法读取",
+    "disk_full": "磁盘空间不足",
+    "io": "读写文件失败",
+    "internal": "出现内部错误"
+  },
+  "format": {
+    "s": "{s} 秒",
+    "ms": "{m} 分 {s} 秒",
+    "m": "{m} 分",
+    "hm": "{h} 小时 {m} 分",
+    "h": "{h} 小时",
+    "dh": "{d} 天 {h} 小时",
+    "d": "{d} 天",
+    "yesterday": "昨天 {time}"
+  },
+  "settings": {
+    "appearance": {
+      "accent": "强调色",
+      "accentTheme": "主题默认",
+      "accentSystem": "跟随系统",
+      "accentCustom": "自定义",
+      "material": "窗口材质",
+      "materialHint": "同样用于快捷下载框；macOS 为毛玻璃",
+      "materialUnavailable": "当前系统不支持",
+      "materialKinds": {
+        "off": "关闭",
+        "mica": "Mica",
+        "micaAlt": "Mica Alt",
+        "acrylic": "亚克力"
+      },
+      "mode": "外观",
+      "modes": {
+        "light": "浅色",
+        "dark": "深色",
+        "system": "跟随系统"
+      },
+      "lightTheme": "浅色主题",
+      "lightThemeHint": "外观为浅色，或跟随系统且系统为浅色时使用",
+      "darkTheme": "深色主题",
+      "density": "列表密度",
+      "densityHint": "任务列表每行的高度",
+      "densities": {
+        "compact": "紧凑",
+        "comfortable": "舒适",
+        "spacious": "宽松"
+      }
+    },
+    "language": {
+      "ui": "界面语言",
+      "auto": "跟随系统（{lang}）"
+    },
+    "general": {
+      "version": "版本",
+      "logs": "日志",
+      "openFolder": "打开文件夹"
+    },
+    "download": {
+      "folder": "默认下载文件夹",
+      "folderPick": "选择默认下载文件夹",
+      "folderDefault": "系统的“下载”文件夹",
+      "browse": "浏览",
+      "open": "打开",
+      "maxConcurrent": "同时下载的任务数",
+      "maxConcurrentHint": "其余任务排队等待",
+      "connections": "每个任务的连接数",
+      "connectionsHint": "服务器支持分段下载时同时打开的连接，可在新建下载时单独设置",
+      "conflict": "文件已存在时",
+      "conflictRename": "自动重命名",
+      "conflictOverwrite": "覆盖",
+      "resumeOnStartup": "启动时继续未完成的下载",
+      "resumeOnStartupHint": "退出时正在下载的任务，下次启动后自动继续",
+      "syncWrites": "每秒把进度写入磁盘",
+      "syncWritesHint": "断电或系统崩溃后也能从准确的位置继续；关闭可以减少磁盘写入"
+    },
+    "network": {
+      "proxy": "代理",
+      "proxyHint": "HTTP、HTTPS 或 SOCKS5 代理，用于 HTTP 下载；socks5h:// 由代理解析域名",
+      "proxyModes": {
+        "system": "系统代理",
+        "none": "不使用",
+        "custom": "自定义"
+      },
+      "proxyUrl": "代理地址",
+      "userAgentHint": "默认使用桌面版 Chrome 的标识；有的网站会拒绝陌生的客户端",
+      "resetDefault": "恢复默认",
+      "connectTimeout": "连接超时",
+      "readTimeout": "无响应超时",
+      "readTimeoutHint": "连接这么久收不到数据就断开重连",
+      "retries": "失败重试次数",
+      "retriesHint": "网络错误或服务器 5xx 时，每个连接按 1、2、4… 秒的间隔重试",
+      "seconds": "{n} 秒",
+      "times": "{n} 次",
+      "ftpSessions": "FTP 会话数",
+      "ftpSessionsHint": "每个 FTP 任务同时登录的会话；很多服务器限制每个用户的连接数",
+      "ftpMode": "FTP 传输模式",
+      "ftpModeHint": "被动模式适合大多数网络；主动模式需要服务器能连回本机",
+      "ftpPassive": "被动",
+      "ftpActive": "主动"
+    },
+    "torrent": {
+      "seeding": "下载完成后做种",
+      "seedingHint": "继续把文件上传给其他下载者；暂停做种中的任务即可停止",
+      "seedRatio": "分享率达到时停止",
+      "seedRatioHint": "上传量达到文件大小的这个倍数",
+      "seedTime": "做种时长",
+      "seedTimeHint": "从下载完成时算起，与分享率先到者为准",
+      "uploadLimit": "上传限速",
+      "uploadLimitHint": "所有 BT 任务合计",
+      "unlimited": "不限",
+      "hours": "{n} 小时",
+      "days": "{n} 天",
+      "weeks": "{n} 周",
+      "port": "监听端口",
+      "portHint": "其他节点连接进来的端口，0 由系统选择；重启应用后生效",
+      "dht": "DHT 网络",
+      "dhtHint": "没有 Tracker 时靠它寻找节点，大多数磁力链接都需要；重启应用后生效",
+      "upnp": "UPnP 端口映射",
+      "upnpHint": "请路由器转发监听端口，让更多节点连得进来；重启应用后生效",
+      "magnet": "磁力链接",
+      "magnetSet": "已设为打开磁力链接的程序",
+      "magnetHintInstalled": "安装后的应用会自动关联磁力链接与种子文件",
+      "magnetHint": "在浏览器里点击 magnet: 链接时用 Omni Download 打开",
+      "magnetRegistered": "已关联",
+      "magnetReregister": "重新关联",
+      "magnetRegister": "设为默认程序"
+    },
+    "browser": {
+      "state": {
+        "connected": "已连接 · {when}",
+        "ready": "已就绪",
+        "otherInstall": "指向另一个安装",
+        "unregistered": "未注册",
+        "notInstalled": "未安装"
+      },
+      "extension": "浏览器扩展",
+      "extensionHint": "安装 Omni Download 扩展后，在浏览器中点击下载会自动交给 Omni Download。",
+      "hostMissing": "没有找到浏览器通信程序 omnidl-nm-host，请重新安装 Omni Download。",
+      "repaired": "已重新写入浏览器通信配置",
+      "repair": "重新写入通信配置",
+      "bridge": "本机通信",
+      "bridgeBusy": "另一个 Omni Download 正在占用浏览器通信，这个窗口收不到浏览器的下载。",
+      "unavailable": "不可用",
+      "quickDialog": "接管前询问",
+      "quickDialogHint": "浏览器交来下载时，先在小窗口里确认文件名和保存位置",
+      "silentSites": "不再询问的网站",
+      "silentSitesHint": "这些网站的下载直接开始；点 × 恢复询问",
+      "silentSitesEmpty": "在询问窗口中勾选“不再询问”的网站会列在这里",
+      "silentSiteRemove": "恢复询问 {site}",
+      "httpBridge": "备用通道",
+      "httpBridgeHint": "Snap、Flatpak 等无法使用本机通信的浏览器，改用本机 HTTP 接口；需要在扩展选项中填入配对码",
+      "pairingCode": "配对码",
+      "pairingCodeHint": "只在本机有效；重新生成后，已配对的扩展需要重新填写",
+      "copied": "已复制配对码",
+      "copy": "复制",
+      "regenerate": "重新生成"
+    }
+  },
+  "shell": {
+    "settings": "设置",
+    "taskCount": "{count} 个任务",
+    "paste": "粘贴下载链接",
+    "filters": {
+      "all": "全部任务",
+      "active": "进行中",
+      "done": "已完成",
+      "torrent": "种子",
+      "failed": "失败",
+      "trash": "回收站"
+    },
+    "settingsTabs": {
+      "general": "常规",
+      "download": "下载",
+      "network": "网络",
+      "torrent": "BT",
+      "browser": "浏览器"
+    },
+    "window": {
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "还原",
+      "close": "关闭"
+    },
+    "theme": {
+      "title": "外观",
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "summary": {
+      "title": "查看进行中的任务",
+      "running": "{count} 个任务下载中"
+    },
+    "sidebar": {
+      "filters": "任务筛选",
+      "categories": "分类"
+    },
+    "speedLimit": {
+      "title": "全局下载限速",
+      "unlimited": "不限速",
+      "limited": "限速 {speed}",
+      "custom": "自定义…",
+      "customValue": "自定义（{speed}）"
+    },
+    "sort": {
+      "added": "按添加时间",
+      "name": "按名称",
+      "size": "按大小",
+      "progress": "按进度",
+      "speed": "按速度",
+      "status": "按状态"
+    },
+    "cmd": {
+      "newDownload": "新建下载",
+      "start": "开始",
+      "pause": "暂停",
+      "delete": "删除",
+      "openFolder": "打开文件夹",
+      "startAll": "全部开始",
+      "pauseAll": "全部暂停",
+      "restore": "还原",
+      "purge": "彻底删除",
+      "emptyTrash": "清空回收站",
+      "detailPanel": "详情面板",
+      "showDetail": "显示详情",
+      "detailPinned": "详情面板已固定，选中任务时自动显示（点击取消）"
+    },
+    "status": {
+      "running": "下载中 {count}",
+      "waiting": "等待 {count}",
+      "seeding": "做种 {count}",
+      "selected": "已选 {count}",
+      "downloadSpeed": "下载速度",
+      "uploadSpeed": "上传速度（做种与下载中的种子）",
+      "extensionConnected": "浏览器扩展已连接",
+      "browsersConnected": "{names} 已连接",
+      "listSeparator": "、"
+    }
+  },
+  "empty": {
+    "all": {
+      "title": "还没有下载任务",
+      "hint": "把下载链接粘贴到上方的框里，或者点“新建下载”。"
+    },
+    "active": {
+      "title": "没有进行中的任务",
+      "hint": "正在下载、等待和暂停的任务会显示在这里。"
+    },
+    "done": {
+      "title": "还没有完成的任务",
+      "hint": "下载完成的文件会显示在这里，双击即可打开。"
+    },
+    "torrent": {
+      "title": "还没有种子任务",
+      "hint": "粘贴磁力链接、打开种子文件，或把 .torrent 文件拖进窗口。"
+    },
+    "failed": {
+      "title": "没有失败的任务",
+      "hint": "下载出错的任务会显示在这里，可以重试。"
+    },
+    "trash": {
+      "title": "回收站是空的",
+      "hint": "删除的任务会先放在这里，可以还原。"
+    },
+    "category": {
+      "title": "这个分类里还没有任务",
+      "hint": "下载的文件按扩展名自动归类。"
+    }
+  },
+  "fileTree": {
+    "all": "全部文件",
+    "chosen": "已选 {chosen} / {count} 个文件 · {size}"
+  },
+  "detail": {
+    "label": "任务详情",
+    "close": "关闭详情",
+    "pin": "固定详情面板",
+    "pinTip": "固定详情面板：选中任务时自动显示",
+    "unpinTip": "取消固定：选中任务时不再自动显示详情",
+    "tabs": "详情",
+    "openFolder": "打开文件夹",
+    "copyLink": "复制链接",
+    "copied": "已复制链接",
+    "tab": {
+      "overview": "概览",
+      "files": "文件",
+      "peers": "节点",
+      "segments": "分片"
+    },
+    "chart": {
+      "title": "速度 · 近 2 分钟",
+      "label": "最近两分钟的下载速度"
+    },
+    "overview": {
+      "size": "大小",
+      "downloaded": "已下载",
+      "speed": "速度",
+      "eta": "剩余时间",
+      "connections": "连接",
+      "connectionCount": "{count} 个连接",
+      "peers": "节点",
+      "peerCount": "{count} 个节点",
+      "uploadSpeed": "上传速度",
+      "uploaded": "已上传",
+      "uploadedValue": "{size} · 分享率 {ratio}",
+      "files": "文件",
+      "filesValue": "{selected} / {count} 个 · {pieces} 块 × {pieceSize}",
+      "infoHash": "特征码",
+      "resume": "断点续传",
+      "resumeUnknown": "开始后确定",
+      "resumeYes": "支持",
+      "resumeNo": "不支持（暂停后需要重新下载）",
+      "added": "添加时间",
+      "completed": "完成时间",
+      "saveTo": "保存到",
+      "link": "链接",
+      "segmentProgress": "分片进度",
+      "segmentCount": "{count} 个分片"
+    },
+    "segments": {
+      "merged": "下载已完成，分片已合并为完整文件。",
+      "notStarted": "开始下载后显示分片。",
+      "none": "没有分片信息。",
+      "map": "分片地图",
+      "active": "{count} 个连接工作中",
+      "done": "已完成",
+      "partial": "部分完成",
+      "pending": "未开始",
+      "title": "分片"
+    },
+    "files": {
+      "pending": "获取到种子信息后显示文件。",
+      "none": "没有文件信息。"
+    },
+    "peers": {
+      "title": "节点",
+      "stats": "已连接 {connected} · 已发现 {seen}",
+      "searching": "正在寻找节点…",
+      "idle": "任务运行时显示连接的节点。",
+      "address": "地址",
+      "client": "客户端"
+    },
+    "trackers": {
+      "title": "Tracker",
+      "count": "{count} 个",
+      "none": "没有 Tracker，靠 DHT 与节点交换寻找节点。"
+    },
+    "action": {
+      "pause": "暂停",
+      "resume": "继续",
+      "redownload": "重新下载",
+      "retry": "重试",
+      "stopSeeding": "停止做种",
+      "openFile": "打开文件",
+      "restore": "还原"
+    }
+  },
+  "table": {
+    "label": "下载任务",
+    "column": {
+      "name": "名称",
+      "progress": "进度",
+      "size": "大小",
+      "speed": "速度",
+      "eta": "剩余",
+      "status": "状态"
+    },
+    "menu": {
+      "details": "详情",
+      "restore": "还原",
+      "purge": "彻底删除…",
+      "open": "打开",
+      "start": "开始",
+      "pause": "暂停",
+      "stopSeeding": "停止做种",
+      "redownload": "重新下载",
+      "openFolder": "打开文件夹",
+      "copyLink": "复制链接",
+      "copied": "已复制链接",
+      "copiedMany": "已复制 {count} 个链接",
+      "delete": "删除"
+    }
+  },
+  "newTask": {
+    "title": "新建下载",
+    "close": "关闭",
+    "cancel": "取消",
+    "add": "添加",
+    "addAndStart": "添加并开始",
+    "summary": "{count} 个任务",
+    "addedMany": "已添加 {count} 个任务",
+    "addedOne": "已添加 {name}",
+    "links": "链接",
+    "linksPlaceholder": "https://example.com/file.zip 或 magnet:?xt=…",
+    "linksHint": "每行一个：HTTP、FTP 链接，磁力链接或种子文件的路径。",
+    "openTorrents": "打开种子文件",
+    "pickTorrents": "选择种子文件",
+    "pickDir": "选择保存位置",
+    "fileName": "文件名",
+    "fileNamePlaceholder": "按服务器提供的名称",
+    "saveTo": "保存到",
+    "browse": "浏览",
+    "connections": "连接数",
+    "limit": "限速",
+    "limitPlaceholder": "不限",
+    "limitHint": "例如 500K、2M；留空不限速",
+    "ftpAccount": "FTP 账号",
+    "ftpAnonymous": "留空为匿名登录",
+    "password": "密码",
+    "showPassword": "显示密码",
+    "transferMode": "传输模式",
+    "followSettings": "跟随设置",
+    "ftpPassive": "被动",
+    "ftpActive": "主动",
+    "insecureTls": "接受未验证的证书",
+    "advanced": "高级",
+    "advancedSummary": "Referer · Cookie · User-Agent · 代理",
+    "proxy": "代理",
+    "proxySystem": "系统代理",
+    "proxyNone": "不使用代理",
+    "proxyCustom": "自定义",
+    "proxyUrl": "代理地址",
+    "startNow": "添加后立即开始",
+    "badge": {
+      "magnet": "磁力",
+      "torrent": "种子"
+    },
+    "row": {
+      "unsupported": "这类链接暂不支持，这一行不会添加",
+      "later": "开始下载时获取文件信息",
+      "probingMagnet": "正在向节点获取种子信息…",
+      "probing": "正在获取文件信息…",
+      "probeFailed": "{error}，仍可添加，开始时会重试",
+      "sizeUnknown": "大小未知",
+      "files": "{count} 个文件",
+      "singleFile": "单个文件",
+      "resumable": "支持断点续传",
+      "notResumable": "不支持断点续传",
+      "connections": "将使用 {count} 个连接",
+      "sessions": "将使用 {count} 个会话"
+    }
+  },
+  "dialogs": {
+    "close": "关闭",
+    "cancel": "取消",
+    "ok": "确定",
+    "purge": {
+      "titleMany": "彻底删除 {count} 个任务？",
+      "titleOne": "彻底删除这个任务？",
+      "confirm": "彻底删除",
+      "text": "任务记录和未完成的临时文件会被删除，无法还原。",
+      "deleteFiles": "同时删除已下载完成的文件"
+    },
+    "speed": {
+      "title": "全局限速",
+      "label": "所有任务合计的最高下载速度",
+      "placeholder": "不限速",
+      "invalid": "无法识别，例如 500K、2M、1.5MB/s",
+      "empty": "留空表示不限速",
+      "perSecond": "每秒 {size}"
+    }
+  },
+  "quick": {
+    "fromBrowser": "来自 {browser} 的下载",
+    "fromAnyBrowser": "来自浏览器的下载",
+    "close": "关闭",
+    "closeTitle": "关闭（不下载）",
+    "fileName": "文件名",
+    "sizeUnknown": "大小未知",
+    "probing": "正在获取文件信息…",
+    "resumable": "支持断点续传",
+    "notResumable": "不支持断点续传",
+    "connectionsUsed": "将使用 {count} 个连接",
+    "attached": {
+      "both": "已附带 Cookie 与 Referer",
+      "cookie": "已附带 Cookie",
+      "referer": "已附带 Referer"
+    },
+    "saveTo": "保存到",
+    "browse": "浏览",
+    "pickDir": "选择保存位置",
+    "connections": "连接数",
+    "limit": "限速",
+    "limitPlaceholder": "不限",
+    "limitHint": "例如 500K、2M；留空不限速",
+    "remember": "{site} 的下载以后不再询问，直接按这里的设置开始",
+    "rememberAnySite": "这个网站的下载以后不再询问，直接按这里的设置开始",
+    "keyStart": "开始",
+    "keyLater": "稍后",
+    "useBrowser": "改用浏览器下载",
+    "later": "稍后下载",
+    "start": "开始下载"
+  }
+}

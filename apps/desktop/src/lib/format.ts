@@ -1,4 +1,7 @@
-// Numbers for people: sizes, speeds, durations, times. Chinese wording until i18n (Phase 5).
+// Numbers for people: sizes, speeds, durations, times, in the UI language (`format` in
+// locales/*/app.json; dates through Intl).
+
+import i18n from '../i18n';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
@@ -26,17 +29,17 @@ export function speed(bps: number | null | undefined): string {
   return bps == null ? '—' : `${bytes(bps)}/s`;
 }
 
-/** `47 秒`, `3 分 5 秒`, `2 小时 3 分`, `4 天 2 小时`. */
+/** `47 秒`, `3 分 5 秒`, `2 小时 3 分`, `4 天 2 小时` (in the UI language). */
 export function duration(secs: number | null | undefined): string {
   if (secs == null || !Number.isFinite(secs) || secs < 0) return '—';
   const s = Math.round(secs);
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return i18n.t('format.s', { s });
   const m = Math.floor(s / 60);
-  if (m < 60) return s % 60 ? `${m} 分 ${s % 60} 秒` : `${m} 分`;
+  if (m < 60) return s % 60 ? i18n.t('format.ms', { m, s: s % 60 }) : i18n.t('format.m', { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h} 小时 ${m % 60} 分` : `${h} 小时`;
+  if (h < 24) return m % 60 ? i18n.t('format.hm', { h, m: m % 60 }) : i18n.t('format.h', { h });
   const d = Math.floor(h / 24);
-  return h % 24 ? `${d} 天 ${h % 24} 小时` : `${d} 天`;
+  return h % 24 ? i18n.t('format.dh', { d, h: h % 24 }) : i18n.t('format.d', { d });
 }
 
 /** Whole percent, never 100 before the end. */
@@ -49,7 +52,7 @@ export function ratio(done: number, total: number | null): number {
   return total ? Math.min(1, done / total) : 0;
 }
 
-/** `10:42` today, `昨天 10:42`, `11月3日`, `2025年11月3日`. */
+/** `10:42` today, `昨天 10:42`, `11月3日`, `2025年11月3日` (dates in the UI language). */
 export function when(ms: number | null | undefined, now = Date.now()): string {
   if (ms == null) return '—';
   const d = new Date(ms);
@@ -59,10 +62,14 @@ export function when(ms: number | null | undefined, now = Date.now()): string {
   if (sameDay(d, today)) return hm;
   const y = new Date(today);
   y.setDate(y.getDate() - 1);
-  if (sameDay(d, y)) return `昨天 ${hm}`;
-  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
-  return d.getFullYear() === today.getFullYear() ? md : `${d.getFullYear()}年${md}`;
+  if (sameDay(d, y)) return i18n.t('format.yesterday', { time: hm });
+  const lang = i18n.language || 'zh-CN';
+  const opts: Intl.DateTimeFormatOptions = d.getFullYear() === today.getFullYear() ? { month: 'long', day: 'numeric' } : { year: 'numeric', month: 'long', day: 'numeric' };
+  return new Intl.DateTimeFormat(lang, opts).format(d);
 }
+
+/** Words that mean "no limit" in a speed field, in any of the UI languages. */
+const UNLIMITED = ['不限', '不限速', '無限制', '不限制', 'unlimited', 'none', '無制限', 'なし'];
 
 /**
  * A speed typed by the user: `500` (KB/s), `500K`, `2M`, `1.5 MB/s`, `1g`. Empty is unlimited
@@ -70,7 +77,7 @@ export function when(ms: number | null | undefined, now = Date.now()): string {
  */
 export function parseSpeed(input: string): number | null | undefined {
   const s = input.trim().toLowerCase().replace(/\s+/g, '').replace(/\/s$/, '').replace(/ps$/, '');
-  if (!s || s === '0' || s === '不限' || s === '不限速') return null;
+  if (!s || s === '0' || UNLIMITED.includes(s)) return null;
   const m = /^(\d+(?:\.\d+)?)([kmg]?)(?:i?b)?$/.exec(s);
   if (!m) return undefined;
   const n = Number(m[1]);

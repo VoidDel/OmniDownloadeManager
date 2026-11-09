@@ -4,7 +4,8 @@ import './styles/app.css';
 
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
@@ -31,9 +32,20 @@ void useApp
   .getState()
   .boot(platform)
   .then((background) => {
-    createRoot(document.getElementById('root')!).render(<StrictMode>{quick ? <QuickApp /> : <App platform={platform} />}</StrictMode>);
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <Language>{quick ? <QuickApp /> : <App platform={platform} />}</Language>
+      </StrictMode>,
+    );
     // The main window is created hidden; it shows once the first frame is painted (no white
     // flash), unless the browser bridge started the app in the background. Quick-download
     // windows show themselves once they have their request.
     if (isTauri() && !quick && !background) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
   });
+
+/** Draws everything again when the language changes: texts made outside components (status,
+ *  errors, sizes) follow too. The app's state lives in the store, so nothing is lost. */
+function Language({ children }: { children: ReactNode }) {
+  const { i18n } = useTranslation();
+  return <div key={i18n.language} style={{ display: 'contents' }}>{children}</div>;
+}

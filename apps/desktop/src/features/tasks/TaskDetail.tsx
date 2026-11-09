@@ -3,6 +3,7 @@
 // trackers instead of segments. Actions at the bottom follow its state.
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
 import { Tabs } from '../../components/ui';
@@ -66,6 +67,7 @@ function useDetail(id: string, running: boolean, status: Task['status'], every: 
 
 /** Speed over the last two minutes. */
 function SpeedChart({ id, speed }: { id: string; speed: number }) {
+  const { t } = useTranslation();
   const h = speedHistory(id);
   if (h.length < 2) return null;
   const max = Math.max(...h, 1);
@@ -74,10 +76,10 @@ function SpeedChart({ id, speed }: { id: string; speed: number }) {
   return (
     <div>
       <div className="det-head">
-        <span>速度 · 近 2 分钟</span>
+        <span>{t('detail.chart.title')}</span>
         <span className="num">{fmt.speed(speed)}</span>
       </div>
-      <svg className="spark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="最近两分钟的下载速度">
+      <svg className="spark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label={t('detail.chart.label')}>
         <polygon points={`0,56 ${pts.join(' ')} 300,56`} fill="var(--accent)" opacity=".14" />
         <polyline points={pts.join(' ')} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
@@ -92,47 +94,51 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
   const running = t.status === 'downloading' || t.status === 'probing';
   const bt = t.kind === 'torrent';
   const fill = blockFill(segments, t.totalBytes, t.status === 'completed');
+  const { t: tr } = useTranslation();
   return (
     <>
       <dl className="det-dl">
-        <dt>大小</dt>
+        <dt>{tr('detail.overview.size')}</dt>
         <dd className="num">{fmt.bytes(t.totalBytes)}</dd>
-        <dt>已下载</dt>
+        <dt>{tr('detail.overview.downloaded')}</dt>
         <dd className="num">
           {fmt.bytes(t.status === 'completed' ? t.totalBytes : t.downloadedBytes)}
           {t.totalBytes ? ` · ${t.status === 'completed' ? '100%' : fmt.percent(t.downloadedBytes, t.totalBytes)}` : ''}
         </dd>
         {running && (
           <>
-            <dt>速度</dt>
+            <dt>{tr('detail.overview.speed')}</dt>
             <dd className="num">{fmt.speed(t.speedBps)}</dd>
-            <dt>剩余时间</dt>
+            <dt>{tr('detail.overview.eta')}</dt>
             <dd className="num">{fmt.duration(t.etaSecs)}</dd>
-            <dt>{bt ? '节点' : '连接'}</dt>
-            <dd>{t.connections ? `${t.connections} 个${bt ? '节点' : '连接'}` : '—'}</dd>
+            <dt>{tr(bt ? 'detail.overview.peers' : 'detail.overview.connections')}</dt>
+            <dd>{t.connections ? tr(bt ? 'detail.overview.peerCount' : 'detail.overview.connectionCount', { count: t.connections }) : '—'}</dd>
           </>
         )}
         {bt && (
           <>
             {t.status === 'seeding' && (
               <>
-                <dt>上传速度</dt>
+                <dt>{tr('detail.overview.uploadSpeed')}</dt>
                 <dd className="num">{fmt.speed(t.uploadSpeedBps)}</dd>
-                <dt>节点</dt>
-                <dd>{t.connections ? `${t.connections} 个节点` : '—'}</dd>
+                <dt>{tr('detail.overview.peers')}</dt>
+                <dd>{t.connections ? tr('detail.overview.peerCount', { count: t.connections }) : '—'}</dd>
               </>
             )}
-            <dt>已上传</dt>
-            <dd className="num">
-              {fmt.bytes(t.uploadedBytes)} · 分享率 {ratio(t)}
-            </dd>
+            <dt>{tr('detail.overview.uploaded')}</dt>
+            <dd className="num">{tr('detail.overview.uploadedValue', { size: fmt.bytes(t.uploadedBytes), ratio: ratio(t) })}</dd>
             {torrent && (
               <>
-                <dt>文件</dt>
+                <dt>{tr('detail.overview.files')}</dt>
                 <dd>
-                  {torrent.files.filter((f) => f.selected).length} / {torrent.files.length} 个 · {torrent.pieces} 块 × {fmt.bytes(torrent.pieceSize)}
+                  {tr('detail.overview.filesValue', {
+                    selected: torrent.files.filter((f) => f.selected).length,
+                    count: torrent.files.length,
+                    pieces: torrent.pieces,
+                    pieceSize: fmt.bytes(torrent.pieceSize),
+                  })}
                 </dd>
-                <dt>特征码</dt>
+                <dt>{tr('detail.overview.infoHash')}</dt>
                 <dd className="mono path">{torrent.infoHash}</dd>
               </>
             )}
@@ -140,21 +146,21 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
         )}
         {!bt && (
           <>
-            <dt>断点续传</dt>
-            <dd>{t.startedAt == null ? '开始后确定' : t.resumable ? '支持' : '不支持（暂停后需要重新下载）'}</dd>
+            <dt>{tr('detail.overview.resume')}</dt>
+            <dd>{tr(t.startedAt == null ? 'detail.overview.resumeUnknown' : t.resumable ? 'detail.overview.resumeYes' : 'detail.overview.resumeNo')}</dd>
           </>
         )}
-        <dt>添加时间</dt>
+        <dt>{tr('detail.overview.added')}</dt>
         <dd>{fmt.when(t.createdAt)}</dd>
         {t.completedAt != null && (
           <>
-            <dt>完成时间</dt>
+            <dt>{tr('detail.overview.completed')}</dt>
             <dd>{fmt.when(t.completedAt)}</dd>
           </>
         )}
-        <dt>保存到</dt>
+        <dt>{tr('detail.overview.saveTo')}</dt>
         <dd className="mono path">{t.saveDir}</dd>
-        <dt>链接</dt>
+        <dt>{tr('detail.overview.link')}</dt>
         <dd className="mono path">{t.source}</dd>
       </dl>
       {t.error && (
@@ -169,8 +175,8 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
       {!bt && t.totalBytes != null && t.totalBytes > 0 && (
         <div>
           <div className="det-head">
-            <span>分片进度</span>
-            <span className="muted">{segments.length ? `${segments.length} 个分片` : ''}</span>
+            <span>{tr('detail.overview.segmentProgress')}</span>
+            <span className="muted">{segments.length ? tr('detail.overview.segmentCount', { count: segments.length }) : ''}</span>
           </div>
           <div className="blocks" aria-hidden="true">
             {fill.map((f, i) => (
@@ -185,15 +191,16 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
 }
 
 function Segments({ t, segments }: { t: Task; segments: SegmentView[] }) {
+  const { t: tr } = useTranslation();
   const fill = blockFill(segments, t.totalBytes, t.status === 'completed');
-  if (t.status === 'completed') return <p className="muted det-note">下载已完成，分片已合并为完整文件。</p>;
-  if (!segments.length) return <p className="muted det-note">{t.startedAt == null ? '开始下载后显示分片。' : '没有分片信息。'}</p>;
+  if (t.status === 'completed') return <p className="muted det-note">{tr('detail.segments.merged')}</p>;
+  if (!segments.length) return <p className="muted det-note">{tr(t.startedAt == null ? 'detail.segments.notStarted' : 'detail.segments.none')}</p>;
   return (
     <>
       <div>
         <div className="det-head">
-          <span>分片地图</span>
-          <span className="muted">{segments.filter((s) => s.active).length} 个连接工作中</span>
+          <span>{tr('detail.segments.map')}</span>
+          <span className="muted">{tr('detail.segments.active', { count: segments.filter((s) => s.active).length })}</span>
         </div>
         <div className="blockmap" aria-hidden="true">
           {fill.map((f, i) => (
@@ -203,21 +210,21 @@ function Segments({ t, segments }: { t: Task; segments: SegmentView[] }) {
         <div className="legend">
           <span>
             <i style={{ background: 'var(--accent)' }} />
-            已完成
+            {tr('detail.segments.done')}
           </span>
           <span>
             <i style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
-            部分完成
+            {tr('detail.segments.partial')}
           </span>
           <span>
             <i style={{ background: 'var(--bg-pressed)' }} />
-            未开始
+            {tr('detail.segments.pending')}
           </span>
         </div>
       </div>
       <div>
         <div className="det-head">
-          <span>分片</span>
+          <span>{tr('detail.segments.title')}</span>
         </div>
         <div className="seglist">
           {segments.map((s, i) => {
@@ -247,7 +254,8 @@ function Segments({ t, segments }: { t: Task; segments: SegmentView[] }) {
 function Files({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
   const run = useApp((s) => s.run);
   const [pending, setPending] = useState<Set<number> | null>(null);
-  if (!torrent) return <p className="muted det-note">{t.startedAt == null ? '获取到种子信息后显示文件。' : '没有文件信息。'}</p>;
+  const { t: tr } = useTranslation();
+  if (!torrent) return <p className="muted det-note">{tr(t.startedAt == null ? 'detail.files.pending' : 'detail.files.none')}</p>;
   const editable = ['queued', 'probing', 'downloading', 'paused', 'failed'].includes(t.status);
   const selected = pending ?? new Set(torrent.files.filter((f) => f.selected).map((f) => f.index));
   const choose = (next: Set<number>) => {
@@ -260,20 +268,21 @@ function Files({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
 /** Connected peers and the trackers. */
 function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
   const live = t.status === 'downloading' || t.status === 'seeding';
+  const { t: tr } = useTranslation();
   return (
     <>
       <div>
         <div className="det-head">
-          <span>节点</span>
-          <span className="muted">{live && torrent ? `已连接 ${torrent.peers.length} · 已发现 ${torrent.peersSeen}` : ''}</span>
+          <span>{tr('detail.peers.title')}</span>
+          <span className="muted">{live && torrent ? tr('detail.peers.stats', { connected: torrent.peers.length, seen: torrent.peersSeen }) : ''}</span>
         </div>
         {!live || !torrent?.peers.length ? (
-          <p className="muted det-note">{live ? '正在寻找节点…' : '任务运行时显示连接的节点。'}</p>
+          <p className="muted det-note">{tr(live ? 'detail.peers.searching' : 'detail.peers.idle')}</p>
         ) : (
-          <div className="peers" role="table" aria-label="节点">
+          <div className="peers" role="table" aria-label={tr('detail.peers.title')}>
             <div role="row" className="peer head">
-              <span role="columnheader">地址</span>
-              <span role="columnheader">客户端</span>
+              <span role="columnheader">{tr('detail.peers.address')}</span>
+              <span role="columnheader">{tr('detail.peers.client')}</span>
               <span role="columnheader" className="num">
                 ↓
               </span>
@@ -302,8 +311,8 @@ function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
       </div>
       <div>
         <div className="det-head">
-          <span>Tracker</span>
-          <span className="muted">{torrent ? `${torrent.trackers.length} 个` : ''}</span>
+          <span>{tr('detail.trackers.title')}</span>
+          <span className="muted">{torrent ? tr('detail.trackers.count', { count: torrent.trackers.length }) : ''}</span>
         </div>
         {torrent?.trackers.length ? (
           <ul className="trackers">
@@ -314,7 +323,7 @@ function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
             ))}
           </ul>
         ) : (
-          <p className="muted det-note">没有 Tracker，靠 DHT 与节点交换寻找节点。</p>
+          <p className="muted det-note">{tr('detail.trackers.none')}</p>
         )}
       </div>
     </>
@@ -324,22 +333,25 @@ function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
 /** The primary action for a task's state. */
 function Primary({ t }: { t: Task }) {
   const run = useApp((s) => s.run);
+  const { t: tr } = useTranslation();
   const [label, icon, act]: [string, 'pause' | 'play' | 'refresh' | 'external', () => Promise<unknown>] = (() => {
     switch (t.status) {
       case 'queued':
       case 'probing':
       case 'downloading':
-        return ['暂停', 'pause', () => api.pause([t.id])];
+        return [tr('detail.action.pause'), 'pause', () => api.pause([t.id])];
       case 'paused':
-        return ['继续', 'play', () => api.resume([t.id])];
+        return [tr('detail.action.resume'), 'play', () => api.resume([t.id])];
       case 'failed':
-        return t.error?.code === 'remote_changed' ? ['重新下载', 'refresh', () => api.restart([t.id])] : ['重试', 'refresh', () => api.resume([t.id])];
+        return t.error?.code === 'remote_changed'
+          ? [tr('detail.action.redownload'), 'refresh', () => api.restart([t.id])]
+          : [tr('detail.action.retry'), 'refresh', () => api.resume([t.id])];
       case 'seeding':
-        return ['停止做种', 'pause', () => api.pause([t.id])];
+        return [tr('detail.action.stopSeeding'), 'pause', () => api.pause([t.id])];
       case 'completed':
-        return ['打开文件', 'external', () => api.open(t.id)];
+        return [tr('detail.action.openFile'), 'external', () => api.open(t.id)];
       default:
-        return ['还原', 'refresh', () => api.restore([t.id])];
+        return [tr('detail.action.restore'), 'refresh', () => api.restore([t.id])];
     }
   })();
   return (
@@ -357,6 +369,7 @@ export function TaskDetail({ id }: { id: string }) {
   const run = useApp((s) => s.run);
   const toast = useApp((s) => s.toast);
   const [tab, setTab] = useState<Tab>('overview');
+  const { t: tr } = useTranslation();
   const bt = t?.kind === 'torrent';
   const running = t?.status === 'downloading' || t?.status === 'probing' || t?.status === 'seeding';
   const detail = useDetail(id, running, t?.status ?? 'queued', bt ? 1000 : 500);
@@ -366,20 +379,20 @@ export function TaskDetail({ id }: { id: string }) {
   const color = STATUS_COLOR[t.status];
   const tabs: [Tab, string][] = bt
     ? [
-        ['overview', '概览'],
-        ['files', '文件'],
-        ['peers', '节点'],
+        ['overview', tr('detail.tab.overview')],
+        ['files', tr('detail.tab.files')],
+        ['peers', tr('detail.tab.peers')],
       ]
     : [
-        ['overview', '概览'],
-        ['segments', '分片'],
+        ['overview', tr('detail.tab.overview')],
+        ['segments', tr('detail.tab.segments')],
       ];
   const shown = tabs.some(([k]) => k === tab) ? tab : 'overview';
   return (
-    <aside className="detail" aria-label="任务详情">
+    <aside className="detail" aria-label={tr('detail.label')}>
       <div className="det-top">
         <h2 title={t.fileName}>{t.fileName}</h2>
-        <button type="button" className="iconbtn" title="关闭详情" aria-label="关闭详情" onClick={closeDetail}>
+        <button type="button" className="iconbtn" title={tr('detail.close')} aria-label={tr('detail.close')} onClick={closeDetail}>
           <Icon name="x" />
         </button>
         {/* The same switch as the command bar's, in the same place: highlighted, the panel opens
@@ -388,8 +401,8 @@ export function TaskDetail({ id }: { id: string }) {
           type="button"
           className="iconbtn"
           aria-pressed={pinned}
-          title={pinned ? '取消固定：选中任务时不再自动显示详情' : '固定详情面板：选中任务时自动显示'}
-          aria-label="固定详情面板"
+          title={tr(pinned ? 'detail.unpinTip' : 'detail.pinTip')}
+          aria-label={tr('detail.pin')}
           onClick={() => setDetailPinned(!pinned)}
         >
           <Icon name="sidebar" />
@@ -408,7 +421,7 @@ export function TaskDetail({ id }: { id: string }) {
           </>
         )}
       </div>
-      <Tabs id="det" label="详情" value={shown} onChange={setTab} options={tabs} />
+      <Tabs id="det" label={tr('detail.tabs')} value={shown} onChange={setTab} options={tabs} />
       <div className="det-body">
         {shown === 'overview' && <Overview t={t} segments={segments} torrent={torrent} />}
         {shown === 'segments' && <Segments t={t} segments={segments} />}
@@ -419,14 +432,14 @@ export function TaskDetail({ id }: { id: string }) {
         <Primary t={t} />
         <button type="button" className="btn outline" onClick={() => void run(() => api.reveal(t.id))}>
           <Icon name="folderOpen" />
-          打开文件夹
+          {tr('detail.openFolder')}
         </button>
         <button
           type="button"
           className="iconbtn outline"
-          title="复制链接"
-          aria-label="复制链接"
-          onClick={() => void navigator.clipboard.writeText(t.source).then(() => toast('success', '已复制链接'))}
+          title={tr('detail.copyLink')}
+          aria-label={tr('detail.copyLink')}
+          onClick={() => void navigator.clipboard.writeText(t.source).then(() => toast('success', tr('detail.copied')))}
         >
           <Icon name="copy" />
         </button>

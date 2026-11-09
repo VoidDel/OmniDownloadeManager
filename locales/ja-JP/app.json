@@ -1,0 +1,529 @@
+{
+  "status": {
+    "queued": "待機中",
+    "probing": "接続中",
+    "downloading": "ダウンロード中",
+    "paused": "一時停止",
+    "seeding": "シード中",
+    "completed": "完了",
+    "failed": "失敗",
+    "removed": "削除済み",
+    "fetchingTorrent": "トレント情報を取得中"
+  },
+  "category": {
+    "video": "動画",
+    "audio": "音楽",
+    "document": "ドキュメント",
+    "archive": "アーカイブ",
+    "program": "プログラム",
+    "disk_image": "ディスクイメージ",
+    "image": "画像",
+    "other": "その他"
+  },
+  "errors": {
+    "invalid_url": "ダウンロードできるリンクではありません",
+    "unsupported": "この種類のダウンロードは今後のバージョンで対応予定です",
+    "network": "ネットワークに接続できませんでした",
+    "timeout": "接続がタイムアウトしました",
+    "tls": "安全な接続に失敗しました。証明書が無効です",
+    "http_status": "サーバーがエラー {status} を返しました",
+    "http_statusNoStatus": "サーバーがエラーを返しました",
+    "ftp_reply": "FTP サーバーが要求を拒否しました（{status}）",
+    "ftp_replyNoStatus": "FTP サーバーが要求を拒否しました",
+    "not_found": "サーバー上にこのファイルはありません",
+    "auth_required": "ログインまたは認証が必要です。アカウントまたはパスワードが正しくありません",
+    "forbidden": "サーバーがアクセスを拒否しました",
+    "remote_changed": "サーバー上のファイルが変更されたため、最初からダウンロードし直す必要があります",
+    "file_missing": "ファイルが見つからないか、読み取れません",
+    "disk_full": "ディスクの空き容量が不足しています",
+    "io": "ファイルの読み書きに失敗しました",
+    "internal": "内部エラーが発生しました"
+  },
+  "format": {
+    "s": "{s} 秒",
+    "ms": "{m} 分 {s} 秒",
+    "m": "{m} 分",
+    "hm": "{h} 時間 {m} 分",
+    "h": "{h} 時間",
+    "dh": "{d} 日 {h} 時間",
+    "d": "{d} 日",
+    "yesterday": "昨日 {time}"
+  },
+  "settings": {
+    "appearance": {
+      "accent": "アクセントカラー",
+      "accentTheme": "テーマ既定",
+      "accentSystem": "システム",
+      "accentCustom": "カスタム",
+      "material": "ウィンドウ素材",
+      "materialHint": "クイックダウンロード画面にも適用。macOS ではすりガラス",
+      "materialUnavailable": "このシステムでは利用できません",
+      "materialKinds": {
+        "off": "オフ",
+        "mica": "Mica",
+        "micaAlt": "Mica Alt",
+        "acrylic": "アクリル"
+      },
+      "mode": "外観",
+      "modes": {
+        "light": "ライト",
+        "dark": "ダーク",
+        "system": "システムに従う"
+      },
+      "lightTheme": "ライトテーマ",
+      "lightThemeHint": "外観がライトのとき、またはシステムに従いシステムがライトのときに使用します",
+      "darkTheme": "ダークテーマ",
+      "density": "リストの密度",
+      "densityHint": "タスク一覧の各行の高さ",
+      "densities": {
+        "compact": "コンパクト",
+        "comfortable": "標準",
+        "spacious": "ゆったり"
+      }
+    },
+    "language": {
+      "ui": "表示言語",
+      "auto": "システム（{lang}）"
+    },
+    "general": {
+      "version": "バージョン",
+      "logs": "ログ",
+      "openFolder": "フォルダーを開く"
+    },
+    "download": {
+      "folder": "既定のダウンロードフォルダー",
+      "folderPick": "既定のダウンロードフォルダーを選択",
+      "folderDefault": "システムの「ダウンロード」フォルダー",
+      "browse": "参照…",
+      "open": "開く",
+      "maxConcurrent": "同時にダウンロードするタスク数",
+      "maxConcurrentHint": "残りのタスクは順番を待ちます",
+      "connections": "タスクごとの接続数",
+      "connectionsHint": "サーバーが分割ダウンロードに対応している場合に同時に開く接続数です。新規ダウンロード時に個別に設定できます",
+      "conflict": "ファイルが既に存在する場合",
+      "conflictRename": "自動で名前を変更",
+      "conflictOverwrite": "上書き",
+      "resumeOnStartup": "起動時に未完了のダウンロードを再開",
+      "resumeOnStartupHint": "終了時にダウンロード中だったタスクを、次回の起動後に自動で再開します",
+      "syncWrites": "進捗を毎秒ディスクに書き込む",
+      "syncWritesHint": "停電やシステムのクラッシュ後も正確な位置から再開できます。オフにするとディスクへの書き込みを減らせます"
+    },
+    "network": {
+      "proxy": "プロキシ",
+      "proxyHint": "HTTP ダウンロードに使う HTTP、HTTPS、SOCKS5 プロキシ。socks5h:// ではプロキシ側でドメイン名を解決します",
+      "proxyModes": {
+        "system": "システムのプロキシ",
+        "none": "使用しない",
+        "custom": "カスタム"
+      },
+      "proxyUrl": "プロキシのアドレス",
+      "userAgentHint": "既定ではデスクトップ版 Chrome の識別子を使用します。見慣れないクライアントを拒否するサイトもあります",
+      "resetDefault": "既定に戻す",
+      "connectTimeout": "接続タイムアウト",
+      "readTimeout": "無応答タイムアウト",
+      "readTimeoutHint": "この時間データを受信できない場合は切断して再接続します",
+      "retries": "失敗時の再試行回数",
+      "retriesHint": "ネットワークエラーやサーバーの 5xx エラー時に、接続ごとに 1、2、4… 秒の間隔で再試行します",
+      "seconds": "{n} 秒",
+      "times": "{n} 回",
+      "ftpSessions": "FTP セッション数",
+      "ftpSessionsHint": "FTP タスクごとに同時にログインするセッション数です。多くのサーバーはユーザーごとの接続数を制限しています",
+      "ftpMode": "FTP 転送モード",
+      "ftpModeHint": "ほとんどのネットワークではパッシブモードが適しています。アクティブモードではサーバーからこのコンピューターに接続できる必要があります",
+      "ftpPassive": "パッシブ",
+      "ftpActive": "アクティブ"
+    },
+    "torrent": {
+      "seeding": "ダウンロード完了後にシードする",
+      "seedingHint": "ほかのダウンロード参加者にファイルをアップロードし続けます。シード中のタスクを一時停止すると止まります",
+      "seedRatio": "共有比がこの値に達したら停止",
+      "seedRatioHint": "アップロード量がファイルサイズのこの倍数に達したとき",
+      "seedTime": "シード時間",
+      "seedTimeHint": "ダウンロード完了時から数えます。共有比と先に達した方で停止します",
+      "uploadLimit": "アップロード速度制限",
+      "uploadLimitHint": "すべての BT タスクの合計",
+      "unlimited": "無制限",
+      "hours": "{n} 時間",
+      "days": "{n} 日",
+      "weeks": "{n} 週間",
+      "port": "待ち受けポート",
+      "portHint": "ほかのピアが接続してくるポートです。0 にするとシステムが選択します。アプリの再起動後に有効になります",
+      "dht": "DHT ネットワーク",
+      "dhtHint": "Tracker がないときにピアを探すために使います。ほとんどのマグネットリンクで必要です。アプリの再起動後に有効になります",
+      "upnp": "UPnP ポートマッピング",
+      "upnpHint": "ルーターに待ち受けポートの転送を依頼し、より多くのピアが接続できるようにします。アプリの再起動後に有効になります",
+      "magnet": "マグネットリンク",
+      "magnetSet": "マグネットリンクを開くアプリに設定済み",
+      "magnetHintInstalled": "インストール版のアプリはマグネットリンクとトレントファイルを自動で関連付けます",
+      "magnetHint": "ブラウザーで magnet: リンクをクリックしたときに Omni Download で開きます",
+      "magnetRegistered": "関連付け済み",
+      "magnetReregister": "再度関連付け",
+      "magnetRegister": "既定のアプリに設定"
+    },
+    "browser": {
+      "state": {
+        "connected": "接続済み · {when}",
+        "ready": "準備完了",
+        "otherInstall": "別のインストールを指しています",
+        "unregistered": "未登録",
+        "notInstalled": "未インストール"
+      },
+      "extension": "ブラウザー拡張機能",
+      "extensionHint": "Omni Download 拡張機能をインストールすると、ブラウザーでダウンロードをクリックしたときに自動で Omni Download に引き渡されます。",
+      "hostMissing": "ブラウザー通信プログラム omnidl-nm-host が見つかりません。Omni Download を再インストールしてください。",
+      "repaired": "ブラウザー通信の設定を書き込み直しました",
+      "repair": "通信設定を書き込み直す",
+      "bridge": "ローカル通信",
+      "bridgeBusy": "別の Omni Download がブラウザー通信を使用中のため、このウィンドウではブラウザーからのダウンロードを受け取れません。",
+      "unavailable": "利用不可",
+      "quickDialog": "引き継ぐ前に確認",
+      "quickDialogHint": "ブラウザーからダウンロードを受け取ったとき、まず小さなウィンドウでファイル名と保存先を確認します",
+      "silentSites": "確認しないサイト",
+      "silentSitesHint": "これらのサイトのダウンロードはすぐに開始します。× をクリックすると確認するように戻ります",
+      "silentSitesEmpty": "確認ウィンドウで「今後確認しない」をオンにしたサイトがここに表示されます",
+      "silentSiteRemove": "{site} で確認を再開",
+      "httpBridge": "代替チャネル",
+      "httpBridgeHint": "Snap、Flatpak などローカル通信を使えないブラウザーでは、ローカルの HTTP インターフェイスを使います。拡張機能のオプションでペアリングコードの入力が必要です",
+      "pairingCode": "ペアリングコード",
+      "pairingCodeHint": "このコンピューターでのみ有効です。再生成すると、ペアリング済みの拡張機能で入力し直す必要があります",
+      "copied": "ペアリングコードをコピーしました",
+      "copy": "コピー",
+      "regenerate": "再生成"
+    }
+  },
+  "shell": {
+    "settings": "設定",
+    "taskCount": "{count} 件のタスク",
+    "paste": "ダウンロードリンクを貼り付け",
+    "filters": {
+      "all": "すべてのタスク",
+      "active": "進行中",
+      "done": "完了",
+      "torrent": "トレント",
+      "failed": "失敗",
+      "trash": "ごみ箱"
+    },
+    "settingsTabs": {
+      "general": "一般",
+      "download": "ダウンロード",
+      "network": "ネットワーク",
+      "torrent": "BT",
+      "browser": "ブラウザー"
+    },
+    "window": {
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "元に戻す",
+      "close": "閉じる"
+    },
+    "theme": {
+      "title": "外観",
+      "light": "ライト",
+      "dark": "ダーク",
+      "system": "システムに従う"
+    },
+    "summary": {
+      "title": "進行中のタスクを表示",
+      "running": "{count} 件をダウンロード中"
+    },
+    "sidebar": {
+      "filters": "タスクの絞り込み",
+      "categories": "カテゴリ"
+    },
+    "speedLimit": {
+      "title": "全体のダウンロード速度制限",
+      "unlimited": "無制限",
+      "limited": "制限 {speed}",
+      "custom": "カスタム…",
+      "customValue": "カスタム（{speed}）"
+    },
+    "sort": {
+      "added": "追加日時順",
+      "name": "名前順",
+      "size": "サイズ順",
+      "progress": "進捗順",
+      "speed": "速度順",
+      "status": "状態順"
+    },
+    "cmd": {
+      "newDownload": "新規ダウンロード",
+      "start": "開始",
+      "pause": "一時停止",
+      "delete": "削除",
+      "openFolder": "フォルダーを開く",
+      "startAll": "すべて開始",
+      "pauseAll": "すべて一時停止",
+      "restore": "元に戻す",
+      "purge": "完全に削除",
+      "emptyTrash": "ごみ箱を空にする",
+      "detailPanel": "詳細パネル",
+      "showDetail": "詳細を表示",
+      "detailPinned": "詳細パネルは固定されています。タスクを選択すると自動で表示されます（クリックで解除）"
+    },
+    "status": {
+      "running": "ダウンロード中 {count}",
+      "waiting": "待機 {count}",
+      "seeding": "シード {count}",
+      "selected": "選択 {count}",
+      "downloadSpeed": "ダウンロード速度",
+      "uploadSpeed": "アップロード速度（シード中とダウンロード中のトレント）",
+      "extensionConnected": "ブラウザー拡張機能に接続済み",
+      "browsersConnected": "{names} に接続済み",
+      "listSeparator": "、"
+    }
+  },
+  "empty": {
+    "all": {
+      "title": "ダウンロードタスクはまだありません",
+      "hint": "上の欄にダウンロードリンクを貼り付けるか、「新規ダウンロード」をクリックしてください。"
+    },
+    "active": {
+      "title": "進行中のタスクはありません",
+      "hint": "ダウンロード中・待機中・一時停止中のタスクがここに表示されます。"
+    },
+    "done": {
+      "title": "完了したタスクはまだありません",
+      "hint": "ダウンロードが完了したファイルがここに表示されます。ダブルクリックで開けます。"
+    },
+    "torrent": {
+      "title": "トレントタスクはまだありません",
+      "hint": "マグネットリンクを貼り付けるか、トレントファイルを開くか、.torrent ファイルをウィンドウにドラッグしてください。"
+    },
+    "failed": {
+      "title": "失敗したタスクはありません",
+      "hint": "エラーが発生したタスクがここに表示され、再試行できます。"
+    },
+    "trash": {
+      "title": "ごみ箱は空です",
+      "hint": "削除したタスクはいったんここに移動し、元に戻すことができます。"
+    },
+    "category": {
+      "title": "このカテゴリにはまだタスクがありません",
+      "hint": "ダウンロードしたファイルは拡張子によって自動で分類されます。"
+    }
+  },
+  "fileTree": {
+    "all": "すべてのファイル",
+    "chosen": "{chosen} / {count} ファイルを選択 · {size}"
+  },
+  "detail": {
+    "label": "タスクの詳細",
+    "close": "詳細を閉じる",
+    "pin": "詳細パネルを固定",
+    "pinTip": "詳細パネルを固定：タスクを選択すると自動で表示",
+    "unpinTip": "固定を解除：タスクを選択しても詳細を自動で表示しない",
+    "tabs": "詳細",
+    "openFolder": "フォルダーを開く",
+    "copyLink": "リンクをコピー",
+    "copied": "リンクをコピーしました",
+    "tab": {
+      "overview": "概要",
+      "files": "ファイル",
+      "peers": "ピア",
+      "segments": "セグメント"
+    },
+    "chart": {
+      "title": "速度 · 直近 2 分",
+      "label": "直近 2 分間のダウンロード速度"
+    },
+    "overview": {
+      "size": "サイズ",
+      "downloaded": "ダウンロード済み",
+      "speed": "速度",
+      "eta": "残り時間",
+      "connections": "接続",
+      "connectionCount": "{count} 接続",
+      "peers": "ピア",
+      "peerCount": "{count} ピア",
+      "uploadSpeed": "アップロード速度",
+      "uploaded": "アップロード済み",
+      "uploadedValue": "{size} · 共有比 {ratio}",
+      "files": "ファイル",
+      "filesValue": "{selected} / {count} 個 · {pieces} ピース × {pieceSize}",
+      "infoHash": "情報ハッシュ",
+      "resume": "レジューム",
+      "resumeUnknown": "開始後に判明",
+      "resumeYes": "対応",
+      "resumeNo": "非対応（一時停止すると最初からダウンロードし直し）",
+      "added": "追加日時",
+      "completed": "完了日時",
+      "saveTo": "保存先",
+      "link": "リンク",
+      "segmentProgress": "セグメントの進捗",
+      "segmentCount": "{count} セグメント"
+    },
+    "segments": {
+      "merged": "ダウンロードが完了し、セグメントは 1 つのファイルに結合されました。",
+      "notStarted": "ダウンロードを開始するとセグメントが表示されます。",
+      "none": "セグメント情報はありません。",
+      "map": "セグメントマップ",
+      "active": "{count} 接続が動作中",
+      "done": "完了",
+      "partial": "一部完了",
+      "pending": "未開始",
+      "title": "セグメント"
+    },
+    "files": {
+      "pending": "トレント情報を取得するとファイルが表示されます。",
+      "none": "ファイル情報はありません。"
+    },
+    "peers": {
+      "title": "ピア",
+      "stats": "接続済み {connected} · 検出済み {seen}",
+      "searching": "ピアを探しています…",
+      "idle": "タスクの実行中は接続中のピアが表示されます。",
+      "address": "アドレス",
+      "client": "クライアント"
+    },
+    "trackers": {
+      "title": "トラッカー",
+      "count": "{count} 個",
+      "none": "トラッカーがないため、DHT とピア交換でピアを探します。"
+    },
+    "action": {
+      "pause": "一時停止",
+      "resume": "再開",
+      "redownload": "再ダウンロード",
+      "retry": "再試行",
+      "stopSeeding": "シードを停止",
+      "openFile": "ファイルを開く",
+      "restore": "元に戻す"
+    }
+  },
+  "table": {
+    "label": "ダウンロードタスク",
+    "column": {
+      "name": "名前",
+      "progress": "進捗",
+      "size": "サイズ",
+      "speed": "速度",
+      "eta": "残り",
+      "status": "状態"
+    },
+    "menu": {
+      "details": "詳細",
+      "restore": "元に戻す",
+      "purge": "完全に削除…",
+      "open": "開く",
+      "start": "開始",
+      "pause": "一時停止",
+      "stopSeeding": "シードを停止",
+      "redownload": "再ダウンロード",
+      "openFolder": "フォルダーを開く",
+      "copyLink": "リンクをコピー",
+      "copied": "リンクをコピーしました",
+      "copiedMany": "{count} 件のリンクをコピーしました",
+      "delete": "削除"
+    }
+  },
+  "newTask": {
+    "title": "新規ダウンロード",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "add": "追加",
+    "addAndStart": "追加して開始",
+    "summary": "{count} 件のタスク",
+    "addedMany": "{count} 件のタスクを追加しました",
+    "addedOne": "{name} を追加しました",
+    "links": "リンク",
+    "linksPlaceholder": "https://example.com/file.zip または magnet:?xt=…",
+    "linksHint": "1 行に 1 つ：HTTP・FTP のリンク、マグネットリンク、またはトレントファイルのパス。",
+    "openTorrents": "トレントファイルを開く",
+    "pickTorrents": "トレントファイルを選択",
+    "pickDir": "保存先を選択",
+    "fileName": "ファイル名",
+    "fileNamePlaceholder": "サーバーが提供する名前",
+    "saveTo": "保存先",
+    "browse": "参照…",
+    "connections": "接続数",
+    "limit": "速度制限",
+    "limitPlaceholder": "無制限",
+    "limitHint": "例：500K、2M。空欄にすると無制限",
+    "ftpAccount": "FTP アカウント",
+    "ftpAnonymous": "空欄にすると匿名ログイン",
+    "password": "パスワード",
+    "showPassword": "パスワードを表示",
+    "transferMode": "転送モード",
+    "followSettings": "設定に従う",
+    "ftpPassive": "パッシブ",
+    "ftpActive": "アクティブ",
+    "insecureTls": "検証されていない証明書を許可",
+    "advanced": "詳細",
+    "advancedSummary": "Referer · Cookie · User-Agent · プロキシ",
+    "proxy": "プロキシ",
+    "proxySystem": "システムのプロキシ",
+    "proxyNone": "プロキシを使用しない",
+    "proxyCustom": "カスタム",
+    "proxyUrl": "プロキシのアドレス",
+    "startNow": "追加後すぐに開始",
+    "badge": {
+      "magnet": "マグネット",
+      "torrent": "トレント"
+    },
+    "row": {
+      "unsupported": "この種類のリンクにはまだ対応していないため、この行は追加されません",
+      "later": "ダウンロード開始時にファイル情報を取得します",
+      "probingMagnet": "ピアからトレント情報を取得しています…",
+      "probing": "ファイル情報を取得しています…",
+      "probeFailed": "{error}。追加は可能で、開始時に再試行します",
+      "sizeUnknown": "サイズ不明",
+      "files": "{count} ファイル",
+      "singleFile": "単一ファイル",
+      "resumable": "レジューム対応",
+      "notResumable": "レジューム非対応",
+      "connections": "{count} 接続を使用",
+      "sessions": "{count} セッションを使用"
+    }
+  },
+  "dialogs": {
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "ok": "OK",
+    "purge": {
+      "titleMany": "{count} 件のタスクを完全に削除しますか？",
+      "titleOne": "このタスクを完全に削除しますか？",
+      "confirm": "完全に削除",
+      "text": "タスクの記録と未完了の一時ファイルが削除されます。元に戻すことはできません。",
+      "deleteFiles": "ダウンロード済みのファイルも削除する"
+    },
+    "speed": {
+      "title": "全体の速度制限",
+      "label": "すべてのタスク合計の最大ダウンロード速度",
+      "placeholder": "無制限",
+      "invalid": "認識できません。例：500K、2M、1.5MB/s",
+      "empty": "空欄にすると無制限",
+      "perSecond": "毎秒 {size}"
+    }
+  },
+  "quick": {
+    "fromBrowser": "{browser} からのダウンロード",
+    "fromAnyBrowser": "ブラウザーからのダウンロード",
+    "close": "閉じる",
+    "closeTitle": "閉じる（ダウンロードしない）",
+    "fileName": "ファイル名",
+    "sizeUnknown": "サイズ不明",
+    "probing": "ファイル情報を取得しています…",
+    "resumable": "レジューム対応",
+    "notResumable": "レジューム非対応",
+    "connectionsUsed": "{count} 接続を使用",
+    "attached": {
+      "both": "Cookie と Referer を添付済み",
+      "cookie": "Cookie を添付済み",
+      "referer": "Referer を添付済み"
+    },
+    "saveTo": "保存先",
+    "browse": "参照…",
+    "pickDir": "保存先を選択",
+    "connections": "接続数",
+    "limit": "速度制限",
+    "limitPlaceholder": "無制限",
+    "limitHint": "例：500K、2M。空欄にすると無制限",
+    "remember": "{site} のダウンロードは今後確認せず、この設定ですぐに開始する",
+    "rememberAnySite": "このサイトのダウンロードは今後確認せず、この設定ですぐに開始する",
+    "keyStart": "開始",
+    "keyLater": "後で",
+    "useBrowser": "ブラウザーでダウンロード",
+    "later": "後でダウンロード",
+    "start": "ダウンロード開始"
+  }
+}

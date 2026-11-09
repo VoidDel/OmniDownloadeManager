@@ -6,14 +6,28 @@ use std::{io, path::Path};
 use omnidl_core::EngineConfig;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
+    /// UI language: `auto` (the system's) or `zh-CN`, `zh-TW`, `en-US`, `ja-JP`.
+    pub language: String,
     pub appearance: Appearance,
     /// Where new downloads go; empty: the system's Downloads folder.
     pub download_dir: String,
     pub engine: EngineConfig,
     pub browser: BrowserSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            language: "auto".into(),
+            appearance: Appearance::default(),
+            download_dir: String::new(),
+            engine: EngineConfig::default(),
+            browser: BrowserSettings::default(),
+        }
+    }
 }
 
 /// Browser integration (docs/development-plan.md §5, §6.3).
@@ -54,6 +68,12 @@ pub struct Appearance {
     pub dark_theme: String,
     /// `compact`, `comfortable` or `spacious`.
     pub density: String,
+    /// Window material (Mica, Acrylic, vibrancy) where the system has one.
+    pub material: bool,
+    /// Windows 11: `mica`, `mica-alt` or `acrylic` (macOS always uses vibrancy).
+    pub material_kind: String,
+    /// `theme` (the theme's own), `system` (the system's accent colour) or `#RRGGBB`.
+    pub accent: String,
 }
 
 impl Default for Appearance {
@@ -63,6 +83,9 @@ impl Default for Appearance {
             light_theme: "aurora".into(),
             dark_theme: "midnight".into(),
             density: "comfortable".into(),
+            material: true,
+            material_kind: "mica".into(),
+            accent: "theme".into(),
         }
     }
 }
@@ -107,6 +130,21 @@ impl Settings {
         }
         if !matches!(a.density.as_str(), "compact" | "comfortable" | "spacious") {
             a.density = "comfortable".into();
+        }
+        if !matches!(a.material_kind.as_str(), "mica" | "mica-alt" | "acrylic") {
+            a.material_kind = "mica".into();
+        }
+        let hex = a.accent.len() == 7
+            && a.accent.starts_with('#')
+            && a.accent[1..].chars().all(|c| c.is_ascii_hexdigit());
+        if !(hex || matches!(a.accent.as_str(), "theme" | "system")) {
+            a.accent = "theme".into();
+        }
+        if !matches!(
+            self.language.as_str(),
+            "auto" | "zh-CN" | "zh-TW" | "en-US" | "ja-JP"
+        ) {
+            self.language = "auto".into();
         }
         self
     }

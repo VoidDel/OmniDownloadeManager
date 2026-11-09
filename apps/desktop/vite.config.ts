@@ -15,6 +15,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@icons': fileURLToPath(new URL('../../icons', import.meta.url)),
+      '@locales': fileURLToPath(new URL('../../locales', import.meta.url)),
     },
   },
   server: {
@@ -33,5 +34,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    setupFiles: ['src/i18n/test-setup.ts'],
   },
 });

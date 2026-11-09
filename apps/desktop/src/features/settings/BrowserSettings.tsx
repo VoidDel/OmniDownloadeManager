@@ -3,6 +3,7 @@
 
 import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
 import { Switch } from '../../components/ui';
@@ -24,11 +25,12 @@ function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNod
 }
 
 function BrowserRow({ b, seen }: { b: BrowserState; seen?: number }) {
+  const { t } = useTranslation();
   let state: [string, string];
-  if (b.ours) state = ['ok', seen ? `已连接 · ${fmt.when(seen)}` : '已就绪'];
-  else if (b.registered) state = ['warn', '指向另一个安装'];
-  else if (b.detected) state = ['warn', '未注册'];
-  else state = ['off', '未安装'];
+  if (b.ours) state = ['ok', seen ? t('settings.browser.state.connected', { when: fmt.when(seen) }) : t('settings.browser.state.ready')];
+  else if (b.registered) state = ['warn', t('settings.browser.state.otherInstall')];
+  else if (b.detected) state = ['warn', t('settings.browser.state.unregistered')];
+  else state = ['off', t('settings.browser.state.notInstalled')];
   return (
     <Row label={b.name}>
       <span className={`bstate ${state[0]}`}>
@@ -42,6 +44,7 @@ function BrowserRow({ b, seen }: { b: BrowserState; seen?: number }) {
 export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => void }) {
   const run = useApp((st) => st.run);
   const toast = useApp((st) => st.toast);
+  const { t } = useTranslation();
   const [info, setInfo] = useState<Integration | null>(null);
   // Keeps the page's settings in step with what the backend changed (port, token).
   const take = (i: Integration | undefined) => {
@@ -61,39 +64,35 @@ export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings
       <div className="set-group">
         <Row
           col
-          label="浏览器扩展"
-          hint={
-            info?.hostPath
-              ? '安装 Omni Download 扩展后，在浏览器中点击下载会自动交给 Omni Download。'
-              : '没有找到浏览器通信程序 omnidl-nm-host，请重新安装 Omni Download。'
-          }
+          label={t('settings.browser.extension')}
+          hint={info?.hostPath ? t('settings.browser.extensionHint') : t('settings.browser.hostMissing')}
         >
-          <button type="button" className="btn outline" disabled={!info?.hostPath} onClick={() => void run(api.browserRepair).then((i) => i && (take(i), toast('success', '已重新写入浏览器通信配置')))}>
+          <button type="button" className="btn outline" disabled={!info?.hostPath} onClick={() => void run(api.browserRepair).then((i) => i && (take(i), toast('success', t('settings.browser.repaired'))))}>
             <Icon name="refresh" />
-            重新写入通信配置
+            {t('settings.browser.repair')}
           </button>
         </Row>
         {info?.browsers.map((br) => <BrowserRow key={br.id} b={br} seen={seen.get(br.id)} />)}
         {info && !info.bridgeOk && (
-          <Row label="本机通信" hint="另一个 Omni Download 正在占用浏览器通信，这个窗口收不到浏览器的下载。">
+          <Row label={t('settings.browser.bridge')} hint={t('settings.browser.bridgeBusy')}>
             <span className="bstate warn">
               <i aria-hidden="true" />
-              不可用
+              {t('settings.browser.unavailable')}
             </span>
           </Row>
         )}
       </div>
       <div className="set-group">
-        <Row label="接管前询问" hint="浏览器交来下载时，先在小窗口里确认文件名和保存位置">
-          <Switch label="接管前询问" checked={b.quickDialog} onChange={(v) => set((x) => (x.browser.quickDialog = v))} />
+        <Row label={t('settings.browser.quickDialog')} hint={t('settings.browser.quickDialogHint')}>
+          <Switch label={t('settings.browser.quickDialog')} checked={b.quickDialog} onChange={(v) => set((x) => (x.browser.quickDialog = v))} />
         </Row>
-        <Row col label="不再询问的网站" hint={b.silentSites.length ? '这些网站的下载直接开始；点 × 恢复询问' : '在询问窗口中勾选“不再询问”的网站会列在这里'}>
+        <Row col label={t('settings.browser.silentSites')} hint={b.silentSites.length ? t('settings.browser.silentSitesHint') : t('settings.browser.silentSitesEmpty')}>
           {b.silentSites.length > 0 && (
             <div className="chips">
               {b.silentSites.map((site) => (
                 <span key={site} className="chip site-chip">
                   {site}
-                  <button type="button" aria-label={`恢复询问 ${site}`} onClick={() => set((x) => (x.browser.silentSites = x.browser.silentSites.filter((y) => y !== site)))}>
+                  <button type="button" aria-label={t('settings.browser.silentSiteRemove', { site })} onClick={() => set((x) => (x.browser.silentSites = x.browser.silentSites.filter((y) => y !== site)))}>
                     <Icon name="x" />
                   </button>
                 </span>
@@ -103,19 +102,19 @@ export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings
         </Row>
       </div>
       <div className="set-group">
-        <Row label="备用通道" hint="Snap、Flatpak 等无法使用本机通信的浏览器，改用本机 HTTP 接口；需要在扩展选项中填入配对码">
-          <Switch label="备用通道" checked={b.httpBridge} onChange={(v) => void run(() => api.httpBridgeSet(v)).then(take)} />
+        <Row label={t('settings.browser.httpBridge')} hint={t('settings.browser.httpBridgeHint')}>
+          <Switch label={t('settings.browser.httpBridge')} checked={b.httpBridge} onChange={(v) => void run(() => api.httpBridgeSet(v)).then(take)} />
         </Row>
         {b.httpBridge && info?.pairingCode && (
-          <Row col label="配对码" hint="只在本机有效；重新生成后，已配对的扩展需要重新填写">
+          <Row col label={t('settings.browser.pairingCode')} hint={t('settings.browser.pairingCodeHint')}>
             <div className="inline">
-              <input className="inp mono set-text" readOnly value={info.pairingCode} aria-label="配对码" onFocus={(e) => e.target.select()} />
-              <button type="button" className="btn outline" onClick={() => void navigator.clipboard.writeText(info.pairingCode!).then(() => toast('success', '已复制配对码'))}>
+              <input className="inp mono set-text" readOnly value={info.pairingCode} aria-label={t('settings.browser.pairingCode')} onFocus={(e) => e.target.select()} />
+              <button type="button" className="btn outline" onClick={() => void navigator.clipboard.writeText(info.pairingCode!).then(() => toast('success', t('settings.browser.copied')))}>
                 <Icon name="copy" />
-                复制
+                {t('settings.browser.copy')}
               </button>
               <button type="button" className="btn outline" onClick={() => void run(api.httpBridgeNewToken).then(take)}>
-                重新生成
+                {t('settings.browser.regenerate')}
               </button>
             </div>
           </Row>

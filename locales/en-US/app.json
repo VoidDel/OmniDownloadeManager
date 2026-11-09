@@ -1,0 +1,529 @@
+{
+  "status": {
+    "queued": "Queued",
+    "probing": "Connecting",
+    "downloading": "Downloading",
+    "paused": "Paused",
+    "seeding": "Seeding",
+    "completed": "Completed",
+    "failed": "Failed",
+    "removed": "Deleted",
+    "fetchingTorrent": "Fetching metadata"
+  },
+  "category": {
+    "video": "Video",
+    "audio": "Music",
+    "document": "Documents",
+    "archive": "Archives",
+    "program": "Programs",
+    "disk_image": "Disk images",
+    "image": "Images",
+    "other": "Other"
+  },
+  "errors": {
+    "invalid_url": "Not a downloadable link",
+    "unsupported": "This kind of download will be supported in a later version",
+    "network": "Network connection failed",
+    "timeout": "Connection timed out",
+    "tls": "Secure connection failed: invalid certificate",
+    "http_status": "The server returned error {status}",
+    "http_statusNoStatus": "The server returned an error",
+    "ftp_reply": "The FTP server refused the request ({status})",
+    "ftp_replyNoStatus": "The FTP server refused the request",
+    "not_found": "The file is not on the server",
+    "auth_required": "Sign-in required, or the user name or password is wrong",
+    "forbidden": "The server denied access",
+    "remote_changed": "The file on the server has changed and must be downloaded again",
+    "file_missing": "The file is missing or cannot be read",
+    "disk_full": "Not enough disk space",
+    "io": "Failed to read or write the file",
+    "internal": "An internal error occurred"
+  },
+  "format": {
+    "s": "{s}s",
+    "ms": "{m}m {s}s",
+    "m": "{m}m",
+    "hm": "{h}h {m}m",
+    "h": "{h}h",
+    "dh": "{d}d {h}h",
+    "d": "{d}d",
+    "yesterday": "Yesterday {time}"
+  },
+  "settings": {
+    "appearance": {
+      "accent": "Accent color",
+      "accentTheme": "Theme",
+      "accentSystem": "System",
+      "accentCustom": "Custom",
+      "material": "Window material",
+      "materialHint": "Also used by the quick download window; vibrancy on macOS",
+      "materialUnavailable": "Not available on this system",
+      "materialKinds": {
+        "off": "Off",
+        "mica": "Mica",
+        "micaAlt": "Mica Alt",
+        "acrylic": "Acrylic"
+      },
+      "mode": "Mode",
+      "modes": {
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "lightTheme": "Light theme",
+      "lightThemeHint": "Used in light mode, or in system mode while the system is light",
+      "darkTheme": "Dark theme",
+      "density": "Density",
+      "densityHint": "Row height of the task list",
+      "densities": {
+        "compact": "Compact",
+        "comfortable": "Comfortable",
+        "spacious": "Spacious"
+      }
+    },
+    "language": {
+      "ui": "Language",
+      "auto": "System ({lang})"
+    },
+    "general": {
+      "version": "Version",
+      "logs": "Logs",
+      "openFolder": "Open folder"
+    },
+    "download": {
+      "folder": "Default download folder",
+      "folderPick": "Choose the default download folder",
+      "folderDefault": "The system Downloads folder",
+      "browse": "Browse…",
+      "open": "Open",
+      "maxConcurrent": "Simultaneous downloads",
+      "maxConcurrentHint": "Other tasks wait in the queue",
+      "connections": "Connections per task",
+      "connectionsHint": "Connections opened at once when the server supports segmented downloads; can be set per download in New download",
+      "conflict": "When the file already exists",
+      "conflictRename": "Rename automatically",
+      "conflictOverwrite": "Overwrite",
+      "resumeOnStartup": "Resume unfinished downloads at startup",
+      "resumeOnStartupHint": "Tasks that were downloading when the app quit continue automatically the next time it starts",
+      "syncWrites": "Save progress to disk every second",
+      "syncWritesHint": "Downloads resume from the exact position even after a power loss or system crash; turn off to reduce disk writes"
+    },
+    "network": {
+      "proxy": "Proxy",
+      "proxyHint": "HTTP, HTTPS or SOCKS5 proxy for HTTP downloads; with socks5h:// the proxy resolves host names",
+      "proxyModes": {
+        "system": "System proxy",
+        "none": "None",
+        "custom": "Custom"
+      },
+      "proxyUrl": "Proxy address",
+      "userAgentHint": "Identifies as desktop Chrome by default; some sites reject unfamiliar clients",
+      "resetDefault": "Reset to default",
+      "connectTimeout": "Connection timeout",
+      "readTimeout": "Idle timeout",
+      "readTimeoutHint": "Reconnect when a connection receives no data for this long",
+      "retries": "Retries on failure",
+      "retriesHint": "On network errors or server 5xx responses, each connection retries after 1, 2, 4… seconds",
+      "seconds": "{n} s",
+      "times": "{n, plural, one {# time} other {# times}}",
+      "ftpSessions": "FTP sessions",
+      "ftpSessionsHint": "Sessions each FTP task logs in at once; many servers limit connections per user",
+      "ftpMode": "FTP transfer mode",
+      "ftpModeHint": "Passive mode suits most networks; active mode needs the server to connect back to this computer",
+      "ftpPassive": "Passive",
+      "ftpActive": "Active"
+    },
+    "torrent": {
+      "seeding": "Seed after downloading",
+      "seedingHint": "Keep uploading the files to other downloaders; pause a seeding task to stop",
+      "seedRatio": "Stop at share ratio",
+      "seedRatioHint": "Upload amount as a multiple of the file size",
+      "seedTime": "Seeding time",
+      "seedTimeHint": "Counted from when the download finishes; whichever comes first with the share ratio",
+      "uploadLimit": "Upload limit",
+      "uploadLimitHint": "Total for all BT tasks",
+      "unlimited": "Unlimited",
+      "hours": "{n, plural, one {# hour} other {# hours}}",
+      "days": "{n, plural, one {# day} other {# days}}",
+      "weeks": "{n, plural, one {# week} other {# weeks}}",
+      "port": "Listening port",
+      "portHint": "The port other peers connect to; 0 lets the system choose. Takes effect after restarting the app",
+      "dht": "DHT network",
+      "dhtHint": "Finds peers when there is no Tracker; most magnet links need it. Takes effect after restarting the app",
+      "upnp": "UPnP port mapping",
+      "upnpHint": "Asks the router to forward the listening port so more peers can connect. Takes effect after restarting the app",
+      "magnet": "Magnet links",
+      "magnetSet": "Set as the app for magnet links",
+      "magnetHintInstalled": "The installed app is associated with magnet links and torrent files automatically",
+      "magnetHint": "Open magnet: links clicked in the browser with Omni Download",
+      "magnetRegistered": "Associated",
+      "magnetReregister": "Associate again",
+      "magnetRegister": "Set as default"
+    },
+    "browser": {
+      "state": {
+        "connected": "Connected · {when}",
+        "ready": "Ready",
+        "otherInstall": "Points to another installation",
+        "unregistered": "Not registered",
+        "notInstalled": "Not installed"
+      },
+      "extension": "Browser extension",
+      "extensionHint": "With the Omni Download extension installed, downloads you click in the browser are handed to Omni Download automatically.",
+      "hostMissing": "The browser messaging host omnidl-nm-host was not found. Reinstall Omni Download.",
+      "repaired": "Browser messaging configuration rewritten",
+      "repair": "Rewrite messaging configuration",
+      "bridge": "Native messaging",
+      "bridgeBusy": "Another Omni Download is using the browser connection, so this window does not receive browser downloads.",
+      "unavailable": "Unavailable",
+      "quickDialog": "Ask before taking over",
+      "quickDialogHint": "When the browser hands over a download, confirm the file name and location in a small window first",
+      "silentSites": "Sites not asked about",
+      "silentSitesHint": "Downloads from these sites start right away; click × to ask again",
+      "silentSitesEmpty": "Sites you mark “Don't ask again” in the prompt window are listed here",
+      "silentSiteRemove": "Ask again for {site}",
+      "httpBridge": "Fallback channel",
+      "httpBridgeHint": "Browsers that cannot use native messaging, such as Snap or Flatpak, use a local HTTP interface instead; enter the pairing code in the extension options",
+      "pairingCode": "Pairing code",
+      "pairingCodeHint": "Valid on this computer only; after regenerating, paired extensions need the new code",
+      "copied": "Pairing code copied",
+      "copy": "Copy",
+      "regenerate": "Regenerate"
+    }
+  },
+  "shell": {
+    "settings": "Settings",
+    "taskCount": "{count, plural, one {# task} other {# tasks}}",
+    "paste": "Paste a download link",
+    "filters": {
+      "all": "All tasks",
+      "active": "Active",
+      "done": "Completed",
+      "torrent": "Torrents",
+      "failed": "Failed",
+      "trash": "Trash"
+    },
+    "settingsTabs": {
+      "general": "General",
+      "download": "Downloads",
+      "network": "Network",
+      "torrent": "BT",
+      "browser": "Browser"
+    },
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
+    },
+    "theme": {
+      "title": "Appearance",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "summary": {
+      "title": "Show active tasks",
+      "running": "{count, plural, one {# task downloading} other {# tasks downloading}}"
+    },
+    "sidebar": {
+      "filters": "Task filters",
+      "categories": "Categories"
+    },
+    "speedLimit": {
+      "title": "Global download limit",
+      "unlimited": "Unlimited",
+      "limited": "Limit {speed}",
+      "custom": "Custom…",
+      "customValue": "Custom ({speed})"
+    },
+    "sort": {
+      "added": "By date added",
+      "name": "By name",
+      "size": "By size",
+      "progress": "By progress",
+      "speed": "By speed",
+      "status": "By status"
+    },
+    "cmd": {
+      "newDownload": "New download",
+      "start": "Start",
+      "pause": "Pause",
+      "delete": "Delete",
+      "openFolder": "Open folder",
+      "startAll": "Start all",
+      "pauseAll": "Pause all",
+      "restore": "Restore",
+      "purge": "Delete permanently",
+      "emptyTrash": "Empty trash",
+      "detailPanel": "Details panel",
+      "showDetail": "Show details",
+      "detailPinned": "Details panel pinned: it shows when a task is selected (click to unpin)"
+    },
+    "status": {
+      "running": "{count} downloading",
+      "waiting": "{count} waiting",
+      "seeding": "{count} seeding",
+      "selected": "{count} selected",
+      "downloadSpeed": "Download speed",
+      "uploadSpeed": "Upload speed (seeding and downloading torrents)",
+      "extensionConnected": "Browser extension connected",
+      "browsersConnected": "{names} connected",
+      "listSeparator": ", "
+    }
+  },
+  "empty": {
+    "all": {
+      "title": "No downloads yet",
+      "hint": "Paste a download link into the box above, or click New download."
+    },
+    "active": {
+      "title": "No active tasks",
+      "hint": "Downloading, queued and paused tasks appear here."
+    },
+    "done": {
+      "title": "No completed tasks yet",
+      "hint": "Finished downloads appear here; double-click one to open it."
+    },
+    "torrent": {
+      "title": "No torrent tasks yet",
+      "hint": "Paste a magnet link, open a torrent file, or drag a .torrent file into the window."
+    },
+    "failed": {
+      "title": "No failed tasks",
+      "hint": "Tasks that hit an error appear here and can be retried."
+    },
+    "trash": {
+      "title": "The trash is empty",
+      "hint": "Deleted tasks go here first and can be restored."
+    },
+    "category": {
+      "title": "No tasks in this category yet",
+      "hint": "Downloaded files are sorted into categories by extension."
+    }
+  },
+  "fileTree": {
+    "all": "All files",
+    "chosen": "{chosen} of {count, plural, one {# file} other {# files}} selected · {size}"
+  },
+  "detail": {
+    "label": "Task details",
+    "close": "Close details",
+    "pin": "Pin details panel",
+    "pinTip": "Pin the details panel: show it whenever a task is selected",
+    "unpinTip": "Unpin: stop showing details automatically when a task is selected",
+    "tabs": "Details",
+    "openFolder": "Open folder",
+    "copyLink": "Copy link",
+    "copied": "Link copied",
+    "tab": {
+      "overview": "Overview",
+      "files": "Files",
+      "peers": "Peers",
+      "segments": "Segments"
+    },
+    "chart": {
+      "title": "Speed · last 2 min",
+      "label": "Download speed over the last two minutes"
+    },
+    "overview": {
+      "size": "Size",
+      "downloaded": "Downloaded",
+      "speed": "Speed",
+      "eta": "Time left",
+      "connections": "Connections",
+      "connectionCount": "{count, plural, one {# connection} other {# connections}}",
+      "peers": "Peers",
+      "peerCount": "{count, plural, one {# peer} other {# peers}}",
+      "uploadSpeed": "Upload speed",
+      "uploaded": "Uploaded",
+      "uploadedValue": "{size} · ratio {ratio}",
+      "files": "Files",
+      "filesValue": "{selected} of {count} · {pieces, plural, one {# piece} other {# pieces}} × {pieceSize}",
+      "infoHash": "Info hash",
+      "resume": "Resume",
+      "resumeUnknown": "Known after starting",
+      "resumeYes": "Supported",
+      "resumeNo": "Not supported (restarts from the beginning after pausing)",
+      "added": "Added",
+      "completed": "Completed",
+      "saveTo": "Save to",
+      "link": "Link",
+      "segmentProgress": "Segment progress",
+      "segmentCount": "{count, plural, one {# segment} other {# segments}}"
+    },
+    "segments": {
+      "merged": "The download is complete and the segments have been merged into the full file.",
+      "notStarted": "Segments appear once the download starts.",
+      "none": "No segment information.",
+      "map": "Segment map",
+      "active": "{count, plural, one {# connection active} other {# connections active}}",
+      "done": "Done",
+      "partial": "Partial",
+      "pending": "Not started",
+      "title": "Segments"
+    },
+    "files": {
+      "pending": "Files appear once the torrent metadata is fetched.",
+      "none": "No file information."
+    },
+    "peers": {
+      "title": "Peers",
+      "stats": "{connected} connected · {seen} found",
+      "searching": "Looking for peers…",
+      "idle": "Connected peers appear while the task is running.",
+      "address": "Address",
+      "client": "Client"
+    },
+    "trackers": {
+      "title": "Tracker",
+      "count": "{count}",
+      "none": "No Trackers; peers are found through DHT and peer exchange."
+    },
+    "action": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "redownload": "Download again",
+      "retry": "Retry",
+      "stopSeeding": "Stop seeding",
+      "openFile": "Open file",
+      "restore": "Restore"
+    }
+  },
+  "table": {
+    "label": "Downloads",
+    "column": {
+      "name": "Name",
+      "progress": "Progress",
+      "size": "Size",
+      "speed": "Speed",
+      "eta": "Left",
+      "status": "Status"
+    },
+    "menu": {
+      "details": "Details",
+      "restore": "Restore",
+      "purge": "Delete permanently…",
+      "open": "Open",
+      "start": "Start",
+      "pause": "Pause",
+      "stopSeeding": "Stop seeding",
+      "redownload": "Download again",
+      "openFolder": "Open folder",
+      "copyLink": "Copy link",
+      "copied": "Link copied",
+      "copiedMany": "{count, plural, one {# link copied} other {# links copied}}",
+      "delete": "Delete"
+    }
+  },
+  "newTask": {
+    "title": "New download",
+    "close": "Close",
+    "cancel": "Cancel",
+    "add": "Add",
+    "addAndStart": "Add and start",
+    "summary": "{count, plural, one {# task} other {# tasks}}",
+    "addedMany": "{count, plural, one {Added # task} other {Added # tasks}}",
+    "addedOne": "Added {name}",
+    "links": "Links",
+    "linksPlaceholder": "https://example.com/file.zip or magnet:?xt=…",
+    "linksHint": "One per line: HTTP or FTP links, magnet links, or paths to torrent files.",
+    "openTorrents": "Open torrent files",
+    "pickTorrents": "Choose torrent files",
+    "pickDir": "Choose where to save",
+    "fileName": "File name",
+    "fileNamePlaceholder": "Name provided by the server",
+    "saveTo": "Save to",
+    "browse": "Browse…",
+    "connections": "Connections",
+    "limit": "Speed limit",
+    "limitPlaceholder": "Unlimited",
+    "limitHint": "For example 500K or 2M; leave empty for no limit",
+    "ftpAccount": "FTP account",
+    "ftpAnonymous": "Leave empty to log in anonymously",
+    "password": "Password",
+    "showPassword": "Show password",
+    "transferMode": "Transfer mode",
+    "followSettings": "As in settings",
+    "ftpPassive": "Passive",
+    "ftpActive": "Active",
+    "insecureTls": "Accept unverified certificates",
+    "advanced": "Advanced",
+    "advancedSummary": "Referer · Cookie · User-Agent · proxy",
+    "proxy": "Proxy",
+    "proxySystem": "System proxy",
+    "proxyNone": "No proxy",
+    "proxyCustom": "Custom",
+    "proxyUrl": "Proxy address",
+    "startNow": "Start right after adding",
+    "badge": {
+      "magnet": "Magnet",
+      "torrent": "Torrent"
+    },
+    "row": {
+      "unsupported": "This kind of link is not supported yet; this line will not be added",
+      "later": "File information is fetched when the download starts",
+      "probingMagnet": "Fetching torrent metadata from peers…",
+      "probing": "Fetching file information…",
+      "probeFailed": "{error}; you can still add it and it will be retried when it starts",
+      "sizeUnknown": "Unknown size",
+      "files": "{count, plural, one {# file} other {# files}}",
+      "singleFile": "Single file",
+      "resumable": "Can resume",
+      "notResumable": "Cannot resume",
+      "connections": "Will use {count, plural, one {# connection} other {# connections}}",
+      "sessions": "Will use {count, plural, one {# session} other {# sessions}}"
+    }
+  },
+  "dialogs": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "purge": {
+      "titleMany": "{count, plural, one {Permanently delete # task?} other {Permanently delete # tasks?}}",
+      "titleOne": "Permanently delete this task?",
+      "confirm": "Delete permanently",
+      "text": "The task records and unfinished temporary files will be deleted. This cannot be undone.",
+      "deleteFiles": "Also delete completed downloaded files"
+    },
+    "speed": {
+      "title": "Global speed limit",
+      "label": "Maximum combined download speed of all tasks",
+      "placeholder": "Unlimited",
+      "invalid": "Not recognized; for example 500K, 2M or 1.5MB/s",
+      "empty": "Leave empty for no limit",
+      "perSecond": "{size} per second"
+    }
+  },
+  "quick": {
+    "fromBrowser": "Download from {browser}",
+    "fromAnyBrowser": "Download from the browser",
+    "close": "Close",
+    "closeTitle": "Close (don't download)",
+    "fileName": "File name",
+    "sizeUnknown": "Unknown size",
+    "probing": "Fetching file information…",
+    "resumable": "Can resume",
+    "notResumable": "Cannot resume",
+    "connectionsUsed": "Will use {count, plural, one {# connection} other {# connections}}",
+    "attached": {
+      "both": "Cookie and Referer included",
+      "cookie": "Cookie included",
+      "referer": "Referer included"
+    },
+    "saveTo": "Save to",
+    "browse": "Browse…",
+    "pickDir": "Choose where to save",
+    "connections": "Connections",
+    "limit": "Speed limit",
+    "limitPlaceholder": "Unlimited",
+    "limitHint": "For example 500K or 2M; leave empty for no limit",
+    "remember": "Don't ask again for downloads from {site}; start them with these settings",
+    "rememberAnySite": "Don't ask again for downloads from this site; start them with these settings",
+    "keyStart": "Start",
+    "keyLater": "Later",
+    "useBrowser": "Download in browser instead",
+    "later": "Download later",
+    "start": "Start download"
+  }
+}

@@ -13,6 +13,7 @@
     "eslint": "pnpm -r eslint",
     "test": "pnpm -r test",
     "sync:omni-ui": "node scripts/sync-omni-ui.mjs",
+    "check:locales": "node scripts/check-locales.mjs",
     "icons": "pnpm --filter omnidl-desktop tauri icon ../../icons/app-icon.svg -o src-tauri/icons && node scripts/windows-ico.mjs",
     "ext:build": "pnpm --filter omnidl-extension build",
     "ext:e2e": "pnpm --filter omnidl-extension e2e"

@@ -2,6 +2,7 @@
 // new-download dialog and the details panel (where it also shows each file's progress).
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { FileIcon, Icon } from '../../components/Icon';
 import * as fmt from '../../lib/format';
@@ -63,6 +64,7 @@ const stateOf = (ids: number[], selected: ReadonlySet<number>) => {
 
 /** `onChange` absent: read only. At least one file stays chosen. */
 export function FileTree({ files, selected, onChange }: { files: readonly TreeFile[]; selected: ReadonlySet<number>; onChange?: (next: Set<number>) => void }) {
+  const { t } = useTranslation();
   const root = useMemo(() => build(files), [files]);
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const set = (ids: number[], on: boolean) => {
@@ -125,10 +127,8 @@ export function FileTree({ files, selected, onChange }: { files: readonly TreeFi
   return (
     <div className="ft">
       <div className="ft-head">
-        <Check state={stateOf(root.all, selected)} label="全部文件" disabled={!onChange} onChange={(on) => (on ? set(root.all, true) : undefined)} />
-        <span>
-          已选 {chosen.length} / {files.length} 个文件 · {fmt.bytes(chosen.reduce((n, f) => n + f.size, 0))}
-        </span>
+        <Check state={stateOf(root.all, selected)} label={t('fileTree.all')} disabled={!onChange} onChange={(on) => (on ? set(root.all, true) : undefined)} />
+        <span>{t('fileTree.chosen', { chosen: chosen.length, count: files.length, size: fmt.bytes(chosen.reduce((n, f) => n + f.size, 0)) })}</span>
       </div>
       <div className="ft-list">{rows}</div>
     </div>
