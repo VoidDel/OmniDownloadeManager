@@ -4,7 +4,7 @@
 // without update packages.
 //
 //   pnpm bundle                                  Windows: NSIS; macOS: .app + .dmg; Linux: deb, rpm, AppImage
-//   pnpm bundle --target universal-apple-darwin  any `tauri build` arguments pass through
+//   pnpm bundle --target aarch64-apple-darwin    any `tauri build` arguments pass through
 //
 // Output: target/[<triple>/]release/bundle/ (or under CARGO_TARGET_DIR).
 

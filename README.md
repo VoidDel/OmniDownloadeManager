@@ -29,7 +29,7 @@ pnpm dev              # 启动开发窗口（Vite 端口 1430）
 pnpm bundle           # 本平台的安装包（含 omnidl-nm-host），输出在 target/release/bundle
 ```
 
-`pnpm bundle` 与发布用的配置相同（`src-tauri/tauri.release.conf.json`）：Windows 出 NSIS，macOS 出 .app 与 .dmg（`pnpm bundle --target universal-apple-darwin` 为通用版），Linux 出 deb、rpm 与 AppImage。设置了 `TAURI_SIGNING_PRIVATE_KEY`（minisign 私钥的内容或路径）时同时生成签过名的更新包。
+`pnpm bundle` 与发布用的配置相同（`src-tauri/tauri.release.conf.json`）：Windows 出 NSIS，macOS 出 .app 与 .dmg（仅 Apple Silicon），Linux 出 deb、rpm 与 AppImage。设置了 `TAURI_SIGNING_PRIVATE_KEY`（minisign 私钥的内容或路径）时同时生成签过名的更新包。
 
 ### 发布
 

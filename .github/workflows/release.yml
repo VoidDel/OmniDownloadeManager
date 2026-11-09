@@ -1,7 +1,7 @@
 # Tagged releases (docs/development-plan.md §7.4): pushing a tag `v<version>` (the version in
 # tauri.conf.json) builds the installers on the three platforms into one draft release:
 #
-#   Windows  NSIS (per user)            macOS  .dmg (Universal) + .app.tar.gz
+#   Windows  NSIS (per user)            macOS  .dmg (Apple Silicon) + .app.tar.gz
 #   Linux    .deb, .rpm, AppImage
 #
 # with the Native Messaging host bundled, each update package signed with the minisign key
@@ -31,8 +31,8 @@ jobs:
             target: x86_64-pc-windows-msvc
             rust: x86_64-pc-windows-msvc
           - os: macos-15
-            target: universal-apple-darwin
-            rust: aarch64-apple-darwin,x86_64-apple-darwin
+            target: aarch64-apple-darwin
+            rust: aarch64-apple-darwin
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             rust: x86_64-unknown-linux-gnu

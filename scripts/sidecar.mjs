@@ -4,7 +4,6 @@
 //
 //   node scripts/sidecar.mjs                                 this machine's target
 //   node scripts/sidecar.mjs --target x86_64-pc-windows-msvc
-//   node scripts/sidecar.mjs --target universal-apple-darwin  both Mac architectures, one file
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync } from 'node:fs';
@@ -26,11 +25,6 @@ const build = (t) => {
 };
 
 mkdirSync(out, { recursive: true });
-if (target === 'universal-apple-darwin') {
-  const parts = ['aarch64-apple-darwin', 'x86_64-apple-darwin'].map(build);
-  run('lipo', ['-create', '-output', join(out, `omnidl-nm-host-${target}`), ...parts]);
-} else {
-  const ext = target.includes('windows') ? '.exe' : '';
-  copyFileSync(build(target), join(out, `omnidl-nm-host-${target}${ext}`));
-}
+const ext = target.includes('windows') ? '.exe' : '';
+copyFileSync(build(target), join(out, `omnidl-nm-host-${target}${ext}`));
 console.log(`omnidl-nm-host for ${target} in ${out}`);

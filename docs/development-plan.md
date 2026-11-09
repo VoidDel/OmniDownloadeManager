@@ -2,7 +2,7 @@
 
 > 版本：v0.1（2026-11-09）
 > 技术栈：Rust + Tauri 2 + React 19
-> 目标平台：Windows 10/11、macOS 12+（Intel / Apple Silicon）、Linux（Ubuntu 22.04+ / Fedora 39+ / Arch）
+> 目标平台：Windows 10/11、macOS 12+（Apple Silicon）、Linux（Ubuntu 22.04+ / Fedora 39+ / Arch）
 
 ---
 
@@ -862,7 +862,7 @@ api.open(id) / reveal(id) / openFolder(path) / diskFree(path)
 | 平台 | 格式 | 签名 / 公证 | 说明 |
 |---|---|---|---|
 | Windows | **NSIS**（per-user，推荐）；MSI 可选 | Authenticode（Azure Trusted Signing 或 EV 证书） | per-user 安装便于写 HKCU NM 注册表、无 UAC；安装器同时放置 `omnidl-nm-host.exe` |
-| macOS | **.dmg**（Universal：aarch64 + x86_64） | Developer ID + `notarytool` 公证，Hardened Runtime | 不启用 App Sandbox（需写 NM 清单到 `~/Library/Application Support/…`） |
+| macOS | **.dmg**（Apple Silicon / aarch64，不提供 Intel 版） | Developer ID + `notarytool` 公证，Hardened Runtime | 不启用 App Sandbox（需写 NM 清单到 `~/Library/Application Support/…`） |
 | Linux | **.deb**、**.rpm**、**AppImage** | 无需签名；可提供 GPG 签名的 sha256sums | 依赖 `webkit2gtk-4.1`、`libayatana-appindicator3`；不优先 Flatpak（NM 与托盘受限），可社区维护 |
 
 - 自动更新：`tauri-plugin-updater` + GitHub Releases 作为更新源，`latest.json` 由 CI 生成并用 minisign 密钥签名。
@@ -1053,7 +1053,7 @@ OmniDownloadManager/
 
 - [x] 托盘、开机自启、`--background`、通知、全局快捷键、窗口状态记忆
 - [x] 自动更新（updater + minisign）
-- [x] 三平台打包：NSIS、dmg（Universal）、deb / rpm / AppImage；sidecar 打包 host
+- [x] 三平台打包：NSIS、dmg（Apple Silicon）、deb / rpm / AppImage；sidecar 打包 host
 - [ ] 代码签名与 macOS 公证流水线
 - [x] i18n（zh-CN / zh-TW / en-US / ja-JP），首次启动向导
 - [ ] 扩展上架：Chrome Web Store、Edge Add-ons、AMO
