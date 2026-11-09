@@ -32,7 +32,7 @@ const PROTO: Record<Task['kind'], string> = { http: 'HTTP', ftp: 'FTP', torrent:
 
 /** The menu for the selected tasks. */
 export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[] {
-  const { run, openDialog, openDetail } = useApp.getState();
+  const { run, openDialog, openDetail, openTask, missing } = useApp.getState();
   const list = ids.map((id) => tasks[id]).filter(Boolean);
   if (!list.length) return [];
   const one = list.length === 1 ? list[0] : null;
@@ -48,9 +48,10 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   const canPause = list.some((t) => ['queued', 'probing', 'downloading'].includes(t.status));
   const canResume = list.some((t) => t.status === 'paused' || t.status === 'failed');
   const seeding = list.filter((t) => t.status === 'seeding').map((t) => t.id);
-  const changed = list.filter((t) => t.error?.code === 'remote_changed').map((t) => t.id);
+  // The remote file changed, or the finished file was deleted: download it again.
+  const changed = list.filter((t) => t.error?.code === 'remote_changed' || (t.status === 'completed' && missing[t.id])).map((t) => t.id);
   const items: MenuItem[] = [];
-  if (one?.status === 'completed' || one?.status === 'seeding') items.push({ label: i18n.t('table.menu.open'), icon: 'external', kbd: 'Enter', run: () => void run(() => api.open(one.id)) });
+  if ((one?.status === 'completed' && !missing[one.id]) || one?.status === 'seeding') items.push({ label: i18n.t('table.menu.open'), icon: 'external', kbd: 'Enter', run: () => void openTask(one.id) });
   if (canResume) items.push({ label: i18n.t('table.menu.start'), icon: 'play', run: () => void run(() => api.resume(ids)) });
   if (canPause) items.push({ label: i18n.t('table.menu.pause'), icon: 'pause', run: () => void run(() => api.pause(ids)) });
   if (seeding.length) items.push({ label: i18n.t('table.menu.stopSeeding'), icon: 'stop', run: () => void run(() => api.pause(seeding)) });
@@ -77,15 +78,20 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
 const Row = memo(function Row({ id, start, cols }: { id: string; start: number; cols: string }) {
   const t = useApp((s) => s.tasks[id]);
   const selected = useApp((s) => s.selection.includes(id));
+  const gone = useApp((s) => !!s.missing[id]);
   if (!t) return null;
-  const color = STATUS_COLOR[t.status];
+  // Finished, but the file was deleted or moved since.
+  const fileGone = gone && t.status === 'completed';
+  const color = fileGone ? 'var(--warning)' : STATUS_COLOR[t.status];
   const running = t.status === 'downloading' || t.status === 'probing';
   const p = progressOf(t);
   const seeding = t.status === 'seeding';
   const pct = t.status === 'completed' || seeding ? '100%' : fmt.percent(t.downloadedBytes, t.totalBytes);
   const size = t.totalBytes != null ? fmt.bytes(t.totalBytes) : t.downloadedBytes ? fmt.bytes(t.downloadedBytes) : '—';
   const remaining = running ? fmt.duration(t.etaSecs) : t.status === 'completed' ? fmt.when(t.completedAt) : '—';
-  const title = t.error ? `${errorText(t.error)}\n${t.error.message}` : undefined;
+  // Finished: the average speed over the whole download.
+  const avg = t.status === 'completed' && !fileGone ? fmt.averageSpeed(t) : null;
+  const title = t.error ? `${errorText(t.error)}\n${t.error.message}` : fileGone ? i18n.t('detail.fileMissing') : undefined;
   return (
     <div
       role="row"
@@ -110,8 +116,8 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
       <span className="dim num c-size" role="gridcell">
         {size}
       </span>
-      <span className="dim num c-speed" role="gridcell">
-        {seeding ? `↑ ${fmt.speed(t.uploadSpeedBps)}` : running && t.speedBps ? fmt.speed(t.speedBps) : '—'}
+      <span className="dim num c-speed" role="gridcell" title={avg != null ? i18n.t('table.avgSpeed') : undefined}>
+        {seeding ? `↑ ${fmt.speed(t.uploadSpeedBps)}` : running && t.speedBps ? fmt.speed(t.speedBps) : avg != null ? fmt.speed(avg) : '—'}
       </span>
       <span className="dim num c-eta" role="gridcell">
         {remaining}
@@ -119,7 +125,7 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
       <span className="st" role="gridcell" style={{ color }} title={title}>
         <i className="sdot" style={{ background: color }} />
         {/* The reason is in the tooltip and the details panel; the column only says the state. */}
-        {statusText(t)}
+        {fileGone ? i18n.t('status.fileMissing') : statusText(t)}
       </span>
     </div>
   );
@@ -177,8 +183,8 @@ export function TaskTable() {
     const id = rowAt(e);
     const t = id ? useApp.getState().tasks[id] : null;
     if (!t) return;
-    const { run } = useApp.getState();
-    if (t.status === 'completed' || t.status === 'seeding') void run(() => api.open(t.id));
+    const { run, openTask } = useApp.getState();
+    if (t.status === 'completed' || t.status === 'seeding') void openTask(t.id);
     else if (t.status === 'paused' || t.status === 'failed') void run(() => api.resume([t.id]));
     else if (t.status === 'removed') void run(() => api.restore([t.id]));
   };
@@ -244,7 +250,7 @@ export function TaskTable() {
       }
       case 'Enter': {
         const t = selection.length === 1 ? tasks[selection[0]] : null;
-        if (t?.status === 'completed') void run(() => api.open(t.id));
+        if (t?.status === 'completed' || t?.status === 'seeding') void useApp.getState().openTask(t.id);
         break;
       }
       case 'Escape':

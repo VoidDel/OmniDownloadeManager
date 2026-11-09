@@ -8,7 +8,8 @@
     "completed": "完了",
     "failed": "失敗",
     "removed": "削除済み",
-    "fetchingTorrent": "トレント情報を取得中"
+    "fetchingTorrent": "トレント情報を取得中",
+    "fileMissing": "ファイルなし"
   },
   "category": {
     "video": "動画",
@@ -37,7 +38,8 @@
     "file_missing": "ファイルが見つからないか、読み取れません",
     "disk_full": "ディスクの空き容量が不足しています",
     "io": "ファイルの読み書きに失敗しました",
-    "internal": "内部エラーが発生しました"
+    "internal": "内部エラーが発生しました",
+    "fileGone": "ファイルが見つかりません。削除または移動された可能性があります"
   },
   "format": {
     "s": "{s} 秒",
@@ -258,7 +260,8 @@
       "emptyTrash": "ごみ箱を空にする",
       "detailPanel": "詳細パネル",
       "showDetail": "詳細を表示",
-      "detailPinned": "詳細パネルは固定されています。タスクを選択すると自動で表示されます（クリックで解除）"
+      "detailPinned": "詳細パネルは固定されています。タスクを選択すると自動で表示されます（クリックで解除）",
+      "redownload": "再ダウンロード"
     },
     "status": {
       "running": "ダウンロード中 {count}",
@@ -350,7 +353,9 @@
       "saveTo": "保存先",
       "link": "リンク",
       "segmentProgress": "セグメントの進捗",
-      "segmentCount": "{count} セグメント"
+      "segmentCount": "{count} セグメント",
+      "avgSpeed": "平均速度",
+      "peakSpeed": "最大速度"
     },
     "segments": {
       "merged": "ダウンロードが完了し、セグメントは 1 つのファイルに結合されました。",
@@ -388,7 +393,8 @@
       "stopSeeding": "シードを停止",
       "openFile": "ファイルを開く",
       "restore": "元に戻す"
-    }
+    },
+    "fileMissing": "ファイルが見つかりません。削除または移動された可能性があります。もう一度ダウンロードできます。"
   },
   "table": {
     "label": "ダウンロードタスク",
@@ -414,7 +420,8 @@
       "copied": "リンクをコピーしました",
       "copiedMany": "{count} 件のリンクをコピーしました",
       "delete": "削除"
-    }
+    },
+    "avgSpeed": "平均速度"
   },
   "newTask": {
     "title": "新規ダウンロード",

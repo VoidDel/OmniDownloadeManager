@@ -91,6 +91,10 @@ function SpeedChart({ id, speed }: { id: string; speed: number }) {
 const ratio = (t: Task) => (t.totalBytes ? (t.uploadedBytes / t.totalBytes).toFixed(2) : '—');
 
 function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; torrent?: TorrentDetail }) {
+  const avg = fmt.averageSpeed(t);
+  // The stored peak arrives with status changes; while running, the recent samples too.
+  const peak = Math.max(t.peakBps ?? 0, ...speedHistory(t.id));
+  const gone = useApp((s) => !!s.missing[t.id]) && t.status === 'completed';
   const running = t.status === 'downloading' || t.status === 'probing';
   const bt = t.kind === 'torrent';
   const fill = blockFill(segments, t.totalBytes, t.status === 'completed');
@@ -158,11 +162,32 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
             <dd>{fmt.when(t.completedAt)}</dd>
           </>
         )}
+        {avg != null && (
+          <>
+            <dt>{tr('detail.overview.avgSpeed')}</dt>
+            <dd>{fmt.speed(avg)}</dd>
+          </>
+        )}
+        {peak > 0 && (
+          <>
+            <dt>{tr('detail.overview.peakSpeed')}</dt>
+            <dd>{fmt.speed(peak)}</dd>
+          </>
+        )}
         <dt>{tr('detail.overview.saveTo')}</dt>
         <dd className="mono path">{t.saveDir}</dd>
         <dt>{tr('detail.overview.link')}</dt>
         <dd className="mono path">{t.source}</dd>
       </dl>
+      {gone && (
+        <div className="det-err warn" role="status">
+          <Icon name="alert" />
+          <div>
+            <b>{tr('status.fileMissing')}</b>
+            <small>{tr('detail.fileMissing')}</small>
+          </div>
+        </div>
+      )}
       {t.error && (
         <div className="det-err" role="status">
           <Icon name="alert" />
@@ -333,6 +358,7 @@ function Peers({ t, torrent }: { t: Task; torrent?: TorrentDetail }) {
 /** The primary action for a task's state. */
 function Primary({ t }: { t: Task }) {
   const run = useApp((s) => s.run);
+  const gone = useApp((s) => !!s.missing[t.id]);
   const { t: tr } = useTranslation();
   const [label, icon, act]: [string, 'pause' | 'play' | 'refresh' | 'external', () => Promise<unknown>] = (() => {
     switch (t.status) {
@@ -349,7 +375,9 @@ function Primary({ t }: { t: Task }) {
       case 'seeding':
         return [tr('detail.action.stopSeeding'), 'pause', () => api.pause([t.id])];
       case 'completed':
-        return [tr('detail.action.openFile'), 'external', () => api.open(t.id)];
+        return gone
+          ? [tr('detail.action.redownload'), 'refresh', () => api.restart([t.id])]
+          : [tr('detail.action.openFile'), 'external', () => useApp.getState().openTask(t.id)];
       default:
         return [tr('detail.action.restore'), 'refresh', () => api.restore([t.id])];
     }

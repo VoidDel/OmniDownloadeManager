@@ -35,6 +35,8 @@ export const api = {
   magnetStatus: () => invoke<MagnetHandler>('magnet_status'),
   magnetRegister: () => invoke<MagnetHandler>('magnet_register'),
   open: (id: string) => invoke<void>('task_open', { id }),
+  /** Finished downloads whose file is no longer there. */
+  missingFiles: () => invoke<string[]>('task_missing'),
   reveal: (id: string) => invoke<void>('task_reveal', { id }),
   openFolder: (path: string) => invoke<void>('folder_open', { path }),
 

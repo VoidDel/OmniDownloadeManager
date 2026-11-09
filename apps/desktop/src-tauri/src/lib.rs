@@ -151,6 +151,7 @@ pub fn run() {
             commands::magnet_status,
             commands::magnet_register,
             commands::task_open,
+            commands::task_missing,
             commands::task_reveal,
             commands::folder_open,
             browser::browser_status,

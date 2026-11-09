@@ -76,6 +76,13 @@ export function App({ platform }: { platform: Platform }) {
   useShortcuts();
   useTorrentDrop();
 
+  // Files deleted or moved while the window was in the background.
+  useEffect(() => {
+    const check = () => void useApp.getState().checkFiles();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, []);
+
   // Following the system: switch with it.
   useEffect(() => {
     if (appearance.mode !== 'system') return;

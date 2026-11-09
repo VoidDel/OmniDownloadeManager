@@ -88,6 +88,9 @@ struct Running {
     limit: RateLimiter,
     meter: SpeedMeter,
     up_meter: SpeedMeter,
+    /// When this run started, until it finishes or begins to seed: its time goes to
+    /// `Task::active_ms`.
+    since: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -355,6 +358,8 @@ impl TaskManager {
                     created_at: now_ms(),
                     started_at: None,
                     completed_at: None,
+                    active_ms: 0,
+                    peak_bps: 0,
                     prev_status: None,
                     sort_order,
                     etag: None,
@@ -425,8 +430,8 @@ impl TaskManager {
         Ok(())
     }
 
-    /// Starts paused or failed downloads over from the first byte (after the remote file
-    /// changed, say), keeping their file name.
+    /// Starts paused, failed or finished downloads over from the first byte (after the remote
+    /// file changed, or the finished file was deleted), keeping their file name.
     pub async fn restart(&self, ids: &[TaskId]) -> Result<()> {
         let mut changed = Vec::new();
         {
@@ -437,13 +442,19 @@ impl TaskManager {
                     continue;
                 }
                 if let Some(t) = tasks.get_mut(id)
-                    && matches!(t.status, TaskStatus::Paused | TaskStatus::Failed)
+                    && matches!(
+                        t.status,
+                        TaskStatus::Paused | TaskStatus::Failed | TaskStatus::Completed
+                    )
                 {
                     t.status = TaskStatus::Queued;
                     t.error = None;
                     t.downloaded_bytes = 0;
                     t.etag = None;
                     t.last_modified = None;
+                    t.completed_at = None;
+                    t.active_ms = 0;
+                    t.peak_bps = 0;
                     changed.push(*id);
                 }
             }
@@ -671,6 +682,7 @@ impl Inner {
                         limit: RateLimiter::new(t.options.speed_limit),
                         meter: SpeedMeter::default(),
                         up_meter: SpeedMeter::default(),
+                        since: Some(Instant::now()),
                     },
                 );
                 started.push(id);
@@ -745,12 +757,14 @@ impl Inner {
     }
 
     async fn finish(self: &Arc<Self>, id: TaskId, outcome: Outcome) {
-        let (stop, uploaded) = self
+        let (stop, uploaded, active) = self
             .state
             .lock()
             .running
             .remove(&id)
-            .map_or((Stop::None, 0), |r| (r.stop, r.progress.uploaded()));
+            .map_or((Stop::None, 0, None), |r| {
+                (r.stop, r.progress.uploaded(), r.since.map(|s| s.elapsed()))
+            });
         // A run stopped before it settled the file (while probing) has nothing on disk.
         let started = self
             .state
@@ -778,6 +792,9 @@ impl Inner {
                 let mut st = self.state.lock();
                 if let Some(t) = st.tasks.get_mut(&id) {
                     let seeding = t.status == TaskStatus::Seeding;
+                    if let Some(d) = active {
+                        t.active_ms = t.active_ms.saturating_add(millis(d));
+                    }
                     t.uploaded_bytes = t.uploaded_bytes.max(uploaded);
                     t.speed_bps = 0;
                     t.upload_speed_bps = 0;
@@ -973,7 +990,12 @@ impl Checkpoint for Saver {
         };
         {
             let mut st = inner.state.lock();
+            // Seeding is not downloading: the clock stops here.
+            let active = st.running.get_mut(&self.id).and_then(|r| r.since.take());
             if let Some(t) = st.tasks.get_mut(&self.id) {
+                if let Some(s) = active.filter(|_| t.completed_at.is_none()) {
+                    t.active_ms = t.active_ms.saturating_add(millis(s.elapsed()));
+                }
                 t.status = TaskStatus::Seeding;
                 t.total_bytes = s.total;
                 t.downloaded_bytes = s.downloaded();
@@ -988,6 +1010,10 @@ impl Checkpoint for Saver {
         inner.schedule();
         Ok(())
     }
+}
+
+fn millis(d: Duration) -> u64 {
+    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// Samples running tasks: speed, ETA, connections; publishes one progress event per tick.
@@ -1025,6 +1051,7 @@ async fn ticker(inner: Weak<Inner>) {
                 t.uploaded_bytes = uploaded;
                 t.total_bytes = total;
                 t.speed_bps = speed;
+                t.peak_bps = t.peak_bps.max(speed);
                 t.upload_speed_bps = upload_speed;
                 t.eta_secs = eta;
                 t.connections = r.progress.connections();

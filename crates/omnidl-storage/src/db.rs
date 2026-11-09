@@ -39,6 +39,10 @@ pub struct TaskRecord {
     pub created_at: i64,
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
+    /// Time spent downloading, pauses excluded (ms).
+    pub active_ms: i64,
+    /// The highest download speed seen (bytes per second).
+    pub peak_bps: i64,
 }
 
 /// One segment of a download: bytes `start..=end` (`end` is `None` while the length is unknown),
@@ -62,7 +66,8 @@ macro_rules! task_columns {
     () => {
         "id, kind, source, final_url, save_dir, file_name, status, prev_status, \
      total_bytes, downloaded, uploaded, category, priority, sort_order, options_json, etag, \
-     last_modified, resumable, error_json, created_at, started_at, completed_at"
+     last_modified, resumable, error_json, created_at, started_at, completed_at, active_ms, \
+     peak_bps"
     };
 }
 
@@ -104,7 +109,7 @@ impl Db {
         sqlx::query(concat!(
             "INSERT INTO tasks (",
             task_columns!(),
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ))
         .bind(&t.id)
         .bind(&t.kind)
@@ -128,6 +133,8 @@ impl Db {
         .bind(t.created_at)
         .bind(t.started_at)
         .bind(t.completed_at)
+        .bind(t.active_ms)
+        .bind(t.peak_bps)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -139,7 +146,8 @@ impl Db {
             "UPDATE tasks SET source = ?, final_url = ?, save_dir = ?, file_name = ?, status = ?, \
              prev_status = ?, total_bytes = ?, downloaded = ?, uploaded = ?, category = ?, \
              priority = ?, sort_order = ?, options_json = ?, etag = ?, last_modified = ?, \
-             resumable = ?, error_json = ?, started_at = ?, completed_at = ? WHERE id = ?",
+             resumable = ?, error_json = ?, started_at = ?, completed_at = ?, active_ms = ?, \
+             peak_bps = ? WHERE id = ?",
         )
         .bind(&t.source)
         .bind(&t.final_url)
@@ -160,6 +168,8 @@ impl Db {
         .bind(&t.error_json)
         .bind(t.started_at)
         .bind(t.completed_at)
+        .bind(t.active_ms)
+        .bind(t.peak_bps)
         .bind(&t.id)
         .execute(&self.pool)
         .await?;
@@ -323,6 +333,8 @@ fn task_from_row(r: &SqliteRow) -> Result<TaskRecord> {
         created_at: r.try_get("created_at")?,
         started_at: r.try_get("started_at")?,
         completed_at: r.try_get("completed_at")?,
+        active_ms: r.try_get("active_ms")?,
+        peak_bps: r.try_get("peak_bps")?,
     })
 }
 
@@ -354,6 +366,8 @@ mod tests {
             created_at: 1,
             started_at: None,
             completed_at: None,
+            active_ms: 0,
+            peak_bps: 0,
         }
     }
 

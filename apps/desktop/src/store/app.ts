@@ -6,7 +6,7 @@ import type { Platform, ToastItem, ToastTone } from 'omni-ui';
 import { create } from 'zustand';
 
 import { api, asError, listenApp, listenTasks } from '../lib/api';
-import { initI18n, resolveLang, setLanguage } from '../i18n';
+import i18n, { initI18n, resolveLang, setLanguage } from '../i18n';
 import { applyTheme, setSystemLook } from '../lib/theme';
 import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus } from '../lib/types';
 import { errorText } from '../lib/words';
@@ -83,6 +83,9 @@ interface State {
   materialSupported: boolean;
   /** The system's accent colour, when known. */
   systemAccent: string | null;
+  /** Finished downloads whose file was deleted or moved (checked at start and when the window
+   *  comes back to the front). */
+  missing: Record<string, true>;
 
   /** Loads settings and tasks and listens for changes. Resolves to whether the app was started
    *  in the background by the browser bridge (the main window then stays hidden). */
@@ -103,6 +106,10 @@ interface State {
   dismiss: (id: number) => void;
   /** Runs a command; a failure becomes an error toast. Resolves to undefined on failure. */
   run: <T>(op: () => Promise<T>) => Promise<T | undefined>;
+  /** Looks for finished downloads whose file is gone. */
+  checkFiles: () => Promise<void>;
+  /** Opens a finished download; a file that is gone is marked and offered for downloading again. */
+  openTask: (id: string) => Promise<void>;
   /** Changes and saves the settings (the window applies them at once). */
   saveSettings: (change: (s: Settings) => void) => Promise<void>;
   /** The folder new downloads go to. */
@@ -168,6 +175,7 @@ export const useApp = create<State>((set, get) => ({
   seenBrowsers: [],
   materialSupported: false,
   systemAccent: null,
+  missing: {},
 
   boot: async (platform) => {
     set({ platform });
@@ -185,6 +193,12 @@ export const useApp = create<State>((set, get) => ({
           set((s) => {
             if (!s.tasks[t.id]) return {};
             if (!['probing', 'downloading'].includes(t.status)) history.delete(t.id);
+            // Downloading it again brings the file back.
+            if (s.missing[t.id] && t.status !== 'completed') {
+              const missing = { ...s.missing };
+              delete missing[t.id];
+              return { tasks: withTask(s.tasks, t), missing };
+            }
             return { tasks: withTask(s.tasks, t) };
           }),
         deleted: (ids) =>
@@ -239,6 +253,7 @@ export const useApp = create<State>((set, get) => ({
       // Opened with magnet links or .torrent files.
       if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
       background = boot.background;
+      void get().checkFiles();
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.
       console.error('bootstrap', e);
@@ -287,6 +302,33 @@ export const useApp = create<State>((set, get) => ({
       get().toast('error', errorText(err));
       console.error(err);
       return undefined;
+    }
+  },
+
+  checkFiles: async () => {
+    try {
+      const ids = await api.missingFiles();
+      set({ missing: Object.fromEntries(ids.map((id) => [id, true as const])) });
+    } catch (e) {
+      console.error('missing files', e);
+    }
+  },
+
+  openTask: async (id) => {
+    try {
+      await api.open(id);
+    } catch (e) {
+      const err: AppError = asError(e);
+      if (err.code !== 'file_missing') {
+        get().toast('error', errorText(err));
+        console.error(err);
+        return;
+      }
+      set((s) => ({ missing: { ...s.missing, [id]: true } }));
+      get().toast('error', i18n.t('errors.fileGone'), {
+        label: i18n.t('table.menu.redownload'),
+        run: () => void get().run(() => api.restart([id])),
+      });
     }
   },
 

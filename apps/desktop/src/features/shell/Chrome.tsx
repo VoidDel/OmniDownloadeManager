@@ -423,6 +423,15 @@ export function CommandBar() {
     useShallow((s) => ({ run: s.run, openDialog: s.openDialog, openDetail: s.openDetail, setDetailPinned: s.setDetailPinned })),
   );
   const statuses = useApp(useShallow((s) => selection.map((id) => s.tasks[id]?.status)));
+  // Selected tasks to download again: the finished file was deleted, or the remote file changed.
+  const again = useApp(
+    useShallow((s) =>
+      selection.filter((id) => {
+        const t = s.tasks[id];
+        return t && ((t.status === 'completed' && s.missing[id]) || t.error?.code === 'remote_changed');
+      }),
+    ),
+  );
   const allIds = useApp(useShallow((s) => visibleIds(s.tasks, s.filter, { key: 'added', desc: false })));
   const anyPausable = useApp((s) => Object.values(s.tasks).some((t) => ['queued', 'probing', 'downloading'].includes(t.status)));
   const anyResumable = useApp((s) => Object.values(s.tasks).some((t) => t.status === 'paused' || t.status === 'failed'));
@@ -467,6 +476,12 @@ export function CommandBar() {
             <Icon name="pause" />
             <span className="lbl">{t('shell.cmd.pause')}</span>
           </button>
+          {again.length > 0 && (
+            <button type="button" title={t('shell.cmd.redownload')} className="btn" onClick={() => void run(() => api.restart(again))}>
+              <Icon name="refresh" />
+              <span className="lbl">{t('shell.cmd.redownload')}</span>
+            </button>
+          )}
           <button type="button" title={t('shell.cmd.delete')} className="btn" onClick={() => void run(() => api.remove(selection))}>
             <Icon name="trash" />
             <span className="lbl">{t('shell.cmd.delete')}</span>

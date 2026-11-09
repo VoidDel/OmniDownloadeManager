@@ -216,6 +216,10 @@ pub struct Task {
     /// When the file name was settled and the partial file created.
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
+    /// Time spent downloading, pauses (and seeding) excluded, in milliseconds.
+    pub active_ms: u64,
+    /// The highest download speed seen (bytes per second).
+    pub peak_bps: u64,
     #[serde(skip)]
     pub(crate) prev_status: Option<TaskStatus>,
     #[serde(skip)]
@@ -275,6 +279,8 @@ impl Task {
             created_at: self.created_at,
             started_at: self.started_at,
             completed_at: self.completed_at,
+            active_ms: i64::try_from(self.active_ms).unwrap_or(i64::MAX),
+            peak_bps: i64::try_from(self.peak_bps).unwrap_or(i64::MAX),
         }
     }
 
@@ -317,6 +323,8 @@ impl Task {
             created_at: r.created_at,
             started_at: r.started_at,
             completed_at: r.completed_at,
+            active_ms: u64::try_from(r.active_ms).unwrap_or(0),
+            peak_bps: u64::try_from(r.peak_bps).unwrap_or(0),
             prev_status: r.prev_status.and_then(|s| TaskStatus::parse(&s)),
             sort_order: r.sort_order,
             etag: r.etag,
@@ -397,6 +405,8 @@ mod tests {
             created_at: 5,
             started_at: Some(6),
             completed_at: None,
+            active_ms: 7,
+            peak_bps: 8,
             prev_status: None,
             sort_order: 3,
             etag: Some("\"e\"".into()),

@@ -251,6 +251,33 @@ async fn removing_a_running_task_stops_it_first() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_finished_task_again() {
+    // The finished file was deleted: restarting starts over from the first byte.
+    let engine = FakeEngine::new(1000, 100, 2);
+    let m = manager(engine.clone(), Db::memory().await.unwrap(), 3).await;
+    let id = m
+        .add(vec![new_task("https://example.com/again.iso", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    let done = wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    assert!(done.completed_at.is_some());
+    // The time it spent downloading (10 steps of 2 ms): its average speed.
+    assert!(done.active_ms >= 10, "active {} ms", done.active_ms);
+    m.restart(&[id]).await.unwrap();
+    let again = m.get(id).unwrap();
+    assert!(matches!(
+        again.status,
+        TaskStatus::Queued | TaskStatus::Probing | TaskStatus::Downloading
+    ));
+    assert_eq!(again.downloaded_bytes, 0);
+    assert_eq!(again.completed_at, None);
+    assert_eq!((again.active_ms, again.peak_bps), (0, 0));
+    wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(engine.resumed_from.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn records_failures_and_retries_them() {
     let db = Db::memory().await.unwrap();
     let engine = Arc::new(FakeEngine {

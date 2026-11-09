@@ -8,7 +8,8 @@
     "completed": "已完成",
     "failed": "失敗",
     "removed": "已刪除",
-    "fetchingTorrent": "取得種子資訊"
+    "fetchingTorrent": "取得種子資訊",
+    "fileMissing": "檔案已刪除"
   },
   "category": {
     "video": "影片",
@@ -37,7 +38,8 @@
     "file_missing": "檔案遺失或無法讀取",
     "disk_full": "磁碟空間不足",
     "io": "讀寫檔案失敗",
-    "internal": "發生內部錯誤"
+    "internal": "發生內部錯誤",
+    "fileGone": "檔案已不存在，可能已被刪除或移動"
   },
   "format": {
     "s": "{s} 秒",
@@ -258,7 +260,8 @@
       "emptyTrash": "清空回收筒",
       "detailPanel": "詳細資料窗格",
       "showDetail": "顯示詳細資料",
-      "detailPinned": "詳細資料窗格已固定，選取任務時會自動顯示（按一下取消）"
+      "detailPinned": "詳細資料窗格已固定，選取任務時會自動顯示（按一下取消）",
+      "redownload": "重新下載"
     },
     "status": {
       "running": "下載中 {count}",
@@ -350,7 +353,9 @@
       "saveTo": "儲存到",
       "link": "連結",
       "segmentProgress": "分段進度",
-      "segmentCount": "{count} 個分段"
+      "segmentCount": "{count} 個分段",
+      "avgSpeed": "平均速度",
+      "peakSpeed": "最高速度"
     },
     "segments": {
       "merged": "下載已完成，分段已合併為完整檔案。",
@@ -388,7 +393,8 @@
       "stopSeeding": "停止做種",
       "openFile": "開啟檔案",
       "restore": "還原"
-    }
+    },
+    "fileMissing": "檔案已不存在，可能已被刪除或移出儲存位置。可以重新下載。"
   },
   "table": {
     "label": "下載任務",
@@ -414,7 +420,8 @@
       "copied": "已複製連結",
       "copiedMany": "已複製 {count} 個連結",
       "delete": "刪除"
-    }
+    },
+    "avgSpeed": "平均速度"
   },
   "newTask": {
     "title": "新增下載",

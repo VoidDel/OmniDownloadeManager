@@ -8,7 +8,8 @@
     "completed": "Completed",
     "failed": "Failed",
     "removed": "Deleted",
-    "fetchingTorrent": "Fetching metadata"
+    "fetchingTorrent": "Fetching metadata",
+    "fileMissing": "File deleted"
   },
   "category": {
     "video": "Video",
@@ -37,7 +38,8 @@
     "file_missing": "The file is missing or cannot be read",
     "disk_full": "Not enough disk space",
     "io": "Failed to read or write the file",
-    "internal": "An internal error occurred"
+    "internal": "An internal error occurred",
+    "fileGone": "The file no longer exists; it may have been deleted or moved"
   },
   "format": {
     "s": "{s}s",
@@ -258,7 +260,8 @@
       "emptyTrash": "Empty trash",
       "detailPanel": "Details panel",
       "showDetail": "Show details",
-      "detailPinned": "Details panel pinned: it shows when a task is selected (click to unpin)"
+      "detailPinned": "Details panel pinned: it shows when a task is selected (click to unpin)",
+      "redownload": "Download again"
     },
     "status": {
       "running": "{count} downloading",
@@ -350,7 +353,9 @@
       "saveTo": "Save to",
       "link": "Link",
       "segmentProgress": "Segment progress",
-      "segmentCount": "{count, plural, one {# segment} other {# segments}}"
+      "segmentCount": "{count, plural, one {# segment} other {# segments}}",
+      "avgSpeed": "Average speed",
+      "peakSpeed": "Peak speed"
     },
     "segments": {
       "merged": "The download is complete and the segments have been merged into the full file.",
@@ -388,7 +393,8 @@
       "stopSeeding": "Stop seeding",
       "openFile": "Open file",
       "restore": "Restore"
-    }
+    },
+    "fileMissing": "The file is no longer there — it may have been deleted or moved. You can download it again."
   },
   "table": {
     "label": "Downloads",
@@ -414,7 +420,8 @@
       "copied": "Link copied",
       "copiedMany": "{count, plural, one {# link copied} other {# links copied}}",
       "delete": "Delete"
-    }
+    },
+    "avgSpeed": "Average speed"
   },
   "newTask": {
     "title": "New download",

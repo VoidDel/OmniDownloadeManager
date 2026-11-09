@@ -8,7 +8,8 @@
     "completed": "已完成",
     "failed": "失败",
     "removed": "已删除",
-    "fetchingTorrent": "获取种子信息"
+    "fetchingTorrent": "获取种子信息",
+    "fileMissing": "文件已删除"
   },
   "category": {
     "video": "视频",
@@ -37,7 +38,8 @@
     "file_missing": "文件丢失或无法读取",
     "disk_full": "磁盘空间不足",
     "io": "读写文件失败",
-    "internal": "出现内部错误"
+    "internal": "出现内部错误",
+    "fileGone": "文件已不存在，可能被删除或移动了"
   },
   "format": {
     "s": "{s} 秒",
@@ -258,7 +260,8 @@
       "emptyTrash": "清空回收站",
       "detailPanel": "详情面板",
       "showDetail": "显示详情",
-      "detailPinned": "详情面板已固定，选中任务时自动显示（点击取消）"
+      "detailPinned": "详情面板已固定，选中任务时自动显示（点击取消）",
+      "redownload": "重新下载"
     },
     "status": {
       "running": "下载中 {count}",
@@ -350,7 +353,9 @@
       "saveTo": "保存到",
       "link": "链接",
       "segmentProgress": "分片进度",
-      "segmentCount": "{count} 个分片"
+      "segmentCount": "{count} 个分片",
+      "avgSpeed": "平均速度",
+      "peakSpeed": "最大速度"
     },
     "segments": {
       "merged": "下载已完成，分片已合并为完整文件。",
@@ -388,7 +393,8 @@
       "stopSeeding": "停止做种",
       "openFile": "打开文件",
       "restore": "还原"
-    }
+    },
+    "fileMissing": "文件已不存在，可能被删除或移出了保存位置。可以重新下载。"
   },
   "table": {
     "label": "下载任务",
@@ -414,7 +420,8 @@
       "copied": "已复制链接",
       "copiedMany": "已复制 {count} 个链接",
       "delete": "删除"
-    }
+    },
+    "avgSpeed": "平均速度"
   },
   "newTask": {
     "title": "新建下载",

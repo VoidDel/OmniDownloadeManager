@@ -79,6 +79,10 @@ export interface Task {
   createdAt: number;
   startedAt: number | null;
   completedAt: number | null;
+  /** Time spent downloading, pauses excluded (ms). */
+  activeMs: number;
+  /** The highest download speed seen (bytes per second). */
+  peakBps: number;
 }
 
 export interface ProbeInfo {

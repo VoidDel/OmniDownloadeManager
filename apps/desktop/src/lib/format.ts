@@ -2,6 +2,7 @@
 // locales/*/app.json; dates through Intl).
 
 import i18n from '../i18n';
+import type { Task } from './types';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
@@ -23,6 +24,15 @@ export function bytes(n: number | null | undefined): string {
     r = round(v / 1024);
   }
   return `${r} ${UNITS[u]}`;
+}
+
+/** A finished download's average speed (bytes per second): its size over the time it spent
+ *  downloading, or null when that time is not known (finished before it was recorded: the time
+ *  from start to finish would count pauses too). */
+export function averageSpeed(t: Task): number | null {
+  if (t.completedAt == null || !t.activeMs) return null;
+  const bytes = t.totalBytes ?? t.downloadedBytes;
+  return bytes > 0 ? (bytes * 1000) / t.activeMs : null;
 }
 
 export function speed(bps: number | null | undefined): string {

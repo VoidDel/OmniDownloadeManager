@@ -4,7 +4,8 @@
 use std::{path::Path, sync::atomic::Ordering};
 
 use omnidl_core::{
-    Error, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskKind, TaskOptions, TaskStatus,
+    Error, ErrorCode, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskKind, TaskOptions,
+    TaskStatus,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -188,9 +189,27 @@ pub fn task_open(app: AppHandle, state: State<'_, AppState>, id: TaskId) -> Resu
         return Err(Error::invalid("the download has not finished"));
     }
     let path = task.path();
+    if !path.exists() {
+        return Err(Error::new(
+            ErrorCode::FileMissing,
+            format!("{} no longer exists", path.display()),
+        ));
+    }
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(|e| Error::internal(format!("{}: {e}", path.display())))
+}
+
+/// Finished downloads whose file (or torrent folder) is no longer where it was saved.
+#[tauri::command]
+pub fn task_missing(state: State<'_, AppState>) -> Vec<TaskId> {
+    state
+        .manager
+        .list()
+        .into_iter()
+        .filter(|t| t.status == TaskStatus::Completed && !t.path().exists())
+        .map(|t| t.id)
+        .collect()
 }
 
 /// Shows a download in the file manager: the file once it exists, else its folder.
