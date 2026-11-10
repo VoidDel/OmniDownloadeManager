@@ -166,10 +166,22 @@ impl Settings {
         match toml::from_str::<Self>(&text) {
             Ok(mut s) => {
                 // Settings from before the first-run guide existed: this is not a first run.
-                let guided = toml::from_str::<toml::Table>(&text)
-                    .is_ok_and(|t| t.get("general").and_then(|g| g.get("onboarded")).is_some());
-                if !guided {
+                let table = toml::from_str::<toml::Table>(&text).ok();
+                let has = |group: &str, key: &str| {
+                    table
+                        .as_ref()
+                        .and_then(|t| t.get(group))
+                        .and_then(|g| g.get(key))
+                        .is_some()
+                };
+                if !has("general", "onboarded") {
                     s.general.onboarded = true;
+                }
+                // Settings from before the automatic user agent: one the user changed is kept.
+                if !has("engine", "userAgentAuto") {
+                    let ua = s.engine.user_agent.trim();
+                    s.engine.user_agent_auto =
+                        ua.is_empty() || ua == omnidl_core::default_user_agent();
                 }
                 s.normalized()
             }
@@ -249,6 +261,28 @@ mod tests {
         s.appearance.mode = "dark".into();
         s.save(&path).unwrap();
         assert_eq!(Settings::load(&path), s);
+    }
+
+    #[test]
+    fn keeps_a_user_agent_changed_before_the_automatic_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.toml");
+        std::fs::write(&path, "[engine]\nuserAgent = \"Wget/1.21\"\n").unwrap();
+        let s = Settings::load(&path);
+        assert!(!s.engine.user_agent_auto);
+        assert_eq!(s.engine.user_agent, "Wget/1.21");
+        std::fs::write(&path, "[engine]\nconnections = 4\n").unwrap();
+        assert!(
+            Settings::load(&path).engine.user_agent_auto,
+            "the default one: automatic"
+        );
+        let mut s = Settings::load(&path);
+        s.engine.user_agent_auto = false;
+        s.save(&path).unwrap();
+        assert!(
+            !Settings::load(&path).engine.user_agent_auto,
+            "a choice saved is kept"
+        );
     }
 
     #[test]

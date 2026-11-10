@@ -13,14 +13,13 @@ use std::{
 
 use bytes::Bytes;
 use omnidl_core::{
-    Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable,
+    Crew, Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable, Shift, Worker,
     disk::{backoff, claim_name, ensure_space, place},
     filename, segments,
 };
 use omnidl_storage::{FileWriter, file};
 use parking_lot::Mutex;
 use tokio::{io::AsyncReadExt, task::JoinSet, time::Instant};
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     Probe, probe,
@@ -30,6 +29,8 @@ use crate::{
 const UI_TICK: Duration = Duration::from_millis(250);
 const SAVE_EVERY: Duration = Duration::from_secs(1);
 const READ_BUF: usize = 64 * 1024;
+/// Servers often refuse more sessions than this from one address.
+const MAX_SESSIONS: u32 = 8;
 
 pub(crate) async fn run(retry_delay: Duration, job: Job) -> Outcome {
     let job = Arc::new(job);
@@ -51,11 +52,13 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Download> {
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(&e, dir.display()))?;
     let total = probe.total;
     let resumable = probe.resumable;
-    let sessions = if resumable {
-        job.options.ftp_connections
-    } else {
-        1
-    };
+    // Tuning starts from the sessions of the settings (servers are strict about them).
+    let first = job.conns.begin(
+        job.options.ftp_conn_mode(),
+        MAX_SESSIONS,
+        job.options.ftp_connections,
+    );
+    let sessions = if resumable { first } else { 1 };
     let (file_name, file, plan) = match &job.resume {
         Some(r) => {
             let partial = dir.join(filename::partial(&r.file_name));
@@ -167,6 +170,9 @@ enum ConnError {
     Fatal(Error),
     /// This session gave up; others may take its segment.
     GaveUp(Error),
+    /// A connection started in place of a replaced one gave up (refused, most likely because
+    /// the server still counts the old one): not a reason for fewer connections.
+    ReplacementGaveUp(Error),
 }
 
 enum FetchError {
@@ -224,24 +230,18 @@ impl Download {
             table: self.table.clone(),
             writer: self.writer.clone(),
             ranged: self.state.resumable,
-            stop: stop.clone(),
+            crew: Crew::new(stop.clone(), self.job.conns.crew_window()),
             open: AtomicU32::new(0),
             retry_delay: self.retry_delay,
             spare: self.spare.clone(),
         });
         let count = if conn.ranged {
-            self.job.options.ftp_connections
+            self.job.conns.target()
         } else {
             1
         };
         let mut set = JoinSet::new();
-        {
-            let mut t = self.table.lock();
-            for _ in 0..count {
-                let Some(idx) = t.claim() else { break };
-                set.spawn(conn.clone().work(idx));
-            }
-        }
+        conn.spawn(&mut set, count);
         let mut tick = tokio::time::interval(UI_TICK);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut last_save = Instant::now();
@@ -251,8 +251,36 @@ impl Download {
             tokio::select! {
                 joined = set.join_next() => match joined {
                     None => break,
-                    Some(Ok(Ok(()))) => {}
-                    Some(Ok(Err(ConnError::GaveUp(e)))) => gave_up = Some(e),
+                    // One ended (done, retired or replaced): its place may need filling.
+                    Some(Ok(Ok(()))) => {
+                        if conn.ranged && !stop.is_cancelled() {
+                            conn.spawn(&mut set, conn.crew.vacancies(self.job.conns.target()));
+                        }
+                    }
+                    Some(Ok(Err(ConnError::ReplacementGaveUp(e)))) => {
+                        conn.crew.replacement_refused();
+                        gave_up = Some(e);
+                        // Its place is taken again at the next tick; at once if it was alone.
+                        if set.is_empty() && !stop.is_cancelled() {
+                            conn.spawn(&mut set, conn.crew.vacancies(self.job.conns.target()));
+                            if set.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                    Some(Ok(Err(ConnError::GaveUp(e)))) => {
+                        // "421 Too many connections", or it kept failing: no more sessions than
+                        // the others, for a while.
+                        // Those still trying count too: on a slow line they may not have an answer yet.
+                        self.job
+                            .conns
+                            .overloaded(conn.crew.running().max(conn.open.load(Ordering::Relaxed)));
+                        conn.crew.pause_replacing();
+                        gave_up = Some(e);
+                        if set.is_empty() {
+                            break;
+                        }
+                    }
                     Some(Ok(Err(ConnError::Fallback))) => {
                         halt.get_or_insert(Halt::Fallback);
                         stop.cancel();
@@ -268,6 +296,12 @@ impl Download {
                 },
                 _ = tick.tick() => {
                     self.publish();
+                    if conn.ranged && !stop.is_cancelled() {
+                        let job = &self.job;
+                        job.conns.observe(job.progress.downloaded(), job.speed_limit());
+                        let more = conn.crew.rebalance(job.conns.target(), job.conns.limited());
+                        conn.spawn(&mut set, more);
+                    }
                     if last_save.elapsed() >= SAVE_EVERY {
                         last_save = Instant::now();
                         if let Err(e) = self.save().await {
@@ -374,25 +408,41 @@ struct Conn {
     writer: FileWriter,
     /// Transfers start where their segment does (`REST`).
     ranged: bool,
-    stop: CancellationToken,
+    /// The sessions, each stopped with the download or on its own (retired, replaced).
+    crew: Arc<Crew>,
     open: AtomicU32,
     retry_delay: Duration,
     spare: Arc<Mutex<Option<Ftp>>>,
 }
 
 impl Conn {
+    /// Starts up to `n` sessions, each on a segment it claims.
+    fn spawn(self: &Arc<Self>, set: &mut JoinSet<Result<(), ConnError>>, n: u32) {
+        let mut t = self.table.lock();
+        for _ in 0..n {
+            let Some(idx) = t.claim() else { break };
+            set.spawn(self.clone().work(self.crew.join(), idx));
+        }
+    }
+
     /// One session: its segment, then whatever it can claim next. A transfer that ran to the
     /// end of the file leaves the session reusable; one stopped early (its segment ended or
     /// was split) closes it, since aborting a transfer is unreliable across servers.
-    async fn work(self: Arc<Self>, mut idx: usize) -> Result<(), ConnError> {
+    async fn work(self: Arc<Self>, shift: Shift, mut idx: usize) -> Result<(), ConnError> {
+        let w = shift.worker();
         let mut ftp = self.spare.lock().take();
         let r = loop {
-            let r = self.segment(idx, &mut ftp).await;
+            let r = self.segment(w, idx, &mut ftp).await;
             self.table.lock().release(idx);
-            if let Err(e) = r {
-                break Err(e);
+            match r {
+                Err(ConnError::GaveUp(e)) if w.is_replacement() => {
+                    break Err(ConnError::ReplacementGaveUp(e));
+                }
+                Err(e) => break Err(e),
+                Ok(()) => {}
             }
-            if self.stop.is_cancelled() {
+            // The download stopped, or this session was retired or replaced.
+            if w.is_cancelled() {
                 break Ok(());
             }
             match self.table.lock().claim() {
@@ -406,14 +456,19 @@ impl Conn {
         r
     }
 
-    async fn segment(&self, idx: usize, ftp: &mut Option<Ftp>) -> Result<(), ConnError> {
+    async fn segment(
+        &self,
+        w: &Worker,
+        idx: usize,
+        ftp: &mut Option<Ftp>,
+    ) -> Result<(), ConnError> {
         let mut attempt = 0;
         loop {
-            if self.stop.is_cancelled() {
+            if w.is_cancelled() {
                 return Ok(());
             }
             let before = self.position(idx);
-            let e = match self.fetch(idx, ftp).await {
+            let e = match self.fetch(w, idx, ftp).await {
                 Ok(()) | Err(FetchError::Cancelled) => return Ok(()),
                 Err(FetchError::Fallback) => return Err(ConnError::Fallback),
                 Err(FetchError::Failed(e)) => e,
@@ -437,7 +492,7 @@ impl Conn {
             tracing::debug!("{} (retry {attempt}): {e}", self.target.url);
             tokio::select! {
                 _ = tokio::time::sleep(backoff(self.retry_delay, attempt)) => {}
-                _ = self.stop.cancelled() => return Ok(()),
+                _ = w.cancelled() => return Ok(()),
             }
         }
     }
@@ -452,7 +507,12 @@ impl Conn {
     }
 
     /// One `RETR` for the rest of segment `idx`.
-    async fn fetch(&self, idx: usize, slot: &mut Option<Ftp>) -> Result<(), FetchError> {
+    async fn fetch(
+        &self,
+        w: &Worker,
+        idx: usize,
+        slot: &mut Option<Ftp>,
+    ) -> Result<(), FetchError> {
         let start = {
             let mut t = self.table.lock();
             if !self.ranged && t.segment(idx).downloaded > 0 {
@@ -463,13 +523,14 @@ impl Conn {
             if s.is_done() {
                 return Ok(());
             }
+            w.set_left(s.remaining());
             s.pos()
         };
         let o = &self.job.options;
         if slot.is_none() {
             let opened = tokio::select! {
                 r = session::open(&self.target, o) => r,
-                _ = self.stop.cancelled() => return Err(FetchError::Cancelled),
+                _ = w.cancelled() => return Err(FetchError::Cancelled),
             };
             *slot = Some(opened.map_err(FetchError::Failed)?);
         }
@@ -481,7 +542,7 @@ impl Conn {
         }
         let opened = tokio::select! {
             r = timed(o.read_timeout, ftp.retr_as_stream(self.target.path.as_str())) => r,
-            _ = self.stop.cancelled() => {
+            _ = w.cancelled() => {
                 *slot = None;
                 return Err(FetchError::Cancelled);
             }
@@ -504,7 +565,7 @@ impl Conn {
         loop {
             let read = tokio::select! {
                 r = tokio::time::timeout(o.read_timeout, stream.read(&mut buf)) => r,
-                _ = self.stop.cancelled() => {
+                _ = w.cancelled() => {
                     drop(stream);
                     *slot = None;
                     return Err(FetchError::Cancelled);
@@ -554,7 +615,7 @@ impl Conn {
             let len = n as u64;
             tokio::select! {
                 _ = self.job.throttle(len) => {}
-                _ = self.stop.cancelled() => {
+                _ = w.cancelled() => {
                     drop(stream);
                     *slot = None;
                     return Err(FetchError::Cancelled);
@@ -566,7 +627,13 @@ impl Conn {
                 if let Err(e) = self.writer.write(offset, chunk).await {
                     return Err(FetchError::Failed(Error::io(&e, "writing the file")));
                 }
-                self.table.lock().commit(idx, take);
+                let left = {
+                    let mut t = self.table.lock();
+                    t.commit(idx, take);
+                    t.segment(idx).remaining()
+                };
+                w.add(take);
+                w.set_left(left);
                 self.job.progress.add(take);
                 offset += take;
             }

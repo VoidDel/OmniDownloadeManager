@@ -14,7 +14,7 @@ use aes::{
     Aes128,
     cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
 };
-use futures_util::{StreamExt, stream};
+use futures_util::{StreamExt, stream::FuturesOrdered};
 use omnidl_core::{
     Error, ErrorCode, Job, Outcome, Result, ResumeState, Segment,
     disk::{backoff, claim_name, place},
@@ -452,7 +452,9 @@ type Failed = (Error, Option<ResumeState>);
 async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     let early = |e: Error| (e, None);
     let url = crate::parse_url(&job.source).map_err(early)?;
-    let client = client::build(&job.options).map_err(early)?;
+    // The user agent that worked for this host, if another did (`ua`).
+    let ua = crate::ua::preferred(&job.options, &url);
+    let client = client::build_as(&job.options, &ua).map_err(early)?;
     let (media_url, media) = media_playlist(&client, &url).await.map_err(early)?;
     if !media.ended {
         return Err(early(live()));
@@ -529,19 +531,24 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         retry_delay,
         keys: Mutex::new(HashMap::new()),
     });
-    let parallel = (job.options.connections as usize).clamp(1, MAX_PARALLEL);
+    job.conns.begin(
+        job.options.conn_mode(),
+        MAX_PARALLEL as u32,
+        omnidl_core::conns::AUTO_START,
+    );
     let first = state.segments.len();
-    job.progress
-        .set_connections(parallel.min(count - first) as u32);
-    // In order, `parallel` at a time.
-    let mut parts = stream::iter(media.parts.into_iter().skip(first))
-        .map(|p| {
-            let f = fetcher.clone();
-            async move { f.part(&p).await }
-        })
-        .buffered(parallel);
+    // In order, as many at a time as the connections asked for (by the user or the tuner).
+    let mut todo = media.parts.into_iter().skip(first);
+    let mut parts = FuturesOrdered::new();
     let mut last_save = tokio::time::Instant::now();
-    while let Some(r) = parts.next().await {
+    loop {
+        while parts.len() < job.conns.target() as usize {
+            let Some(p) = todo.next() else { break };
+            let f = fetcher.clone();
+            parts.push_back(async move { f.part(&p).await });
+        }
+        job.progress.set_connections(parts.len() as u32);
+        let Some(r) = parts.next().await else { break };
         let data = r.map_err(|e| (e, Some(state.clone())))?;
         let len = data.len() as u64;
         tokio::select! {
@@ -558,6 +565,8 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         });
         written += len;
         job.progress.add(len);
+        job.conns
+            .observe(job.progress.downloaded(), job.speed_limit());
         // The size so far, spread over what is left: an estimate until the end.
         let n = state.segments.len() as u64;
         job.progress

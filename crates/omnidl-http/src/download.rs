@@ -4,14 +4,15 @@ use std::{
     path::PathBuf,
     sync::{
         Arc,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU32, AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use futures_util::StreamExt;
 use omnidl_core::{
-    Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable,
+    Crew, Error, ErrorCode, Job, Outcome, Result, ResumeState, SegmentTable, Shift, Worker,
+    conns::{AUTO_START, MAX_CONNECTIONS},
     disk::{backoff, claim_name, ensure_space, place},
     filename, segments,
 };
@@ -22,11 +23,10 @@ use reqwest::{
     header::{CONTENT_RANGE, RANGE},
 };
 use tokio::{task::JoinSet, time::Instant};
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{
-    client::{self, request_error, status_error},
+    client::{request_error, status_error},
     hls, parse_url,
     probe::{self, Probe},
 };
@@ -62,8 +62,12 @@ enum Prepared {
 /// Probes, settles name and partial file, and reports the start.
 async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
     let url = parse_url(&job.source)?;
-    let client = client::build(&job.options)?;
-    let probe = probe_retrying(retry_delay, job, &client, &url).await?;
+    // Another user agent when the server refuses this one (`ua`).
+    let (client, probe) = crate::ua::probe_with(&job.options, &url, |c| {
+        let (job, url) = (job.clone(), url.clone());
+        async move { probe_retrying(retry_delay, &job, &c, &url).await }
+    })
+    .await?;
     if hls::is_playlist_type(probe.content_type.as_deref()) {
         return Ok(Prepared::Playlist);
     }
@@ -72,13 +76,11 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
 
     let total = probe.total;
     let mut resumable = probe.resumable;
-    let connections = |resumable: bool| {
-        if resumable {
-            job.options.connections
-        } else {
-            1
-        }
-    };
+    // The first segments, one per connection; the user or the tuner change the number later.
+    let first = job
+        .conns
+        .begin(job.options.conn_mode(), MAX_CONNECTIONS, AUTO_START);
+    let connections = |resumable: bool| if resumable { first } else { 1 };
     let (file_name, file, plan) = match &job.resume {
         Some(r) => {
             let partial = dir.join(filename::partial(&r.file_name));
@@ -244,6 +246,9 @@ enum ConnError {
     Fatal(Error),
     /// This connection gave up; others may take its segment.
     GaveUp(Error),
+    /// A connection started in place of a replaced one gave up (refused, most likely because
+    /// the server still counts the old one): not a reason for fewer connections.
+    ReplacementGaveUp(Error),
 }
 
 /// A request's end.
@@ -310,24 +315,18 @@ impl Download {
             table: self.table.clone(),
             writer: self.writer.clone(),
             ranged: self.state.resumable,
-            stop: stop.clone(),
+            crew: Crew::new(stop.clone(), self.job.conns.crew_window()),
+            next_source: AtomicUsize::new(0),
             open: AtomicU32::new(0),
             retry_delay: self.retry_delay,
         });
         let count = if conn.ranged {
-            self.job.options.connections
+            self.job.conns.target()
         } else {
             1
         };
         let mut set = JoinSet::new();
-        {
-            let mut t = self.table.lock();
-            for n in 0..count as usize {
-                let Some(idx) = t.claim() else { break };
-                // Connections take the link and the mirrors in turn.
-                set.spawn(conn.clone().work(idx, n % conn.sources.len()));
-            }
-        }
+        conn.spawn(&mut set, count);
         let mut tick = tokio::time::interval(UI_TICK);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut last_save = Instant::now();
@@ -337,8 +336,36 @@ impl Download {
             tokio::select! {
                 joined = set.join_next() => match joined {
                     None => break,
-                    Some(Ok(Ok(()))) => {}
-                    Some(Ok(Err(ConnError::GaveUp(e)))) => gave_up = Some(e),
+                    // One ended (done, retired or replaced): its place may need filling.
+                    Some(Ok(Ok(()))) => {
+                        if conn.ranged && !stop.is_cancelled() {
+                            conn.spawn(&mut set, conn.crew.vacancies(self.job.conns.target()));
+                        }
+                    }
+                    Some(Ok(Err(ConnError::ReplacementGaveUp(e)))) => {
+                        conn.crew.replacement_refused();
+                        gave_up = Some(e);
+                        // Its place is taken again at the next tick; at once if it was alone.
+                        if set.is_empty() && !stop.is_cancelled() {
+                            conn.spawn(&mut set, conn.crew.vacancies(self.job.conns.target()));
+                            if set.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                    Some(Ok(Err(ConnError::GaveUp(e)))) => {
+                        // The server refused one more, or it kept failing: no more than the
+                        // others, for a while.
+                        // Those still trying count too: on a slow line they may not have an answer yet.
+                        self.job
+                            .conns
+                            .overloaded(conn.crew.running().max(conn.open.load(Ordering::Relaxed)));
+                        conn.crew.pause_replacing();
+                        gave_up = Some(e);
+                        if set.is_empty() {
+                            break;
+                        }
+                    }
                     Some(Ok(Err(ConnError::Fallback))) => {
                         halt.get_or_insert(Halt::Fallback);
                         stop.cancel();
@@ -354,6 +381,13 @@ impl Download {
                 },
                 _ = tick.tick() => {
                     self.publish();
+                    if conn.ranged && !stop.is_cancelled() {
+                        // More or fewer connections, and a new one for a slow one.
+                        let job = &self.job;
+                        job.conns.observe(job.progress.downloaded(), job.speed_limit());
+                        let more = conn.crew.rebalance(job.conns.target(), job.conns.limited());
+                        conn.spawn(&mut set, more);
+                    }
                     if last_save.elapsed() >= SAVE_EVERY {
                         last_save = Instant::now();
                         if let Err(e) = self.save().await {
@@ -469,7 +503,10 @@ struct Conn {
     writer: FileWriter,
     /// Requests carry `Range` (the server supports it and the length is known).
     ranged: bool,
-    stop: CancellationToken,
+    /// The connections, each stopped with the download or on its own (retired, replaced).
+    crew: Arc<Crew>,
+    /// Connections take the link and the mirrors in turn.
+    next_source: AtomicUsize,
     /// Requests with a body streaming.
     open: AtomicU32,
     retry_delay: Duration,
@@ -493,14 +530,35 @@ impl Conn {
             .unwrap_or(0)
     }
 
+    /// Starts up to `n` connections, each on a segment it claims.
+    fn spawn(self: &Arc<Self>, set: &mut JoinSet<Result<(), ConnError>>, n: u32) {
+        let mut t = self.table.lock();
+        for _ in 0..n {
+            let Some(idx) = t.claim() else { break };
+            let src = self.next_source.fetch_add(1, Ordering::Relaxed) % self.sources.len();
+            set.spawn(self.clone().work(self.crew.join(), idx, src));
+        }
+    }
+
     /// One connection: its segment, then whatever it can claim next, from source `src` (the
-    /// link or a mirror).
-    async fn work(self: Arc<Self>, mut idx: usize, mut src: usize) -> Result<(), ConnError> {
+    /// link or a mirror). A retired connection leaves its segment to the others.
+    async fn work(
+        self: Arc<Self>,
+        shift: Shift,
+        mut idx: usize,
+        mut src: usize,
+    ) -> Result<(), ConnError> {
+        let w = shift.worker();
         loop {
-            let r = self.segment(idx, &mut src).await;
+            let r = self.segment(w, idx, &mut src).await;
             self.table.lock().release(idx);
-            r?;
-            if self.stop.is_cancelled() {
+            match r {
+                Err(ConnError::GaveUp(e)) if w.is_replacement() => {
+                    return Err(ConnError::ReplacementGaveUp(e));
+                }
+                r => r?,
+            }
+            if w.is_cancelled() {
                 return Ok(());
             }
             match self.table.lock().claim() {
@@ -512,17 +570,17 @@ impl Conn {
 
     /// Downloads segment `idx` until it ends, retrying transient failures with backoff. A mirror
     /// that fails in any way is left out and the segment goes on from another source.
-    async fn segment(&self, idx: usize, src: &mut usize) -> Result<(), ConnError> {
+    async fn segment(&self, w: &Worker, idx: usize, src: &mut usize) -> Result<(), ConnError> {
         let mut attempt = 0;
         loop {
-            if self.stop.is_cancelled() {
+            if w.is_cancelled() {
                 return Ok(());
             }
             if self.dropped.lock()[*src] {
                 *src = 0;
             }
             let before = self.position(idx);
-            let e = match self.fetch(idx, *src).await {
+            let e = match self.fetch(w, idx, *src).await {
                 Ok(()) | Err(FetchError::Cancelled) => return Ok(()),
                 Err(FetchError::Fallback) if *src != 0 => {
                     *src = self.drop_source(*src, &"ignores ranges");
@@ -553,7 +611,7 @@ impl Conn {
             tracing::debug!("{} (retry {attempt}): {e}", self.url());
             tokio::select! {
                 _ = tokio::time::sleep(backoff(self.retry_delay, attempt)) => {}
-                _ = self.stop.cancelled() => return Ok(()),
+                _ = w.cancelled() => return Ok(()),
             }
         }
     }
@@ -568,7 +626,7 @@ impl Conn {
     }
 
     /// One request for the rest of segment `idx`, to source `src`.
-    async fn fetch(&self, idx: usize, src: usize) -> Result<(), FetchError> {
+    async fn fetch(&self, w: &Worker, idx: usize, src: usize) -> Result<(), FetchError> {
         let (start, end) = {
             let mut t = self.table.lock();
             if !self.ranged && t.segment(idx).downloaded > 0 {
@@ -582,6 +640,7 @@ impl Conn {
             }
             (s.pos(), s.end)
         };
+        w.set_left(end.map(|e| e + 1 - start));
         let mut req = self.client.get(self.sources[src].clone());
         if self.ranged {
             let range = match end {
@@ -592,7 +651,7 @@ impl Conn {
         }
         let resp = tokio::select! {
             r = req.send() => r.map_err(|e| FetchError::Failed(request_error(&e)))?,
-            _ = self.stop.cancelled() => return Err(FetchError::Cancelled),
+            _ = w.cancelled() => return Err(FetchError::Cancelled),
         };
         match resp.status() {
             StatusCode::PARTIAL_CONTENT => {
@@ -621,7 +680,7 @@ impl Conn {
         loop {
             let next = tokio::select! {
                 n = body.next() => n,
-                _ = self.stop.cancelled() => return Err(FetchError::Cancelled),
+                _ = w.cancelled() => return Err(FetchError::Cancelled),
             };
             let chunk = match next {
                 Some(Ok(c)) => c,
@@ -645,14 +704,20 @@ impl Conn {
             let len = chunk.len() as u64;
             tokio::select! {
                 _ = self.job.throttle(len) => {}
-                _ = self.stop.cancelled() => return Err(FetchError::Cancelled),
+                _ = w.cancelled() => return Err(FetchError::Cancelled),
             }
             let n = self.table.lock().reserve(idx, len);
             if n > 0 {
                 if let Err(e) = self.writer.write(offset, chunk.slice(..n as usize)).await {
                     return Err(FetchError::Failed(Error::io(&e, "writing the file")));
                 }
-                self.table.lock().commit(idx, n);
+                let left = {
+                    let mut t = self.table.lock();
+                    t.commit(idx, n);
+                    t.segment(idx).remaining()
+                };
+                w.add(n);
+                w.set_left(left);
                 self.job.progress.add(n);
                 offset += n;
             }

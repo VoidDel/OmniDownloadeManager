@@ -287,6 +287,23 @@ pub async fn task_set_speed_limit(
     state.manager.set_task_speed_limit(id, limit).await
 }
 
+/// Common user agents to choose from in the settings (name, value).
+#[tauri::command]
+pub fn user_agent_presets() -> Vec<(&'static str, String)> {
+    omnidl_core::user_agent_presets()
+}
+
+/// The task's connections: a number, or `None` to tune them; a running download changes at
+/// once.
+#[tauri::command]
+pub async fn task_set_connections(
+    state: State<'_, AppState>,
+    id: TaskId,
+    connections: Option<u32>,
+) -> Result<()> {
+    state.manager.set_task_connections(id, connections).await
+}
+
 /// Sets the checksum a download should meet, as the user typed it (`sha256:…`, bare hex…); empty
 /// clears it. A finished download is checked at once.
 #[tauri::command]

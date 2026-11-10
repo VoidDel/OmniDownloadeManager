@@ -8,9 +8,10 @@ use reqwest::{
     header::{ACCEPT, ACCEPT_ENCODING, COOKIE, HeaderMap, HeaderName, HeaderValue, REFERER},
 };
 
-/// A client for one download: its user agent, referer, cookies, extra headers and proxy apply to
-/// every request. Connections are pooled up to the download's connection count.
-pub(crate) fn build(o: &JobOptions) -> Result<Client> {
+/// A client for one download with user agent `ua` (`ua::candidates`): it, the referer, cookies,
+/// extra headers and proxy apply to every request. Connections are pooled up to the download's
+/// connection count.
+pub(crate) fn build_as(o: &JobOptions, ua: &str) -> Result<Client> {
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
     // Bytes on disk must match Content-Length: no compressed transfer.
@@ -27,7 +28,7 @@ pub(crate) fn build(o: &JobOptions) -> Result<Client> {
         headers.insert(name.clone(), header_value(name.as_str(), value)?);
     }
     let mut b = Client::builder()
-        .user_agent(o.user_agent.clone())
+        .user_agent(ua.to_owned())
         .default_headers(headers)
         .connect_timeout(o.connect_timeout)
         .read_timeout(o.read_timeout)

@@ -138,6 +138,8 @@
 .det-dl dt { color: var(--fg-secondary); }
 .det-dl dd { margin: 0; min-width: 0; }
 .det-dl .num { font-variant-numeric: tabular-nums; }
+.det-dl .det-conn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.det-dl .det-conn .sel { max-width: 140px; }
 .det-dl .path { font-size: .8rem; word-break: break-all; white-space: pre-line; }
 /* A long link: three lines until it is asked for in full. */
 .det-dl .path.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
@@ -388,6 +390,7 @@ html.float-root, html.float-root body, html.float-root #root { background: trans
 .set-time { width: 148px; font-variant-numeric: tabular-nums; }
 .ip-banned, .set-lines { width: 100%; resize: vertical; min-height: 64px; box-sizing: border-box; }
 .inline.top { align-items: flex-start; }
+.ua-value { display: block; margin-top: 6px; font-size: .78rem; word-break: break-all; }
 .set-days { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .set-days .day {
   min-width: 34px; height: 28px; padding: 0 8px; border-radius: var(--radius-md); font-size: .82rem;

@@ -12,6 +12,9 @@ pub struct TaskOptions {
     pub file_name: Option<String>,
     /// Connections for this task (1–64).
     pub connections: Option<u32>,
+    /// Tune the number of connections while it runs. Unset: tuned when the settings say so and
+    /// the task sets no number.
+    pub auto_connections: Option<bool>,
     /// Bytes per second; `None` is unlimited (the global limit still applies).
     pub speed_limit: Option<u64>,
     pub user_agent: Option<String>,

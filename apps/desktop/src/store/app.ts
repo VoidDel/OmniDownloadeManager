@@ -43,8 +43,11 @@ export const DEFAULT_SETTINGS: Settings = {
   engine: {
     maxConcurrent: 3,
     connections: 8,
+    autoConnections: true,
+    autoMaxConnections: 16,
     speedLimit: null,
     userAgent: '',
+    userAgentAuto: true,
     proxy: { mode: 'system' },
     connectTimeoutSecs: 15,
     readTimeoutSecs: 30,

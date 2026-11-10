@@ -69,7 +69,9 @@ impl DownloadEngine for FakeEngine {
         job.checkpoint.started(&state(done)).await.unwrap();
         job.progress.set_total(Some(size));
         job.progress.set_downloaded(done);
-        job.progress.set_connections(1);
+        // Connections as the engines take them: from the options, changed while it runs.
+        job.conns.begin(job.options.conn_mode(), 64, 4);
+        job.progress.set_connections(job.conns.target());
         while done < size {
             tokio::select! {
                 _ = job.cancel.cancelled() => return Outcome::Stopped(state(done)),
@@ -77,6 +79,7 @@ impl DownloadEngine for FakeEngine {
             }
             done = (done + self.step).min(size);
             job.progress.set_downloaded(done);
+            job.progress.set_connections(job.conns.target());
             job.checkpoint.save(&state(done)).await.unwrap();
             if self.fail_at.is_some_and(|f| done >= f) {
                 let e = Error::new(ErrorCode::Network, "connection reset");
@@ -542,4 +545,35 @@ async fn checks_a_finished_file_against_its_checksum() {
     );
     m.restart(&[added[1].id]).await.unwrap();
     assert!(!dir.path().join("bad.bin").exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changes_the_connections_of_a_running_task() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(100_000, 10, 5), db.clone(), 3).await;
+    let id = m
+        .add(vec![new_task("https://example.com/c.bin", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    // Tuned by default: it starts at 4.
+    wait_for(&m, id, |t| t.connections == 4).await;
+    m.set_task_connections(id, Some(12)).await.unwrap();
+    let t = wait_for(&m, id, |t| t.connections == 12).await;
+    assert_eq!(t.options.connections, Some(12));
+    assert_eq!(t.options.auto_connections, Some(false));
+    // Saved: the next run starts with them.
+    let saved = db.get_task(&id.to_string()).await.unwrap().unwrap();
+    assert!(
+        saved.options_json.contains("\"autoConnections\":false"),
+        "{}",
+        saved.options_json
+    );
+    m.set_task_connections(id, None).await.unwrap();
+    let t = m.get(id).unwrap();
+    assert_eq!(
+        (t.options.connections, t.options.auto_connections),
+        (None, Some(true))
+    );
+    m.shutdown().await;
 }

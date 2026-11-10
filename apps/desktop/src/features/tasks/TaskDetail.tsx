@@ -6,7 +6,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
-import { Tabs } from '../../components/ui';
+import { Select, Tabs } from '../../components/ui';
 import { api } from '../../lib/api';
 import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
@@ -88,6 +88,44 @@ function SpeedChart({ id, speed }: { id: string; speed: number }) {
   );
 }
 
+const CONNECTIONS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
+
+/** The connections of a download: how many are open, and the choice (tuned or a number), which
+ *  a running download follows at once. */
+function Connections({ t, running }: { t: Task; running: boolean }) {
+  const { t: tr } = useTranslation();
+  const engine = useApp((s) => s.settings.engine);
+  const run = useApp((s) => s.run);
+  const o = t.options;
+  const auto = o.autoConnections ?? (o.connections == null && engine.autoConnections);
+  const ftp = t.kind === 'ftp';
+  const most = ftp ? 8 : 64;
+  const fixed = Math.min(o.connections ?? (ftp ? engine.ftpConnections : engine.connections), most);
+  const choices = CONNECTIONS.filter((n) => n <= most);
+  const list = choices.includes(fixed) ? choices : [...choices, fixed].sort((a, b) => a - b);
+  // Without ranges a download has one connection, whatever is chosen.
+  const single = !!t.startedAt && !t.resumable;
+  const choose = (v: string) => void run(() => api.setTaskConnections(t.id, v === 'auto' ? null : Number(v)));
+  return (
+    <>
+      <dt>{tr('detail.overview.connections')}</dt>
+      <dd className="det-conn">
+        <span className="num">{running && t.connections ? tr('detail.overview.connectionCount', { count: t.connections }) : '—'}</span>
+        {single ? (
+          <span className="muted">{tr('detail.overview.connectionSingle')}</span>
+        ) : (
+          <Select
+            label={tr('detail.overview.connectionMode')}
+            value={auto ? 'auto' : String(fixed)}
+            options={[['auto', tr('detail.overview.connectionAuto', { max: ftp ? Math.min(engine.autoMaxConnections, 8) : engine.autoMaxConnections })] as [string, string], ...list.map((n): [string, string] => [String(n), String(n)])]}
+            onChange={choose}
+          />
+        )}
+      </dd>
+    </>
+  );
+}
+
 /** Uploaded over size. */
 const ratio = (t: Task) => (t.totalBytes ? (t.uploadedBytes / t.totalBytes).toFixed(2) : '—');
 
@@ -116,10 +154,15 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
             <dd className="num">{fmt.speed(t.speedBps)}</dd>
             <dt>{tr('detail.overview.eta')}</dt>
             <dd className="num">{fmt.duration(t.etaSecs)}</dd>
-            <dt>{tr(bt ? 'detail.overview.peers' : 'detail.overview.connections')}</dt>
-            <dd>{t.connections ? tr(bt ? 'detail.overview.peerCount' : 'detail.overview.connectionCount', { count: t.connections }) : '—'}</dd>
+            {bt && (
+              <>
+                <dt>{tr('detail.overview.peers')}</dt>
+                <dd>{t.connections ? tr('detail.overview.peerCount', { count: t.connections }) : '—'}</dd>
+              </>
+            )}
           </>
         )}
+        {!bt && t.status !== 'completed' && <Connections t={t} running={running} />}
         {bt && (
           <>
             {t.status === 'seeding' && (

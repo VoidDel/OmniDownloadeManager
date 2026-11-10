@@ -11,6 +11,7 @@
 
 pub mod checksum;
 mod config;
+pub mod conns;
 pub mod disk;
 mod engine;
 mod error;
@@ -24,7 +25,8 @@ pub mod segments;
 mod task;
 
 pub use checksum::{Checksum, HashAlgo};
-pub use config::{ConflictPolicy, EngineConfig, default_user_agent};
+pub use config::{ConflictPolicy, EngineConfig, default_user_agent, user_agent_presets};
+pub use conns::{ConnControl, Crew, Mode as ConnMode, Shift, Worker};
 pub use engine::{
     Checkpoint, DownloadEngine, Job, JobOptions, Outcome, PeerInfo, ProbeFile, ProbeInfo, Progress,
     ResumeState, TorrentDetail, TorrentFile,

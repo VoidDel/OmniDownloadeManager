@@ -226,6 +226,8 @@ pub fn run() {
             commands::task_purge,
             commands::task_detail,
             commands::task_set_speed_limit,
+            commands::task_set_connections,
+            commands::user_agent_presets,
             commands::task_set_checksum,
             commands::task_digests,
             commands::task_files_set,

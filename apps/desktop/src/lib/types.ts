@@ -40,6 +40,8 @@ export type ProxyConfig = { mode: 'system' } | { mode: 'none' } | { mode: 'custo
 export interface TaskOptions {
   fileName: string | null;
   connections: number | null;
+  /** Tuned while it runs (null: as the settings say, unless `connections` is set). */
+  autoConnections?: boolean | null;
   speedLimit: number | null;
   userAgent: string | null;
   referer: string | null;
@@ -207,8 +209,13 @@ export type MaterialKind = 'mica' | 'mica-alt' | 'acrylic';
 export interface EngineConfig {
   maxConcurrent: number;
   connections: number;
+  /** Tune the connections by the speed they bring, up to `autoMaxConnections`. */
+  autoConnections: boolean;
+  autoMaxConnections: number;
   speedLimit: number | null;
   userAgent: string;
+  /** Start with a browser's user agent and switch when a server refuses it; off: `userAgent`. */
+  userAgentAuto: boolean;
   proxy: ProxyConfig;
   connectTimeoutSecs: number;
   readTimeoutSecs: number;

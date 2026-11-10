@@ -10,6 +10,7 @@ mod client;
 mod download;
 mod hls;
 mod probe;
+mod ua;
 
 use std::time::Duration;
 
@@ -53,11 +54,16 @@ impl DownloadEngine for HttpEngine {
 
     async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo> {
         let url = parse_url(source)?;
-        let client = client::build(options)?;
         if hls::is_playlist_url(&url) {
+            let client = client::build_as(options, &ua::preferred(options, &url))?;
             return playlist(&client, &url, options).await;
         }
-        let p = probe::probe(&client, &url).await?;
+        // Another user agent when the server refuses this one.
+        let (client, p) = ua::probe_with(options, &url, |c| {
+            let url = url.clone();
+            async move { probe::probe(&c, &url).await }
+        })
+        .await?;
         if hls::is_playlist_type(p.content_type.as_deref()) {
             return playlist(&client, &url, options).await;
         }

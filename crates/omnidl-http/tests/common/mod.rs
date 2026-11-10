@@ -71,6 +71,19 @@ pub struct Stats {
     pub version: AtomicU64,
     /// `/flaky` bodies left that break off early.
     pub flaky_left: AtomicI64,
+    /// `/capped` requests refused with 503, and the lock that makes checking and counting a
+    /// body one step.
+    pub refused: AtomicUsize,
+    pub admit: Mutex<()>,
+    /// `/lagging`: the slow body was started, and dropped before its end.
+    pub lag_started: AtomicUsize,
+    pub lag_cut: AtomicUsize,
+    /// User agents `/picky` was asked with.
+    pub agents: Mutex<Vec<String>>,
+    /// Bodies dropped before their end (connections that stopped early).
+    pub cut: AtomicUsize,
+    /// `/throttled`: when the server's shared bandwidth is free again.
+    pub bandwidth: Mutex<Option<tokio::time::Instant>>,
 }
 
 pub struct Server {
@@ -101,6 +114,11 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/norange/{size}", get(norange))
         .route("/flaky/{size}", get(flaky))
         .route("/slow/{size}", get(slow))
+        .route("/capped/{max}/{size}", get(capped))
+        .route("/lagging/{size}", get(lagging))
+        .route("/throttled/{per}/{total}/{size}", get(throttled))
+        .route("/burst/{fast}/{slow}/{burst}/{size}", get(burst))
+        .route("/picky/{size}", get(picky))
         .route("/changing/{size}", get(changing))
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
@@ -130,6 +148,12 @@ struct Opts {
     break_after: Option<u64>,
     /// No Content-Length (chunked transfer).
     unknown_length: bool,
+    /// The slow body of `/lagging`.
+    lagging: bool,
+    /// The server's bandwidth for all connections together (bytes per second).
+    total: Option<u64>,
+    /// After this many bytes of a body, the pause after each chunk becomes this.
+    burst: Option<(u64, Duration)>,
 }
 
 impl Default for Opts {
@@ -142,6 +166,9 @@ impl Default for Opts {
             delay: None,
             break_after: None,
             unknown_length: false,
+            lagging: false,
+            total: None,
+            burst: None,
         }
     }
 }
@@ -203,6 +230,96 @@ async fn slow(method: Method, headers: HeaderMap, State(s): S, UrlPath(size): Si
     serve(&method, &headers, size, o, &s)
 }
 
+/// About 1 MB/s per connection; more than `max` bodies at once are refused with 503.
+async fn capped(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((max, size)): UrlPath<(usize, u64)>,
+) -> Response {
+    let _admit = s.admit.lock();
+    if method == Method::GET
+        && headers.contains_key(header::RANGE)
+        && s.open.load(Ordering::SeqCst) >= max
+    {
+        s.refused.fetch_add(1, Ordering::SeqCst);
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    let o = Opts {
+        chunk: 16 << 10,
+        delay: Some(Duration::from_millis(15)),
+        ..Opts::default()
+    };
+    // Counts the body before the next request is checked.
+    serve(&method, &headers, size, o, &s)
+}
+
+/// About 1 MB/s per connection, except the first body not starting at 0: about 40 kB/s.
+async fn lagging(method: Method, headers: HeaderMap, State(s): S, UrlPath(size): Size) -> Response {
+    let later = matches!(parse_range(&headers, size), Some(Ok((a, _))) if a > 0);
+    let lag = method == Method::GET && later && s.lag_started.fetch_add(1, Ordering::SeqCst) == 0;
+    let o = Opts {
+        chunk: 16 << 10,
+        delay: Some(Duration::from_millis(if lag { 400 } else { 15 })),
+        lagging: lag,
+        ..Opts::default()
+    };
+    serve(&method, &headers, size, o, &s)
+}
+
+/// A server that limits each connection to `per` KiB/s and, unless `total` is 0, all of them
+/// together to `total` KiB/s.
+async fn throttled(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((per, total, size)): UrlPath<(u64, u64, u64)>,
+) -> Response {
+    let chunk = 16 << 10;
+    let o = Opts {
+        chunk,
+        delay: Some(Duration::from_secs_f64(
+            chunk as f64 / (per as f64 * 1024.0),
+        )),
+        total: (total > 0).then_some(total * 1024),
+        ..Opts::default()
+    };
+    serve(&method, &headers, size, o, &s)
+}
+
+/// A server that limits each connection with a delay: `fast` KiB/s for its first `burst` KiB,
+/// then `slow` KiB/s.
+async fn burst(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((fast, slow, burst, size)): UrlPath<(u64, u64, u64, u64)>,
+) -> Response {
+    let chunk = 16 << 10;
+    let pause = |kib: u64| Duration::from_secs_f64(chunk as f64 / (kib as f64 * 1024.0));
+    let o = Opts {
+        chunk,
+        delay: Some(pause(fast)),
+        burst: Some((burst * 1024, pause(slow))),
+        ..Opts::default()
+    };
+    serve(&method, &headers, size, o, &s)
+}
+
+/// Refuses browsers' user agents (403), as some mirrors do with programs that pretend to be one.
+async fn picky(method: Method, headers: HeaderMap, State(s): S, UrlPath(size): Size) -> Response {
+    let ua = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    s.agents.lock().push(ua.clone());
+    if ua.contains("Mozilla") {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    serve(&method, &headers, size, Opts::default(), &s)
+}
+
 async fn changing(
     method: Method,
     headers: HeaderMap,
@@ -261,12 +378,29 @@ fn parse_range(headers: &HeaderMap, size: u64) -> Option<Result<(u64, u64), ()>>
     Some(Ok((start, end)))
 }
 
-/// Decrements the open-body count when the body is done or dropped.
-struct OpenGuard(Arc<Stats>);
+/// Decrements the open-body count when the body is done or dropped; counts the lagging body
+/// dropped before its end.
+struct OpenGuard {
+    stats: Arc<Stats>,
+    lagging: bool,
+    finished: bool,
+}
+
+impl OpenGuard {
+    fn finish(&mut self) {
+        self.finished = true;
+    }
+}
 
 impl Drop for OpenGuard {
     fn drop(&mut self) {
-        self.0.open.fetch_sub(1, Ordering::SeqCst);
+        self.stats.open.fetch_sub(1, Ordering::SeqCst);
+        if !self.finished {
+            self.stats.cut.fetch_add(1, Ordering::SeqCst);
+        }
+        if self.lagging && !self.finished {
+            self.stats.lag_cut.fetch_add(1, Ordering::SeqCst);
+        }
     }
 }
 
@@ -314,23 +448,47 @@ fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats
     }
     let open = s.open.fetch_add(1, Ordering::SeqCst) + 1;
     s.max_open.fetch_max(open, Ordering::SeqCst);
-    let guard = OpenGuard(s.clone());
+    let guard = OpenGuard {
+        stats: s.clone(),
+        lagging: o.lagging,
+        finished: false,
+    };
     let stop = start + len;
     let limit = o.break_after.map_or(stop, |n| (start + n).min(stop));
-    let body = futures_util::stream::unfold((start, guard), move |(pos, guard)| {
+    let body = futures_util::stream::unfold((start, guard), move |(pos, mut guard)| {
         let o = o.clone();
         async move {
             if pos >= stop {
+                guard.finish();
                 return None;
             }
             if pos >= limit {
                 let e = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "broken");
                 return Some((Err(e), (stop, guard)));
             }
-            if let Some(d) = o.delay {
+            let delay = match o.burst {
+                Some((after, slow)) if pos - start >= after => Some(slow),
+                _ => o.delay,
+            };
+            if let Some(d) = delay {
                 tokio::time::sleep(d).await;
             }
             let next = (pos + o.chunk as u64).min(limit);
+            if next >= stop {
+                // The last chunk: hyper stops polling once the length is sent.
+                guard.finish();
+            }
+            if let Some(rate) = o.total {
+                // The chunk's turn on the shared line.
+                let at = {
+                    let mut free = guard.stats.bandwidth.lock();
+                    let now = tokio::time::Instant::now();
+                    let at = free.map_or(now, |f| f.max(now));
+                    *free = Some(at + Duration::from_secs_f64((next - pos) as f64 / rate as f64));
+                    at
+                };
+                tokio::time::sleep_until(at).await;
+            }
             let data: Vec<u8> = (pos..next).map(byte_at).collect();
             Some((Ok(Bytes::from(data)), (next, guard)))
         }

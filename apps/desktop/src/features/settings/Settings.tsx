@@ -6,7 +6,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { builtinThemes, summarize, type ThemeSummary } from 'omni-ui';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
@@ -48,6 +48,47 @@ function NumberSelect({ value, options, onChange, label, format = String }: { va
       options={list.map((n): [string, string] => [String(n), format(n)])}
       onChange={(v) => onChange(Number(v))}
     />
+  );
+}
+
+/** User-Agent: automatic (a browser's, others when a server refuses it), one of the common ones,
+ *  or one typed in. */
+function UserAgentSetting({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
+  const { t } = useTranslation();
+  const e = s.engine;
+  const [presets, setPresets] = useState<[string, string][]>([]);
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    if (isTauri()) void api.userAgentPresets().then(setPresets, () => undefined);
+  }, []);
+  const preset = presets.find(([, v]) => v === e.userAgent)?.[0];
+  const value = e.userAgentAuto ? 'auto' : !typing && preset ? `preset:${preset}` : 'custom';
+  const choose = (v: string) => {
+    setTyping(v === 'custom');
+    if (v === 'auto') set((x) => (x.engine.userAgentAuto = true));
+    else if (v === 'custom') set((x) => (x.engine.userAgentAuto = false));
+    else {
+      const ua = presets.find(([n]) => `preset:${n}` === v)?.[1];
+      if (ua) set((x) => ((x.engine.userAgentAuto = false), (x.engine.userAgent = ua)));
+    }
+  };
+  return (
+    <Row col label="User-Agent" hint={t(e.userAgentAuto ? 'settings.network.userAgentAutoHint' : 'settings.network.userAgentHint')}>
+      <div className="inline">
+        <Select
+          label="User-Agent"
+          value={value}
+          onChange={choose}
+          options={[
+            ['auto', t('settings.network.userAgentAuto')] as [string, string],
+            ...presets.map(([n]): [string, string] => [`preset:${n}`, n]),
+            ['custom', t('settings.network.userAgentCustom')] as [string, string],
+          ]}
+        />
+        {value === 'custom' && <TextSetting mono label="User-Agent" value={e.userAgent} onSave={(v) => set((x) => (x.engine.userAgent = v))} />}
+      </div>
+      {value.startsWith('preset:') && <small className="muted mono ua-value">{e.userAgent}</small>}
+    </Row>
   );
 }
 
@@ -388,9 +429,18 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         <Row label={t('settings.download.maxConcurrent')} hint={t('settings.download.maxConcurrentHint')}>
           <NumberSelect label={t('settings.download.maxConcurrent')} value={e.maxConcurrent} options={[1, 2, 3, 4, 5, 6, 8, 10]} onChange={(v) => set((x) => (x.engine.maxConcurrent = v))} />
         </Row>
-        <Row label={t('settings.download.connections')} hint={t('settings.download.connectionsHint')}>
-          <NumberSelect label={t('settings.download.connections')} value={e.connections} options={[1, 2, 4, 8, 16, 32]} onChange={(v) => set((x) => (x.engine.connections = v))} />
+        <Row label={t('settings.download.autoConnections')} hint={t('settings.download.autoConnectionsHint')}>
+          <Switch label={t('settings.download.autoConnections')} checked={e.autoConnections} onChange={(v) => set((x) => (x.engine.autoConnections = v))} />
         </Row>
+        {e.autoConnections ? (
+          <Row label={t('settings.download.autoMaxConnections')} hint={t('settings.download.autoMaxConnectionsHint')}>
+            <NumberSelect label={t('settings.download.autoMaxConnections')} value={e.autoMaxConnections} options={[4, 8, 16, 24, 32, 48, 64]} onChange={(v) => set((x) => (x.engine.autoMaxConnections = v))} />
+          </Row>
+        ) : (
+          <Row label={t('settings.download.connections')} hint={t('settings.download.connectionsHint')}>
+            <NumberSelect label={t('settings.download.connections')} value={e.connections} options={[1, 2, 4, 8, 16, 32, 64]} onChange={(v) => set((x) => (x.engine.connections = v))} />
+          </Row>
+        )}
         <Row label={t('settings.download.conflict')}>
           <Segmented<'rename' | 'overwrite'>
             value={e.conflict}
@@ -531,14 +581,7 @@ function Network({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             )}
           </div>
         </Row>
-        <Row col label="User-Agent" hint={t('settings.network.userAgentHint')}>
-          <div className="inline">
-            <TextSetting mono label="User-Agent" value={e.userAgent} onSave={(v) => set((x) => (x.engine.userAgent = v))} />
-            <button type="button" className="btn outline" onClick={() => set((x) => (x.engine.userAgent = ''))}>
-              {t('settings.network.resetDefault')}
-            </button>
-          </div>
-        </Row>
+        <UserAgentSetting s={s} set={set} />
         <Row label={t('settings.network.connectTimeout')}>
           <NumberSelect label={t('settings.network.connectTimeout')} format={seconds} value={e.connectTimeoutSecs} options={[5, 10, 15, 30, 60]} onChange={(v) => set((x) => (x.engine.connectTimeoutSecs = v))} />
         </Row>

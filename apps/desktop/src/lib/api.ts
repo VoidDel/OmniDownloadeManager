@@ -42,6 +42,10 @@ export const api = {
   purge: (ids: string[], deleteFiles: boolean) => invoke<void>('task_purge', { ids, deleteFiles }),
   detail: (id: string) => invoke<TaskDetail>('task_detail', { id }),
   setTaskSpeedLimit: (id: string, limit: number | null) => invoke<void>('task_set_speed_limit', { id, limit }),
+  /** Common user agents to choose from: [name, value]. */
+  userAgentPresets: () => invoke<[string, string][]>('user_agent_presets'),
+  /** A number of connections, or null to tune them; a running download changes at once. */
+  setTaskConnections: (id: string, connections: number | null) => invoke<void>('task_set_connections', { id, connections }),
   /** The checksum the file should have, as typed (empty clears it); a finished file is checked now. */
   setChecksum: (id: string, value: string) => invoke<Task>('task_set_checksum', { id, value }),
   /** MD5, SHA-1 and SHA-256 of a finished file: [algorithm, hex] pairs. */

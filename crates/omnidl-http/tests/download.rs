@@ -14,8 +14,8 @@ use std::{
 use async_trait::async_trait;
 use common::{assert_content, start};
 use omnidl_core::{
-    Checkpoint, DownloadEngine, ErrorCode, Job, JobOptions, Outcome, Progress, RateLimiter, Result,
-    ResumeState,
+    Checkpoint, ConnControl, ConnMode, DownloadEngine, ErrorCode, Job, JobOptions, Outcome,
+    Progress, RateLimiter, Result, ResumeState,
 };
 use omnidl_http::HttpEngine;
 use parking_lot::Mutex;
@@ -52,12 +52,14 @@ struct Run {
     recorder: Arc<Recorder>,
     cancel: CancellationToken,
     progress: Arc<Progress>,
+    conns: Arc<ConnControl>,
 }
 
 fn job(url: &str, dir: &Path, resume: Option<ResumeState>, connections: u32) -> Run {
     let recorder = Arc::new(Recorder::default());
     let cancel = CancellationToken::new();
     let progress = Arc::new(Progress::default());
+    let conns = Arc::new(ConnControl::default());
     let job = Job {
         id: Uuid::new_v4(),
         source: url.into(),
@@ -66,6 +68,7 @@ fn job(url: &str, dir: &Path, resume: Option<ResumeState>, connections: u32) -> 
         resume,
         options: JobOptions {
             connections,
+            auto_connections: false,
             ..JobOptions::default()
         },
         cancel: cancel.clone(),
@@ -73,12 +76,14 @@ fn job(url: &str, dir: &Path, resume: Option<ResumeState>, connections: u32) -> 
         task_limit: RateLimiter::new(None),
         global_limit: RateLimiter::new(None),
         checkpoint: recorder.clone(),
+        conns: conns.clone(),
     };
     Run {
         job,
         recorder,
         cancel,
         progress,
+        conns,
     }
 }
 
@@ -558,4 +563,249 @@ async fn resumes_an_hls_stream_after_the_segments_written() {
     // The playlist again, and only the segments not written yet.
     let asked = server.stats.requests.load(Ordering::SeqCst) - before;
     assert_eq!(asked as u64, 1 + (10 - done));
+}
+
+// ----------------------------------------------------------------- connections that change
+
+fn spawn(job: Job) -> tokio::task::JoinHandle<Outcome> {
+    tokio::spawn(async move { engine().run(job).await })
+}
+
+/// Tuned connections, up to `max`, measured over half-second windows (instead of two
+/// seconds) so that the tests take seconds.
+fn tuned(r: &mut Run, max: u32) {
+    r.job.options.auto_connections = true;
+    r.job.options.auto_max_connections = max;
+    r.conns = Arc::new(ConnControl::with_window(Duration::from_millis(500)));
+    r.job.conns = r.conns.clone();
+}
+
+/// Fixed connections, measured over half-second windows.
+fn quick(r: &mut Run) {
+    r.conns = Arc::new(ConnControl::with_window(Duration::from_millis(500)));
+    r.job.conns = r.conns.clone();
+}
+
+/// The connection counts of a running download, sampled every 100 ms until it ends.
+async fn sample(
+    run: tokio::task::JoinHandle<Outcome>,
+    progress: Arc<Progress>,
+) -> (Outcome, Vec<u32>) {
+    let mut seen = Vec::new();
+    let mut run = run;
+    loop {
+        tokio::select! {
+            o = &mut run => return (o.unwrap(), seen),
+            _ = tokio::time::sleep(Duration::from_millis(100)) => seen.push(progress.connections()),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changes_the_connections_while_downloading() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 24 * MIB + 777;
+    let r = job(&server.url(&format!("/slow/{size}")), dir.path(), None, 2);
+    let (progress, conns) = (r.progress.clone(), r.conns.clone());
+    let run = spawn(r.job);
+    until(|| progress.connections() == 2).await;
+    // More: new connections split the segments with the most left.
+    conns.set_mode(ConnMode::Fixed(6));
+    until(|| progress.connections() == 6).await;
+    // Fewer: the others leave their segments to the one that stays.
+    conns.set_mode(ConnMode::Fixed(1));
+    until(|| progress.connections() == 1).await;
+    conns.set_mode(ConnMode::Fixed(12));
+    let (name, total) = completed(run.await.unwrap());
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    assert!(server.stats.max_open.load(Ordering::SeqCst) >= 6);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tunes_the_connections_up_to_what_the_server_allows() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 32 * MIB;
+    let mut r = job(
+        &server.url(&format!("/capped/6/{size}")),
+        dir.path(),
+        None,
+        8,
+    );
+    tuned(&mut r, 32);
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    let stats = &server.stats;
+    // From 4 it doubled to 8, two were refused, and it kept to 6 from then on.
+    assert!(stats.refused.load(Ordering::SeqCst) >= 1, "it tried more");
+    assert_eq!(stats.max_open.load(Ordering::SeqCst), 6);
+    assert!(r.conns.target() <= 6, "{}", r.conns.target());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn opens_more_connections_on_a_server_that_limits_each() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // 256 KiB/s per connection and no limit in all: every connection adds speed.
+    let size = 24 * MIB;
+    let mut r = job(
+        &server.url(&format!("/throttled/256/0/{size}")),
+        dir.path(),
+        None,
+        8,
+    );
+    tuned(&mut r, 16);
+    let progress = r.progress.clone();
+    let started = Instant::now();
+    let (o, seen) = sample(spawn(r.job), progress).await;
+    let (name, total) = completed(o);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    // 4, 8, then the most allowed.
+    assert_eq!(server.stats.max_open.load(Ordering::SeqCst), 16, "{seen:?}");
+    // Steady connections are kept: only the splits at the end cut bodies short.
+    let cut = server.stats.cut.load(Ordering::SeqCst);
+    eprintln!(
+        "steady: {} requests, {cut} cut",
+        server.stats.requests.load(Ordering::SeqCst)
+    );
+    assert!(cut <= 20, "{cut}");
+    // 4 connections alone would take 24 s, 16 take 6.
+    assert!(
+        started.elapsed() < Duration::from_secs(14),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn settles_where_the_server_bandwidth_runs_out() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // 512 KiB/s per connection, 3 MiB/s in all: 6 connections fill the line, more only wait.
+    let size = 60 * MIB;
+    let mut r = job(
+        &server.url(&format!("/throttled/512/3072/{size}")),
+        dir.path(),
+        None,
+        8,
+    );
+    tuned(&mut r, 32);
+    let progress = r.progress.clone();
+    let (o, seen) = sample(spawn(r.job), progress).await;
+    let (name, total) = completed(o);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    // It tried more (8, 16), went back, and spent the second half near 6, not at 16 or 32.
+    assert!(
+        server.stats.max_open.load(Ordering::SeqCst) >= 8,
+        "{seen:?}"
+    );
+    let late = &seen[seen.len() / 2..];
+    let avg = late.iter().sum::<u32>() as f64 / late.len() as f64;
+    assert!((4.5..=9.0).contains(&avg), "{avg:.1}: {seen:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replaces_a_connection_that_lags() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 48 * MIB;
+    let r = job(
+        &server.url(&format!("/lagging/{size}")),
+        dir.path(),
+        None,
+        4,
+    );
+    let run = spawn(r.job);
+    // One connection gets 40 kB/s while the others get 1 MB/s: within seconds it is dropped
+    // and a new connection takes over its segment (long before the others run out of work and
+    // split it).
+    let stats = server.stats.clone();
+    let deadline = Instant::now() + Duration::from_secs(11);
+    while stats.lag_cut.load(Ordering::SeqCst) == 0 {
+        assert!(Instant::now() < deadline, "the slow connection was kept");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let (name, total) = completed(run.await.unwrap());
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn renews_connections_that_a_server_slows_down_after_a_while() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // Each connection: 4 MiB/s for its first MiB, then 256 KiB/s.
+    let size = 32 * MIB;
+    let mut r = job(
+        &server.url(&format!("/burst/4096/256/1024/{size}")),
+        dir.path(),
+        None,
+        4,
+    );
+    quick(&mut r);
+    let started = Instant::now();
+    let (name, total) = completed(spawn(r.job).await.unwrap());
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    let (requests, cut) = (
+        server.stats.requests.load(Ordering::SeqCst),
+        server.stats.cut.load(Ordering::SeqCst),
+    );
+    eprintln!(
+        "burst: {:?}, {requests} requests, {cut} cut",
+        started.elapsed()
+    );
+    // Kept, 4 connections would take about 30 s; renewed, each runs fast again.
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "{:?}",
+        started.elapsed()
+    );
+    assert!(cut >= 10, "{cut}");
+}
+
+// ------------------------------------------------------------------------- user agents
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tries_another_user_agent_when_refused() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 3 * MIB;
+    let r = job(&server.url(&format!("/picky/{size}")), dir.path(), None, 4);
+    assert!(
+        r.job.options.user_agent.contains("Mozilla"),
+        "a browser's by default"
+    );
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    let agents = server.stats.agents.lock().clone();
+    assert!(
+        agents.iter().any(|a| a.contains("Mozilla")),
+        "the configured one first: {agents:?}"
+    );
+    // Then the app's own name, which the server takes, for every request after.
+    let last = agents.last().unwrap();
+    assert!(last.starts_with("OmniDownload/"), "{agents:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_the_user_agent_of_a_task_with_cookies() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = job(&server.url("/picky/1000"), dir.path(), None, 1);
+    // A browser's cookies go with that browser's user agent: no other is tried.
+    r.job.options.cookies = Some("session=1".into());
+    r.job.options.user_agent_fixed = true;
+    match engine().run(r.job).await {
+        Outcome::Failed(e, _) => assert_eq!(e.code, ErrorCode::Forbidden),
+        other => panic!("not refused: {other:?}"),
+    }
+    let agents = server.stats.agents.lock().clone();
+    assert!(agents.iter().all(|a| a.contains("Mozilla")), "{agents:?}");
 }

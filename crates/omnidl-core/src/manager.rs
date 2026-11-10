@@ -26,9 +26,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    Checkpoint, DownloadEngine, EngineConfig, Error, ErrorCode, EventBus, Job, JobOptions,
-    NoSecrets, Outcome, Priority, ProbeInfo, Progress, ProgressItem, RateLimiter, Result,
-    ResumeState, Secrets, Segment, SegmentView, Stats, Task, TaskEvent, TaskId, TaskKind,
+    Checkpoint, ConnControl, ConnMode, DownloadEngine, EngineConfig, Error, ErrorCode, EventBus,
+    Job, JobOptions, NoSecrets, Outcome, Priority, ProbeInfo, Progress, ProgressItem, RateLimiter,
+    Result, ResumeState, Secrets, Segment, SegmentView, Stats, Task, TaskEvent, TaskId, TaskKind,
     TaskOptions, TaskStatus, TorrentDetail, filename, now_ms,
 };
 
@@ -86,6 +86,8 @@ struct Running {
     stop: Stop,
     progress: Arc<Progress>,
     limit: RateLimiter,
+    /// The connections of this run, changed by the user or tuned.
+    conns: Arc<ConnControl>,
     meter: SpeedMeter,
     up_meter: SpeedMeter,
     /// When this run started, until it finishes or begins to seed: its time goes to
@@ -260,6 +262,30 @@ impl TaskManager {
         let config = config.normalized();
         if config.speed_limit != self.inner.global_limit.rate() {
             self.inner.global_limit.set_rate(config.speed_limit);
+        }
+        let conns = |c: &EngineConfig| {
+            (
+                c.auto_connections,
+                c.auto_max_connections,
+                c.connections,
+                c.ftp_connections,
+            )
+        };
+        let changed = conns(&self.inner.config.read()) != conns(&config);
+        if changed {
+            // Running downloads that follow the settings follow them at once.
+            let st = self.inner.state.lock();
+            for (id, r) in &st.running {
+                let Some(t) = st.tasks.get(id) else { continue };
+                if t.options.connections.is_some() || t.options.auto_connections.is_some() {
+                    continue;
+                }
+                let o = JobOptions::resolve(&t.options, &config);
+                r.conns.set_mode(match t.kind {
+                    TaskKind::Ftp => o.ftp_conn_mode(),
+                    _ => o.conn_mode(),
+                });
+            }
         }
         *self.inner.config.write() = config;
         self.inner.schedule();
@@ -560,6 +586,40 @@ impl TaskManager {
         Ok(())
     }
 
+    /// The task's connections: a number, or `None` to tune them while it runs. A running
+    /// download changes at once.
+    pub async fn set_task_connections(&self, id: TaskId, connections: Option<u32>) -> Result<()> {
+        let max = self.inner.config.read().auto_max_connections;
+        {
+            let mut st = self.inner.state.lock();
+            let t = st.tasks.get_mut(&id).ok_or_else(|| missing(id))?;
+            if t.kind == TaskKind::Torrent {
+                return Err(Error::new(
+                    ErrorCode::Unsupported,
+                    "torrents find their own peers",
+                ));
+            }
+            let mode = match connections {
+                Some(n) => {
+                    let n = n.clamp(1, crate::conns::MAX_CONNECTIONS);
+                    t.options.connections = Some(n);
+                    t.options.auto_connections = Some(false);
+                    ConnMode::Fixed(n)
+                }
+                None => {
+                    t.options.connections = None;
+                    t.options.auto_connections = Some(true);
+                    ConnMode::Auto { max }
+                }
+            };
+            if let Some(r) = st.running.get(&id) {
+                r.conns.set_mode(mode);
+            }
+        }
+        self.inner.changed(id).await;
+        Ok(())
+    }
+
     /// Sets (or with `None` clears) the checksum a download should meet. A finished download is
     /// checked at once; the others when they finish.
     pub async fn set_checksum(&self, id: TaskId, sum: Option<crate::Checksum>) -> Result<Task> {
@@ -739,6 +799,7 @@ impl Inner {
                         stop: Stop::None,
                         progress,
                         limit: RateLimiter::new(t.options.speed_limit),
+                        conns: Arc::new(ConnControl::default()),
                         meter: SpeedMeter::default(),
                         up_meter: SpeedMeter::default(),
                         since: Some(Instant::now()),
@@ -759,13 +820,16 @@ impl Inner {
     async fn drive(self: Arc<Self>, id: TaskId) {
         let parts = {
             let st = self.state.lock();
-            st.tasks.get(&id).cloned().zip(
-                st.running
-                    .get(&id)
-                    .map(|r| (r.cancel.clone(), r.progress.clone(), r.limit.clone())),
-            )
+            st.tasks.get(&id).cloned().zip(st.running.get(&id).map(|r| {
+                (
+                    r.cancel.clone(),
+                    r.progress.clone(),
+                    r.limit.clone(),
+                    r.conns.clone(),
+                )
+            }))
         };
-        let Some((task, (cancel, progress, limit))) = parts else {
+        let Some((task, (cancel, progress, limit, conns))) = parts else {
             return;
         };
         let Some(engine) = self.engine(task.kind) else {
@@ -810,6 +874,7 @@ impl Inner {
                 inner: Arc::downgrade(&self),
                 id,
             }),
+            conns,
         };
         let outcome = engine.run(job).await;
         self.finish(id, outcome).await;

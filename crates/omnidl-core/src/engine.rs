@@ -26,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     ConflictPolicy, EngineConfig, Error, ErrorCode, ProxyConfig, RateLimiter, Result, Segment,
     SegmentView, Task, TaskId, TaskKind, TaskOptions,
+    conns::{ConnControl, Mode as ConnMode},
 };
 
 #[async_trait]
@@ -233,8 +234,15 @@ impl Progress {
 /// Task options merged with the global settings.
 #[derive(Debug, Clone)]
 pub struct JobOptions {
+    /// Connections when not tuned.
     pub connections: u32,
+    /// Tuned while the download runs, up to `auto_max_connections`.
+    pub auto_connections: bool,
+    pub auto_max_connections: u32,
     pub user_agent: String,
+    /// The user agent may not be changed: the task sets its own, or carries cookies (a
+    /// browser's cookies may only work with that browser's user agent).
+    pub user_agent_fixed: bool,
     pub referer: Option<String>,
     pub cookies: Option<String>,
     pub headers: BTreeMap<String, String>,
@@ -264,11 +272,30 @@ impl JobOptions {
     pub fn resolve(task: &TaskOptions, config: &EngineConfig) -> Self {
         Self {
             connections: task.connections.unwrap_or(config.connections).clamp(1, 64),
+            auto_connections: task
+                .auto_connections
+                .unwrap_or(task.connections.is_none() && config.auto_connections),
+            auto_max_connections: config.auto_max_connections.clamp(1, 64),
             user_agent: task
                 .user_agent
                 .clone()
                 .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| config.user_agent.clone()),
+                .unwrap_or_else(|| {
+                    if config.user_agent_auto {
+                        crate::default_user_agent().into()
+                    } else {
+                        config.user_agent.clone()
+                    }
+                }),
+            user_agent_fixed: !config.user_agent_auto
+                || task
+                    .user_agent
+                    .as_deref()
+                    .is_some_and(|s| !s.trim().is_empty())
+                || task
+                    .cookies
+                    .as_deref()
+                    .is_some_and(|s| !s.trim().is_empty()),
             referer: task.referer.clone().filter(|s| !s.trim().is_empty()),
             cookies: task.cookies.clone().filter(|s| !s.trim().is_empty()),
             headers: task.headers.clone(),
@@ -301,6 +328,30 @@ impl JobOptions {
     }
 }
 
+impl JobOptions {
+    /// How the connections of an HTTP download are chosen.
+    pub fn conn_mode(&self) -> ConnMode {
+        if self.auto_connections {
+            ConnMode::Auto {
+                max: self.auto_max_connections,
+            }
+        } else {
+            ConnMode::Fixed(self.connections)
+        }
+    }
+
+    /// The same for FTP sessions (the engine caps them at 8).
+    pub fn ftp_conn_mode(&self) -> ConnMode {
+        if self.auto_connections {
+            ConnMode::Auto {
+                max: self.auto_max_connections,
+            }
+        } else {
+            ConnMode::Fixed(self.ftp_connections)
+        }
+    }
+}
+
 impl Default for JobOptions {
     fn default() -> Self {
         Self::resolve(&TaskOptions::default(), &EngineConfig::default())
@@ -322,6 +373,8 @@ pub struct Job {
     pub task_limit: RateLimiter,
     pub global_limit: RateLimiter,
     pub checkpoint: Arc<dyn Checkpoint>,
+    /// How many connections to use, changed while the download runs.
+    pub conns: Arc<ConnControl>,
 }
 
 impl Job {
@@ -329,6 +382,14 @@ impl Job {
     pub async fn throttle(&self, n: u64) {
         self.task_limit.acquire(n).await;
         self.global_limit.acquire(n).await;
+    }
+
+    /// The stricter speed limit in force, if any.
+    pub fn speed_limit(&self) -> Option<u64> {
+        match (self.task_limit.rate(), self.global_limit.rate()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 }
 

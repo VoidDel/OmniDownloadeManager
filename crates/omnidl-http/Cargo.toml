@@ -31,3 +31,5 @@ sha2.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["net", "signal"] }
 uuid.workspace = true
+# The bench example's log (RUST_LOG).
+tracing-subscriber.workspace = true
