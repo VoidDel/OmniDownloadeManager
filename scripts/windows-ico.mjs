@@ -19,7 +19,14 @@ const SIZES = [16, 20, 24, 28, 30, 32, 36, 40, 42, 48, 56, 60, 64, 72, 80, 96, 1
 const root = fileURLToPath(new URL('..', import.meta.url));
 // Playwright is the extension's dependency.
 const { chromium } = createRequire(`${root}apps/extension/package.json`)('@playwright/test');
-const svg = readFileSync(process.argv[2] ?? `${root}icons/app-icon.svg`, 'utf8');
+// The source keeps the margin macOS icons have (the tile is 896 of 1024); Windows icons fill
+// their frame (Edge, VS Code, Settings: 100 %), and with the margin the taskbar button and the
+// notification-area icon looked a size smaller than their neighbours. So the frame is cropped to
+// the tile, the first <rect> of the source.
+const source = readFileSync(process.argv[2] ?? `${root}icons/app-icon.svg`, 'utf8');
+const tile = source.match(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"/);
+if (!tile) throw new Error('no tile <rect> in the icon source');
+const svg = source.replace(/viewBox="[^"]*"/, `viewBox="${tile.slice(1).join(' ')}"`);
 const out = process.argv[3] ?? `${root}apps/desktop/src-tauri/icons/icon.ico`;
 
 const browser = await chromium.launch();
