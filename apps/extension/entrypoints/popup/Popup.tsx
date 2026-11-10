@@ -1,5 +1,5 @@
 // The toolbar popup (docs/development-plan.md §5.4): whether Omni Download is reachable, the
-// takeover switch, the latest downloads, and a way to open the app.
+// takeover switch, the latest downloads, the media the page plays, and a way to open the app.
 
 import { Icon, ProgressBar, Switch } from 'omni-ui';
 import { useEffect, useState } from 'react';
@@ -10,6 +10,7 @@ import { speed, statusLabel } from '../../lib/page';
 import type { Status } from '../../lib/protocol';
 import { DEFAULT_RULES, type Rules } from '../../lib/rules';
 import { load, save } from '../../lib/settings';
+import { MediaList } from './MediaList';
 
 type State = { kind: 'loading' } | { kind: 'ok'; status: Status } | { kind: 'down'; reason: Unreachable; detail: string };
 
@@ -116,6 +117,8 @@ export function Popup() {
           ))}
         </ul>
       )}
+
+      <MediaList />
 
       <footer>
         <button type="button" className="btn primary grow" onClick={openApp}>

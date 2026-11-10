@@ -1,5 +1,6 @@
 // The extension's background (docs/development-plan.md §5.2–5.4): takes downloads over, the
-// context menu, the "download this page" shortcut.
+// context menu, the "download this page" shortcut, and media sniffing (the videos, audio and
+// HLS streams a page plays, listed in the popup with their number on the toolbar button).
 //
 // Chromium: `downloads.onDeterminingFilename` holds the download while the app is asked; the
 // browser goes on (`suggest()`) when the app cannot be reached or the user wants the browser to
@@ -10,6 +11,7 @@
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, type Header } from '../lib/headers';
 import { t } from '../lib/i18n';
+import { classify, mediaName, mediaOf, saveMedia, withMedia, type Media } from '../lib/media';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
 import { basename, handOver, notify, payloadFor, type Download } from '../lib/takeover';
@@ -187,6 +189,53 @@ function firefoxTakeover() {
   browser.downloads.onCreated.addListener((item: DownloadItem) => void takeStarted(item));
 }
 
+// ---------------------------------------------------------------------------------- media
+
+/** Updates of a tab's list, one after the other (each reads and writes the whole list). */
+const mediaQueue = new Map<number, Promise<void>>();
+
+function inTab(tabId: number, f: () => Promise<void>) {
+  const next = (mediaQueue.get(tabId) ?? Promise.resolve()).then(f, f).catch(() => undefined);
+  mediaQueue.set(tabId, next);
+}
+
+async function badge(tabId: number, count: number) {
+  await browser.action.setBadgeText({ tabId, text: count ? String(count) : '' }).catch(() => undefined);
+}
+
+function sniffMedia() {
+  void browser.action.setBadgeBackgroundColor({ color: '#2F6FED' }).catch(() => undefined);
+  const seen = (d: HeadersDetails) => {
+    if (d.tabId < 0 || d.method !== 'GET' || d.statusCode < 200 || d.statusCode >= 300) return;
+    const c = classify(d.url, d.responseHeaders);
+    if (!c) return;
+    inTab(d.tabId, async () => {
+      const tab = await browser.tabs.get(d.tabId).catch(() => null);
+      const m: Media = { ...c, url: d.url, title: tab?.title ?? null, pageUrl: tab?.url ?? d.documentUrl ?? null, at: Date.now() };
+      const list = withMedia(await mediaOf(d.tabId), m);
+      await saveMedia(d.tabId, list);
+      await badge(d.tabId, list.length);
+    });
+  };
+  const webRequest = browser.webRequest as unknown as {
+    onHeadersReceived: { addListener(f: (d: HeadersDetails) => void, filter: object, extra: string[]): void };
+  };
+  webRequest.onHeadersReceived.addListener(seen, { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other', 'object'] }, ['responseHeaders']);
+  // Another page in the tab: a new list. A closed tab: none.
+  browser.tabs.onUpdated.addListener((tabId, info) => {
+    if (info.status === 'loading' && info.url) inTab(tabId, async () => {
+      await saveMedia(tabId, []);
+      await badge(tabId, 0);
+    });
+  });
+  browser.tabs.onRemoved.addListener((tabId) => inTab(tabId, () => saveMedia(tabId, [])));
+}
+
+/** A media item the popup asked for: an HLS stream is named after its page. */
+function downloadMedia(m: Media) {
+  void explicit({ url: m.url, pageUrl: m.pageUrl, referer: m.pageUrl, filename: m.kind === 'hls' ? mediaName(m) : null, size: m.size, mime: m.mime });
+}
+
 export default defineBackground(() => {
   menus();
   browser.runtime.onInstalled.addListener(() => {
@@ -206,11 +255,15 @@ export default defineBackground(() => {
     if (command === 'download-page' && tab?.url && /^https?:/i.test(tab.url)) void explicit({ url: tab.url, pageUrl: tab.url });
   });
 
-  // Alt+click from the content script: the browser keeps that link.
+  // Alt+click from the content script: the browser keeps that link. The popup's media list:
+  // download one (here, as the popup closes when the app's window opens).
   browser.runtime.onMessage.addListener((msg: unknown) => {
-    const m = msg as { type?: string; url?: string };
+    const m = msg as { type?: string; url?: string; media?: Media };
     if (m?.type === 'bypass' && typeof m.url === 'string') mark(bypass, m.url, 5000);
+    if (m?.type === 'download-media' && m.media) downloadMedia(m.media);
   });
+
+  sniffMedia();
 
   if (import.meta.env.FIREFOX) firefoxTakeover();
   else chromiumTakeover();

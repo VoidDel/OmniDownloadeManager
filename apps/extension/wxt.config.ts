@@ -41,9 +41,10 @@ export default defineConfig({
         'notifications',
         'scripting',
         'activeTab',
-        // Firefox takes downloads over before they start (blocking webRequest); Chromium uses
-        // downloads.onDeterminingFilename.
-        ...(firefox ? ['webRequest', 'webRequestBlocking'] : []),
+        // Media sniffing reads response headers (both); Firefox also takes downloads over before
+        // they start (blocking webRequest), Chromium with downloads.onDeterminingFilename.
+        'webRequest',
+        ...(firefox ? ['webRequestBlocking'] : []),
       ],
       // Cookies of the download's site, and the local fallback channel (127.0.0.1).
       host_permissions: ['<all_urls>'],

@@ -204,9 +204,10 @@ Hands downloads from the browser to the Omni Download desktop application on the
 | `activeTab` | Gives the menu commands and the keyboard shortcut access to the current page only when the user invokes them. |
 | `storage` | Saves the user's take-over rules (minimum file size, file types, excluded sites) and connection settings. |
 | `notifications` | Tells the user when a download could not be handed to the desktop application. |
+| `webRequest` | Reads the content type and size of the files a page loads, to list the videos, audio and HLS streams it plays in the popup ("Media on this page"), so the user can hand one to the desktop application. Nothing is blocked or changed, and what is found stays in the tab's session storage until the user downloads it. |
 | Host permission (`<all_urls>`) | A download can come from any site: the extension needs that site's cookies and referrer to hand the download over, and its content script notices Alt+click, which lets the user keep a download in the browser. It also talks to the desktop application's optional interface on 127.0.0.1. |
 
-Firefox 版另有 `webRequest`、`webRequestBlocking`：Firefox 没有 Chromium 的 `downloads.onDeterminingFilename`，扩展用它们在下载开始前判断是否接管。
+Firefox 版另有 `webRequestBlocking`：Firefox 没有 Chromium 的 `downloads.onDeterminingFilename`，扩展用它（与 `webRequest`）在下载开始前判断是否接管。两个版本都用 `webRequest` 做媒体嗅探（只读响应头，不拦截）。
 
 ### 审核说明（Notes for reviewers）
 

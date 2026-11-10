@@ -241,5 +241,26 @@
   },
   "options": {
     "message": "オプション"
+  },
+  "mediaTitle": {
+    "message": "このページのメディア"
+  },
+  "mediaNone": {
+    "message": "このページではまだ動画や音声が再生されていません。再生が始まるとここに表示されます。"
+  },
+  "mediaVideo": {
+    "message": "動画"
+  },
+  "mediaAudio": {
+    "message": "音声"
+  },
+  "mediaHls": {
+    "message": "HLS ストリーム"
+  },
+  "mediaDownload": {
+    "message": "Omni Download でダウンロード"
+  },
+  "mediaSent": {
+    "message": "Omni Download に渡しました"
   }
 }

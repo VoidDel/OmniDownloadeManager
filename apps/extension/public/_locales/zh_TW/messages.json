@@ -241,5 +241,26 @@
   },
   "options": {
     "message": "選項"
+  },
+  "mediaTitle": {
+    "message": "此頁的媒體"
+  },
+  "mediaNone": {
+    "message": "這個頁面還沒有播放影片或音訊。開始播放後會列在這裡。"
+  },
+  "mediaVideo": {
+    "message": "影片"
+  },
+  "mediaAudio": {
+    "message": "音訊"
+  },
+  "mediaHls": {
+    "message": "HLS 影片串流"
+  },
+  "mediaDownload": {
+    "message": "用 Omni Download 下載"
+  },
+  "mediaSent": {
+    "message": "已交給 Omni Download"
   }
 }

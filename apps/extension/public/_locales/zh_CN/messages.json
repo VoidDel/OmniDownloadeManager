@@ -241,5 +241,26 @@
   },
   "options": {
     "message": "选项"
+  },
+  "mediaTitle": {
+    "message": "此页的媒体"
+  },
+  "mediaNone": {
+    "message": "这个页面还没有播放视频或音频。开始播放后会列在这里。"
+  },
+  "mediaVideo": {
+    "message": "视频"
+  },
+  "mediaAudio": {
+    "message": "音频"
+  },
+  "mediaHls": {
+    "message": "HLS 视频流"
+  },
+  "mediaDownload": {
+    "message": "用 Omni Download 下载"
+  },
+  "mediaSent": {
+    "message": "已交给 Omni Download"
   }
 }

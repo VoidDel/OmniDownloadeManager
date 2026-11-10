@@ -48,13 +48,20 @@ export function statusLabel(status: string): string {
   return STATUS_KEY[status] ? t(STATUS_KEY[status]) : status;
 }
 
-export function speed(bps: number): string {
-  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-  let v = bps;
+function scaled(n: number, units: string[]): string {
+  let v = n;
   let u = 0;
   while (v >= 1024 && u < units.length - 1) {
     v /= 1024;
     u++;
   }
   return `${v >= 100 || u === 0 ? Math.round(v) : v.toFixed(1)} ${units[u]}`;
+}
+
+export function speed(bps: number): string {
+  return scaled(bps, ['B/s', 'KB/s', 'MB/s', 'GB/s']);
+}
+
+export function size(bytes: number): string {
+  return scaled(bytes, ['B', 'KB', 'MB', 'GB', 'TB']);
 }

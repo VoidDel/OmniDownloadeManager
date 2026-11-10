@@ -23,6 +23,18 @@ body { margin: 0; background: var(--bg-canvas); color: var(--fg-primary); font-f
 .precent .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .precent .pst { color: var(--fg-secondary); font-size: .76rem; }
 .precent .progress { grid-column: 1 / -1; }
+/* The media the page plays. */
+.pmedia { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.pmedia .psec { font-size: .78rem; color: var(--fg-muted); }
+.pmedia .pnone { margin: 0; font-size: .8rem; color: var(--fg-secondary); }
+.pmedia ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.pmedia li { display: flex; align-items: center; gap: 8px; }
+.pmedia .pmi { width: 18px; height: 18px; flex: none; color: var(--fg-secondary); }
+.pmedia .pmi.hls, .pmedia .pmi.video { color: var(--accent); }
+.pmedia .pmtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pmedia .pname { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmedia small { font-size: .74rem; color: var(--fg-secondary); }
+.pmedia .iconbtn { width: 28px; height: 28px; }
 .popup footer { display: flex; gap: 8px; align-items: center; }
 .popup footer .grow { flex: 1; justify-content: center; }
 

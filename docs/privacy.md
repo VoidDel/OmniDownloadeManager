@@ -21,6 +21,8 @@ It passes these to the Omni Download application running on your computer, throu
 
 "Download this page's file links" reads the link addresses on the current page, only when you choose that menu item, and passes them to the application in the same way.
 
+To list the videos, audio and video streams a page plays (in the toolbar popup), the extension looks at the type and size of the files your browser loads. It keeps the addresses of the media it finds, with the page's title and address, in the browser's session storage for that tab only: they are cleared when the tab goes to another page or is closed, and when the browser closes. A media address is passed to the application only when you click its download button.
+
 The extension stores your take-over rules (minimum size, file types, excluded sites) and, if you use it, the pairing code for the local interface, in the browser's extension storage on your device.
 
 The extension contains no analytics, no advertising, and loads no remote code.
@@ -58,6 +60,8 @@ Changes to this policy are published in this file, with a new date. Questions: o
 这些信息通过浏览器的 Native Messaging 通道，或者（在扩展选项里配对后）通过本机 `127.0.0.1` 上的接口，交给在你电脑上运行的 Omni Download 应用，不会发送到别处。
 
 “下载本页的文件链接”只在你选择这个菜单项时读取当前页面上的链接地址，并以同样的方式交给应用。
+
+为了在工具栏弹出面板里列出页面播放的视频、音频和视频流，扩展会查看浏览器加载的文件的类型和大小。找到的媒体地址，连同页面标题和地址，只保存在该标签页的浏览器会话存储里：标签页打开别的页面或关闭时清除，浏览器关闭时也会清除。只有你点击某个媒体的下载按钮时，它的地址才会交给应用。
 
 扩展把你的接管规则（最小文件大小、文件类型、不接管的网站），以及备用通道的配对码（如果使用）保存在本机的浏览器扩展存储里。
 

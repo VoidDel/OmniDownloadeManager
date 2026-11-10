@@ -241,5 +241,26 @@
   },
   "options": {
     "message": "Options"
+  },
+  "mediaTitle": {
+    "message": "Media on this page"
+  },
+  "mediaNone": {
+    "message": "Nothing has played on this page yet. Videos and audio show here once they start."
+  },
+  "mediaVideo": {
+    "message": "Video"
+  },
+  "mediaAudio": {
+    "message": "Audio"
+  },
+  "mediaHls": {
+    "message": "HLS stream"
+  },
+  "mediaDownload": {
+    "message": "Download with Omni Download"
+  },
+  "mediaSent": {
+    "message": "Sent to Omni Download"
   }
 }
