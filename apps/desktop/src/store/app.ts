@@ -278,7 +278,8 @@ export const useApp = create<State>((set, get) => ({
         // First run: the guide (language, folder, browsers) before anything else.
         if (!boot.settings.general.onboarded && !get().dialog) set({ dialog: { kind: 'welcome' } });
         // Not while the app is starting up: a little later, and quietly unless there is news.
-        if (boot.settings.general.checkUpdates) setTimeout(() => void get().checkUpdate(false), 8000);
+        // Development builds don't: the release they'd find is not what they run.
+        if (import.meta.env.PROD && boot.settings.general.checkUpdates) setTimeout(() => void get().checkUpdate(false), 8000);
       }
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.
@@ -342,7 +343,7 @@ export const useApp = create<State>((set, get) => ({
     try {
       found = await api.updateCheck();
     } catch (e) {
-      // Offline, or no release yet: only an asked-for check says so (the details in the log).
+      // Offline, or no release yet: only an asked-for check says so (the details are in the log).
       console.warn('update check', asError(e).message);
       if (manual) get().toast('error', i18n.t('update.checkFailed'));
       return;

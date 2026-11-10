@@ -37,6 +37,7 @@ struct UpdateProgress {
 }
 
 fn failed(e: impl std::fmt::Display) -> Error {
+    tracing::warn!("update: {e}");
     Error::new(ErrorCode::Network, e.to_string())
 }
 

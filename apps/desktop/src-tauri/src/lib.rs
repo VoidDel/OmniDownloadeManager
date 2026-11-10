@@ -308,11 +308,13 @@ pub(crate) fn focus_main(app: &AppHandle) {
 fn init_logging(dir: &Path) {
     use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+    // The updater logs every failed check (offline, no release yet) as an ERROR; update.rs logs
+    // one warning line instead.
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(if cfg!(debug_assertions) {
-            "info,omnidl_core=debug,omnidl_http=debug,omnidl_desktop_lib=debug"
+            "info,omnidl_core=debug,omnidl_http=debug,omnidl_desktop_lib=debug,tauri_plugin_updater=off"
         } else {
-            "info"
+            "info,tauri_plugin_updater=off"
         })
     });
     let file = tracing_appender::rolling::Builder::new()
