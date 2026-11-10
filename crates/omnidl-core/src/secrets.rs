@@ -80,7 +80,10 @@ mod tests {
         let s = AesSecrets::new(&[7; 32]);
         let sealed = s.seal(b"session=abc").unwrap();
         assert!(sealed.starts_with(SEALED_PREFIX));
-        assert!(!sealed.contains("abc"));
+        // The stored bytes do not carry the plain text. (Not checked on the base64 text: a random
+        // nonce and ciphertext spell "abc" there now and then.)
+        let raw = STANDARD.decode(&sealed[SEALED_PREFIX.len()..]).unwrap();
+        assert!(!raw.windows(11).any(|w| w == b"session=abc"));
         assert_eq!(s.open(&sealed).unwrap(), b"session=abc");
         assert_ne!(s.seal(b"session=abc").unwrap(), sealed, "fresh nonce");
         // Another key, a tampered value, or plain text do not open.
