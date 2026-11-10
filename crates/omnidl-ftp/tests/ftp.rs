@@ -333,11 +333,18 @@ async fn reports_a_missing_file() {
         .await
         .unwrap_err();
     assert_eq!(e.code, ErrorCode::NotFound);
-    let e = m
+    // A link to a folder lists it (empty here), one to a missing folder fails.
+    let empty = m
         .probe(&s.url("ftp", "pub/"), &TaskOptions::default())
         .await
-        .unwrap_err();
-    assert_eq!(e.code, ErrorCode::InvalidUrl);
+        .unwrap();
+    assert!(empty.files.is_empty());
+    assert_eq!(empty.total, Some(0));
+    assert!(
+        m.probe(&s.url("ftp", "nowhere/"), &TaskOptions::default())
+            .await
+            .is_err()
+    );
     m.shutdown().await;
 }
 
