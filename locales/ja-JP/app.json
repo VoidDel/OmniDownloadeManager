@@ -524,7 +524,7 @@
     "addedOne": "{name} を追加しました",
     "links": "リンク",
     "linksPlaceholder": "https://example.com/file.zip または magnet:?xt=…",
-    "linksHint": "1 行に 1 つ：HTTP・FTP のリンク、マグネットリンク、またはトレントファイルのパス。",
+    "linksHint": "1 行に 1 つ：HTTP・FTP のリンク、マグネットリンク、トレントファイルのパス。連番は [1-20]、[01-20]、[a-z] のように書けます。",
     "openTorrents": "トレントファイルを開く",
     "pickTorrents": "トレントファイルを選択",
     "pickDir": "保存先を選択",
@@ -576,7 +576,9 @@
     "checksumPlaceholder": "任意：MD5 / SHA-1 / SHA-256 の値",
     "checksumHint": "ダウンロード完了後に自動で照合し、一致しなければ知らせます",
     "checksumOneFile": "単一の HTTP または FTP リンクにのみ使えます",
-    "checksumAlgo": "{algo}、ダウンロード完了後に照合"
+    "checksumAlgo": "{algo}、ダウンロード完了後に照合",
+    "batchMade": "連番リンクから {count} 件のダウンロードを作成します",
+    "batchCapped": "連番リンクから {count} 件のダウンロードを作成します（一度に最大 {count} 件）"
   },
   "dialogs": {
     "close": "閉じる",

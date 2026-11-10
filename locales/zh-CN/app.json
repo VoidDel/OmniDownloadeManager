@@ -524,7 +524,7 @@
     "addedOne": "已添加 {name}",
     "links": "链接",
     "linksPlaceholder": "https://example.com/file.zip 或 magnet:?xt=…",
-    "linksHint": "每行一个：HTTP、FTP 链接，磁力链接或种子文件的路径。",
+    "linksHint": "每行一个：HTTP、FTP 链接，磁力链接或种子文件的路径。批量下载用 [1-20]、[01-20]、[a-z] 代表一组编号。",
     "openTorrents": "打开种子文件",
     "pickTorrents": "选择种子文件",
     "pickDir": "选择保存位置",
@@ -576,7 +576,9 @@
     "checksumPlaceholder": "可选：MD5 / SHA-1 / SHA-256 值",
     "checksumHint": "下载完成后自动核对，不一致会提示",
     "checksumOneFile": "只能用于单个 HTTP 或 FTP 链接",
-    "checksumAlgo": "{algo}，下载完成后核对"
+    "checksumAlgo": "{algo}，下载完成后核对",
+    "batchMade": "批量链接已展开为 {count} 个任务",
+    "batchCapped": "批量链接已展开为 {count} 个任务（一次最多 {count} 个）"
   },
   "dialogs": {
     "close": "关闭",

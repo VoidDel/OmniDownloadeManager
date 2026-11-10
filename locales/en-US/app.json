@@ -524,7 +524,7 @@
     "addedOne": "Added {name}",
     "links": "Links",
     "linksPlaceholder": "https://example.com/file.zip or magnet:?xt=…",
-    "linksHint": "One per line: HTTP or FTP links, magnet links, or paths to torrent files.",
+    "linksHint": "One per line: HTTP or FTP links, magnet links or paths to torrent files. For a numbered series, write [1-20], [01-20] or [a-z] in the link.",
     "openTorrents": "Open torrent files",
     "pickTorrents": "Choose torrent files",
     "pickDir": "Choose where to save",
@@ -576,7 +576,9 @@
     "checksumPlaceholder": "Optional: MD5 / SHA-1 / SHA-256 value",
     "checksumHint": "Checked when the download finishes; you’re told if it doesn’t match",
     "checksumOneFile": "Only for a single HTTP or FTP link",
-    "checksumAlgo": "{algo}, checked when the download finishes"
+    "checksumAlgo": "{algo}, checked when the download finishes",
+    "batchMade": "The series makes {count} downloads",
+    "batchCapped": "The series makes {count} downloads (at most {count} at a time)"
   },
   "dialogs": {
     "close": "Close",

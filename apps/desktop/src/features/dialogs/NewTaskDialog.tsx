@@ -13,7 +13,7 @@ import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
-import { nameFromUrl, parseLinks, type Link } from '../../lib/links';
+import { BATCH_MAX, hasBatch, nameFromUrl, parseLinks, type Link } from '../../lib/links';
 import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
 import { errorText } from '../../lib/words';
 import { useApp } from '../../store/app';
@@ -287,7 +287,9 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           }}
         />
         <div className="nt-hintrow">
-          <small className="hint">{t('newTask.linksHint')}</small>
+          <small className="hint">
+            {hasBatch(text) ? t(links.length >= BATCH_MAX ? 'newTask.batchCapped' : 'newTask.batchMade', { count: links.length }) : t('newTask.linksHint')}
+          </small>
           <button type="button" className="btn subtle sm" onClick={() => void addTorrentFiles()}>
             <Icon name="folderOpen" />
             {t('newTask.openTorrents')}
