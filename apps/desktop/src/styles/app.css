@@ -374,7 +374,7 @@ html.float-root, html.float-root body, html.float-root #root { background: trans
 .ball .arc { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
 .ball .arc.spin { transform-origin: 28px 28px; animation: ball-spin 1.2s linear infinite; }
 @keyframes ball-spin { to { transform: rotate(360deg); } }
-.ball .ico { width: 22px; height: 22px; }
+.ball .ico { width: 22px; height: 22px; pointer-events: none; }
 .ball .spd { display: flex; flex-direction: column; align-items: center; line-height: 1.05; color: var(--fg-primary); font-variant-numeric: tabular-nums; pointer-events: none; }
 .ball .spd b { font-size: 13px; font-weight: 650; }
 .ball .spd small { font-size: 9px; color: var(--fg-secondary); }

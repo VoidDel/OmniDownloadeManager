@@ -245,6 +245,8 @@ export interface Settings {
     floatBall: boolean;
     /** Download links copied anywhere are offered for download. */
     watchClipboard: boolean;
+    /** A downloaded `.torrent` file opens the new-download dialog with it. */
+    openTorrents: boolean;
   };
   appearance: {
     mode: ThemeMode;

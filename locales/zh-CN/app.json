@@ -216,7 +216,9 @@
       "magnetHint": "在浏览器里点击 magnet: 链接时用 Omni Download 打开",
       "magnetRegistered": "已关联",
       "magnetReregister": "重新关联",
-      "magnetRegister": "设为默认程序"
+      "magnetRegister": "设为默认程序",
+      "openTorrents": "下载完成的种子文件自动打开",
+      "openTorrentsHint": "下载的 .torrent 文件完成后，打开“新建下载”，选择要下载的内容"
     },
     "browser": {
       "state": {

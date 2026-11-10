@@ -216,7 +216,9 @@
       "magnetHint": "Open magnet: links clicked in the browser with Omni Download",
       "magnetRegistered": "Associated",
       "magnetReregister": "Associate again",
-      "magnetRegister": "Set as default"
+      "magnetRegister": "Set as default",
+      "openTorrents": "Open downloaded torrent files",
+      "openTorrentsHint": "When a .torrent file finishes downloading, opens New download to choose what to download"
     },
     "browser": {
       "state": {

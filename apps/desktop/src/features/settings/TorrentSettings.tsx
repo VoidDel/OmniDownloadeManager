@@ -95,6 +95,11 @@ export function TorrentSettings({ s, set }: { s: Settings; set: (f: (s: Settings
   return (
     <>
       <div className="set-group">
+        <Row label={t('settings.torrent.openTorrents')} hint={t('settings.torrent.openTorrentsHint')}>
+          <Switch label={t('settings.torrent.openTorrents')} checked={s.general.openTorrents} onChange={(v) => set((x) => (x.general.openTorrents = v))} />
+        </Row>
+      </div>
+      <div className="set-group">
         <Row label={t('settings.torrent.seeding')} hint={t('settings.torrent.seedingHint')}>
           <Switch label={t('settings.torrent.seeding')} checked={e.seeding} onChange={(v) => set((x) => (x.engine.seeding = v))} />
         </Row>

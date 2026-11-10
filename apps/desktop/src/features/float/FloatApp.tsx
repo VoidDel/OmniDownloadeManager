@@ -38,6 +38,9 @@ export function FloatApp() {
   const [state, setState] = useState<FloatState>({ busy: false, percent: null, speed: 0 });
   const [over, setOver] = useState(false);
   const press = useRef<{ x: number; y: number } | null>(null);
+  // Drag events come and go as the pointer crosses the ball's parts: counted, the highlight
+  // stays until the drag leaves the window.
+  const depth = useRef(0);
   // Settings changed in the main window (or the tray) arrive as `settings:changed`.
   const appearance = useApp((s) => s.settings.appearance);
   const language = useApp((s) => s.settings.language);
@@ -87,10 +90,19 @@ export function FloatApp() {
   const onDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    depth.current += 1;
     setOver(true);
+  };
+  const onDragLeave = () => {
+    depth.current = Math.max(0, depth.current - 1);
+    if (depth.current === 0) setOver(false);
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
+    depth.current = 0;
     setOver(false);
     const torrents = [...e.dataTransfer.files].filter((f) => f.name.toLowerCase().endsWith('.torrent'));
     if (torrents.length) {
@@ -109,7 +121,7 @@ export function FloatApp() {
     t('float.hint'),
   ].join('\n');
   return (
-    <div className="float" onDragOver={onDragOver} onDragEnter={onDragOver} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+    <div className="float" onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDrop}>
       <div
         className="ball"
         data-busy={state.busy}

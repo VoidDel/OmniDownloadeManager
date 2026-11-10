@@ -1,9 +1,10 @@
 //! Links that arrive outside the browser bridge: copied to the clipboard (`clipboard`) or dropped
 //! on the floating ball (`float`). One plain download link opens the quick-download window, as a
 //! download from the browser does; several links, a magnet link or a torrent open the
-//! new-download dialog.
+//! new-download dialog. A link to a `.torrent` file downloads that file like any other; once it
+//! is there it opens the dialog (`torrent_done`).
 
-use omnidl_core::{Category, NewTask, TaskKind, TaskOptions, filename};
+use omnidl_core::{Category, NewTask, Task, TaskKind, TaskOptions, TaskStatus, filename};
 use tauri::{AppHandle, Manager};
 
 use crate::{
@@ -92,6 +93,30 @@ pub fn offer(app: &AppHandle, links: Vec<String>, origin: Origin) {
             tauri::async_runtime::spawn(async move { ask(&app, url, origin).await });
         }
         _ => crate::links::open(app, links),
+    }
+}
+
+/// A download that just finished as a `.torrent` file (from the browser, the clipboard, the
+/// ball or the new-download dialog, which all fetch it as a file): the new-download dialog opens
+/// with it, as when the file is opened from the
+/// system (BT settings, on by default). Not for one restored from the recycle bin, or one that
+/// failed its checksum.
+pub fn torrent_done(app: &AppHandle, before: Option<TaskStatus>, task: &Task) {
+    let finished = task.status == TaskStatus::Completed
+        && matches!(before, Some(TaskStatus::Probing | TaskStatus::Downloading))
+        && task.error.is_none();
+    if !finished
+        || task.kind == TaskKind::Torrent
+        || !task.file_name.to_ascii_lowercase().ends_with(".torrent")
+    {
+        return;
+    }
+    let on = app
+        .try_state::<AppState>()
+        .is_some_and(|s| s.settings().general.open_torrents);
+    let path = task.path();
+    if on && path.is_file() {
+        crate::links::open(app, vec![path.to_string_lossy().into_owned()]);
     }
 }
 

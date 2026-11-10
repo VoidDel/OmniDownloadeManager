@@ -216,7 +216,9 @@
       "magnetHint": "ブラウザーで magnet: リンクをクリックしたときに Omni Download で開きます",
       "magnetRegistered": "関連付け済み",
       "magnetReregister": "再度関連付け",
-      "magnetRegister": "既定のアプリに設定"
+      "magnetRegister": "既定のアプリに設定",
+      "openTorrents": "ダウンロードしたトレントファイルを自動で開く",
+      "openTorrentsHint": ".torrent ファイルのダウンロードが完了したら「新規ダウンロード」を開き、ダウンロードする内容を選べるようにします"
     },
     "browser": {
       "state": {
