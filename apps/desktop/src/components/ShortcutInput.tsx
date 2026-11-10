@@ -54,17 +54,19 @@ export function ShortcutInput({ value, onChange, label, platform }: { value: str
       if (acc !== value) onChange(acc);
     }
   };
+  // Also in the accessible name: what a screen reader announces must include what is shown.
+  const shown = recording ? t('settings.general.shortcutRecording') : value ? shortcutLabel(value, mac) : t('settings.general.shortcutNone');
   return (
     <span className="shortcut">
       <button
         type="button"
         className={`field-look shortcut-key${recording ? ' rec' : ''}`}
-        aria-label={label}
+        aria-label={`${label}: ${shown}`}
         onFocus={() => setRecording(true)}
         onBlur={() => setRecording(false)}
         onKeyDown={onKeyDown}
       >
-        {recording ? t('settings.general.shortcutRecording') : value ? shortcutLabel(value, mac) : t('settings.general.shortcutNone')}
+        {shown}
       </button>
       {/* Hidden rather than gone, so the fields of both shortcuts line up. */}
       <button

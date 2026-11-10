@@ -270,6 +270,16 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             {t('settings.general.openFolder')}
           </button>
         </Row>
+        <Row label={t('settings.general.help')} hint={t('settings.general.helpHint')}>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void run(() => api.helpOpen('guide'))}>
+            <Icon name="external" />
+            {t('settings.general.guide')}
+          </button>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void run(() => api.helpOpen('feedback'))}>
+            <Icon name="external" />
+            {t('settings.general.feedback')}
+          </button>
+        </Row>
       </div>
     </>
   );

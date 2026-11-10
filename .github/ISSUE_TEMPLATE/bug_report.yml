@@ -1,0 +1,59 @@
+name: 问题反馈
+description: 下载失败、界面异常、浏览器接管不工作等
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 先看一眼 [常见问题](https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/faq.md)，也许已经有答案。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: “设置 › 常规 › 版本”里显示的版本号
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS（Apple Silicon）
+        - Linux（deb）
+        - Linux（rpm）
+        - Linux（AppImage）
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 哪一部分
+      options:
+        - HTTP / HTTPS 下载
+        - FTP 下载
+        - BT / 磁力链接
+        - 浏览器扩展与接管
+        - 界面
+        - 安装、更新、托盘、通知
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 做了什么、期望什么、实际看到了什么。能稳定重现的话，请写出步骤。
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器及版本
+      description: 只有浏览器接管的问题需要填；同时写上扩展弹窗里显示的连接状态
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 把当天的日志文件拖到这里（“设置 › 常规 › 日志 › 打开文件夹”）。日志里可能有下载链接和文件路径，介意的话先抹掉。

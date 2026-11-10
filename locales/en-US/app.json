@@ -23,7 +23,7 @@
   },
   "errors": {
     "invalid_url": "Not a downloadable link",
-    "unsupported": "This kind of download will be supported in a later version",
+    "unsupported": "This kind of link is not supported",
     "network": "Network connection failed",
     "timeout": "Connection timed out",
     "tls": "Secure connection failed: invalid certificate",
@@ -39,7 +39,24 @@
     "disk_full": "Not enough disk space",
     "io": "Failed to read or write the file",
     "internal": "An internal error occurred",
-    "fileGone": "The file no longer exists; it may have been deleted or moved"
+    "fileGone": "The file no longer exists; it may have been deleted or moved",
+    "hints": {
+      "invalid_url": "HTTP, HTTPS and FTP links, magnet links and torrent files are supported.",
+      "unsupported": "HTTP, HTTPS and FTP links, magnet links and torrent files are supported.",
+      "network": "Check your connection and the proxy in Settings › Network, then retry.",
+      "timeout": "The server did not answer. Retry later, or raise the timeouts in Settings › Network.",
+      "tls": "Check the system date and time. A proxy or security software may also have replaced the certificate.",
+      "http_status": "The server has a temporary problem. Retry later.",
+      "ftp_reply": "The server may limit simultaneous logins. Lower the FTP sessions in Settings › Network and retry.",
+      "not_found": "The link may have expired. Get a new download link from the original page.",
+      "auth_required": "Start the download from your browser again so your sign-in comes along; for FTP, put the account in the link.",
+      "forbidden": "The link may have expired, or only works from the original page. Start the download from your browser again.",
+      "remote_changed": "What was downloaded no longer matches the new file. Choose Download again to start over.",
+      "file_missing": "The torrent file this download was added from can no longer be read. Add the torrent again, or use its magnet link.",
+      "disk_full": "Free up space, then choose Retry. What was downloaded is kept.",
+      "io": "Check that the save location still exists and can be written to (is the external or network drive connected?), then retry.",
+      "internal": "Retry once. If it happens again, report it with the logs (Settings › General › Logs)."
+    }
   },
   "format": {
     "s": "{s}s",
@@ -107,7 +124,11 @@
       "shortcutTaken": "{keys} is already taken by another app",
       "checkUpdates": "Check for updates",
       "checkUpdatesHint": "Once after starting; you choose when to install",
-      "shortcutDuplicate": "Those keys are already set for the other action"
+      "shortcutDuplicate": "Those keys are already set for the other action",
+      "help": "Help and feedback",
+      "helpHint": "Attach the logs when you report a problem; they make the cause easier to find",
+      "guide": "User guide",
+      "feedback": "Report a problem"
     },
     "download": {
       "folder": "Default download folder",

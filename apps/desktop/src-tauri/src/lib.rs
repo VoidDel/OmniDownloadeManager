@@ -173,6 +173,7 @@ pub fn run() {
             commands::speed_limit_set,
             commands::autostart_set,
             commands::extension_open,
+            commands::help_open,
             update::update_check,
             update::update_install,
             commands::task_probe,

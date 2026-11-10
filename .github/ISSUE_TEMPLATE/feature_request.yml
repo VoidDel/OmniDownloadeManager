@@ -1,0 +1,20 @@
+name: 功能建议
+description: 希望增加或改进的功能
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 现在哪里不方便，或者做不到什么
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 希望它怎么工作
+  - type: textarea
+    id: other
+    attributes:
+      label: 其他
+      description: 别的软件里类似的功能、截图等

@@ -30,6 +30,11 @@ export function categoryLabel(c: Category): string {
   return i18n.t(`category.${c}`);
 }
 
+/** What to do about an error (`errors.hints.<code>`), or '' when there is nothing to add. */
+export function errorHint(e: AppError): string {
+  return i18n.t(`errors.hints.${e.code}`, { defaultValue: '' });
+}
+
 /** What went wrong, in the user's words; the technical detail goes in a tooltip. */
 export function errorText(e: AppError): string {
   switch (e.code) {

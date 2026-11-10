@@ -291,6 +291,19 @@ pub fn extension_open(app: AppHandle, browser: String) -> Result<()> {
         .map_err(Error::internal)
 }
 
+/// Opens the user guide or the page for reporting a problem, in the browser.
+#[tauri::command]
+pub fn help_open(app: AppHandle, page: String) -> Result<()> {
+    let url = match page.as_str() {
+        "guide" => "https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/user-guide.md",
+        "feedback" => "https://github.com/VoidDel/OmniDownloadeManager/issues/new/choose",
+        _ => return Err(Error::invalid(format!("no such page: {page}"))),
+    };
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(Error::internal)
+}
+
 /// Opens a folder (the download folder from the settings page).
 #[tauri::command]
 pub fn folder_open(app: AppHandle, path: String) -> Result<()> {

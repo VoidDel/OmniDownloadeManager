@@ -11,7 +11,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { hostOf } from '../../lib/links';
 import type { TaskDetail as Detail, SegmentView, Task, TorrentDetail } from '../../lib/types';
-import { STATUS_COLOR, errorText, statusText } from '../../lib/words';
+import { STATUS_COLOR, errorHint, errorText, statusText } from '../../lib/words';
 import { speedHistory, useApp } from '../../store/app';
 import { FileTree } from './FileTree';
 
@@ -193,6 +193,7 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
           <Icon name="alert" />
           <div>
             <b>{errorText(t.error)}</b>
+            {errorHint(t.error) && <span className="hint">{errorHint(t.error)}</span>}
             <small>{t.error.message}</small>
           </div>
         </div>

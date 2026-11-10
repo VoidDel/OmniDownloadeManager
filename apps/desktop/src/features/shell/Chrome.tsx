@@ -225,10 +225,14 @@ export function TitleBar({ platform }: { platform: Platform }) {
       <div className="tb-side" data-tauri-drag-region>
         <div className="ttl" data-tauri-drag-region>
           {view === 'settings' ? (
-            <b>{t('shell.settings')}</b>
+            <b role="heading" aria-level={1}>
+              {t('shell.settings')}
+            </b>
           ) : (
             <>
-              <b>{filterLabel(filter)}</b>
+              <b role="heading" aria-level={1}>
+                {filterLabel(filter)}
+              </b>
               <span>{t('shell.taskCount', { count })}</span>
             </>
           )}

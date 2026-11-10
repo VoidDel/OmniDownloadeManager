@@ -27,6 +27,8 @@ export const api = {
   updateInstall: () => invoke<void>('update_install'),
   /** The extension's store page for a browser (or how to install it). */
   extensionOpen: (browser: string) => invoke<void>('extension_open', { browser }),
+  /** The user guide or the page for reporting a problem, in the browser. */
+  helpOpen: (page: 'guide' | 'feedback') => invoke<void>('help_open', { page }),
 
   probe: (url: string, options: TaskOptions) => invoke<ProbeInfo>('task_probe', { url, options }),
   add: (items: NewTask[]) => invoke<Task[]>('task_add', { items }),

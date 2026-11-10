@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用手册
+    url: https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/user-guide.md
+    about: 怎么添加下载、接管浏览器、做种、限速
+  - name: 常见问题
+    url: https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/faq.md
+    about: 安装被拦截、速度慢、浏览器没有接管、磁力链接没有节点

@@ -75,7 +75,7 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
 }
 
 /** One task. `start` is its offset in the list. */
-const Row = memo(function Row({ id, start, cols }: { id: string; start: number; cols: string }) {
+const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: number; cols: string; cursor: boolean }) {
   const t = useApp((s) => s.tasks[id]);
   const selected = useApp((s) => s.selection.includes(id));
   const gone = useApp((s) => !!s.missing[id]);
@@ -95,7 +95,8 @@ const Row = memo(function Row({ id, start, cols }: { id: string; start: number; 
   return (
     <div
       role="row"
-      className="trow task-row"
+      id={`task-${id}`}
+      className={`trow task-row${cursor ? ' cursor' : ''}`}
       aria-selected={selected}
       data-id={id}
       style={{ transform: `translateY(${start}px)`, gridTemplateColumns: cols }}
@@ -139,6 +140,8 @@ export function TaskTable() {
   const filter = useApp((s) => s.filter);
   const rowH = ROW_HEIGHT[density];
   const scroller = useRef<HTMLDivElement>(null);
+  // Keyboard focus is on the grid itself; the row it is at is `aria-activedescendant`.
+  const table = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   // The keyboard cursor; the selection follows it unless Ctrl is held.
   const [focus, setFocus] = useState<string | null>(null);
@@ -163,7 +166,7 @@ export function TaskTable() {
       if (e.button === 0) select([], null);
       return;
     }
-    scroller.current?.focus({ preventScroll: true });
+    table.current?.focus({ preventScroll: true });
     setFocus(id);
     if (e.button === 2) {
       if (!selection.includes(id)) select([id], id);
@@ -197,6 +200,8 @@ export function TaskTable() {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // Keys pressed on a column header's button are that button's.
+    if (e.target !== e.currentTarget) return;
     const { selection, select, run, openDialog, tasks } = useApp.getState();
     const move = (to: number) => {
       const i = Math.max(0, Math.min(ids.length - 1, to));
@@ -256,6 +261,18 @@ export function TaskTable() {
       case 'Escape':
         select([], null);
         break;
+      case 'ContextMenu':
+      case 'F10': {
+        // The menu key (or Shift+F10): the menu of the selection, at the row the cursor is on.
+        if (e.key === 'F10' && !e.shiftKey) break;
+        e.preventDefault();
+        const items = taskMenu(selection, tasks);
+        if (!items.length) break;
+        const row = (focus && document.getElementById(`task-${focus}`)) || table.current?.querySelector('.task-row[aria-selected="true"]');
+        const r = (row ?? e.currentTarget).getBoundingClientRect();
+        setMenu({ x: r.left + 48, y: r.top + Math.min(r.height, rowH), items });
+        break;
+      }
     }
   };
 
@@ -263,7 +280,21 @@ export function TaskTable() {
 
   const items = v.getVirtualItems();
   return (
-    <div className="task-table" role="grid" aria-label={tr('table.label')} aria-rowcount={ids.length} aria-multiselectable="true">
+    <div
+      className="task-table"
+      role="grid"
+      ref={table}
+      tabIndex={0}
+      aria-label={tr('table.label')}
+      aria-rowcount={ids.length}
+      aria-multiselectable="true"
+      aria-activedescendant={focus && items.some((vi) => ids[vi.index] === focus) ? `task-${focus}` : undefined}
+      onKeyDown={onKeyDown}
+      onFocus={(e) => {
+        // Tabbed into: the cursor starts at the selection, or at the first row.
+        if (e.target === e.currentTarget && (!focus || !ids.includes(focus))) setFocus(useApp.getState().selection.find((id) => ids.includes(id)) ?? ids[0] ?? null);
+      }}
+    >
       <div className="thead" role="row" style={{ gridTemplateColumns: cols }}>
         {COLUMNS.map(([key, label, cls], i) => {
           // "剩余" is not sortable (it changes every tick); its slot keeps the grid.
@@ -275,29 +306,36 @@ export function TaskTable() {
             );
           }
           const active = sort.key === key;
+          // The header cell holds the button: a button cannot itself be a column header.
           return (
-            <button
-              key={key}
-              type="button"
-              role="columnheader"
-              className={cls || undefined}
-              aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}
-              onClick={() => setSort(key)}
-            >
-              {tr(label)}
-              <Icon name={active && sort.desc ? 'chevronDown' : 'chevronUp'} />
-            </button>
+            <span key={key} role="columnheader" className={cls || undefined} aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}>
+              <button type="button" onClick={() => setSort(key)}>
+                {tr(label)}
+                <Icon name={active && sort.desc ? 'chevronDown' : 'chevronUp'} />
+              </button>
+            </span>
           );
         })}
       </div>
-      <div className="tscroll" ref={scroller} tabIndex={0} onMouseDown={onMouseDown} onDoubleClick={onDoubleClick} onContextMenu={onContextMenu} onKeyDown={onKeyDown}>
-        <div className="tbody" style={{ height: v.getTotalSize() }}>
+      <div className="tscroll" role="rowgroup" ref={scroller} onMouseDown={onMouseDown} onDoubleClick={onDoubleClick} onContextMenu={onContextMenu}>
+        <div className="tbody" role="presentation" style={{ height: v.getTotalSize() }}>
           {items.map((vi) => (
-            <Row key={ids[vi.index]} id={ids[vi.index]} start={vi.start} cols={cols} />
+            <Row key={ids[vi.index]} id={ids[vi.index]} start={vi.start} cols={cols} cursor={focus === ids[vi.index]} />
           ))}
         </div>
       </div>
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menu.items}
+          onClose={() => {
+            setMenu(null);
+            // Back to the list, so the keyboard carries on from where the menu was opened.
+            table.current?.focus({ preventScroll: true });
+          }}
+        />
+      )}
     </div>
   );
 }

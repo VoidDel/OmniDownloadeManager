@@ -2,7 +2,7 @@
 
 跨平台（Windows、macOS、Linux）下载管理器：HTTP / FTP 多连接与断点续传、BitTorrent 与磁力链接，以及 Chrome、Edge、Firefox 扩展。Rust + Tauri 2 + React，界面与 [OmniZip](https://github.com/VoidDel/OmniZip) 同属 Omni 家族，共用设计系统 [omni-ui](https://github.com/VoidDel/omni-ui)。
 
-> 当前进度：**Phase 4** 已完成：HTTP / HTTPS 多连接下载与断点续传、任务列表与设置（Phase 1），Chrome、Edge、Firefox 扩展接管下载（Phase 2），BitTorrent 与磁力链接（文件选择、做种策略、`magnet:` 与 `.torrent` 关联，Phase 3），以及 FTP / FTPS（账号、多会话、`REST` 续传，Phase 4）。之后是系统集成与发布工程，路线图见 [开发方案](docs/development-plan.md) §10。
+> 当前进度：**Phase 5** 已完成（代码签名与扩展上架除外）：HTTP / HTTPS / FTP 多连接下载与断点续传、BitTorrent 与磁力链接、浏览器扩展接管下载、托盘与后台运行、通知、自动更新和三平台安装包。正在进行 Phase 6（打磨与公测），路线图见 [开发方案](docs/development-plan.md) §10。
 
 ## 目录
 
@@ -17,7 +17,9 @@
 | `themes/` | omni-ui 内置主题的副本（`pnpm sync:omni-ui`），供 Rust 嵌入 |
 | `locales/` | 界面文字：简体中文（源）、繁體中文、English、日本語（i18next + ICU，与 OmniZip 相同） |
 | `icons/app-icon.svg` | 应用图标源文件（`pnpm icons` 生成各平台尺寸） |
-| `docs/` | 开发方案与架构决策记录（`docs/architecture/ADR-*.md`） |
+| `docs/` | 使用手册、常见问题、开发方案与架构决策记录（`docs/architecture/ADR-*.md`） |
+
+使用方法见 [使用手册](docs/user-guide.md) 和 [常见问题](docs/faq.md)；参与开发见 [贡献指南](CONTRIBUTING.md)。
 
 ## 开发
 

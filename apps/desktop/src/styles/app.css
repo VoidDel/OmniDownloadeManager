@@ -55,8 +55,14 @@
   .task-table .c-eta, .task-table .c-size, .task-table .c-speed { display: none; }
 }
 .task-table .thead { flex: none; }
-.task-table .thead > span { white-space: nowrap; }
+.task-table .thead > span { white-space: nowrap; min-width: 0; }
+/* The sort button sits inside its header cell (omni-ui styles it as the cell itself). */
+.thead .num > button { justify-content: flex-end; }
+.thead [aria-sort="ascending"] .ic, .thead [aria-sort="descending"] .ic { opacity: 1; }
 .tscroll { flex: 1; min-height: 0; overflow: auto; outline: 0; }
+/* The list takes keyboard focus as a whole (arrows move through the rows): the ring is on the row the cursor is at. */
+.task-table:focus-visible { outline: 0; }
+.task-table:focus-visible .task-row.cursor { outline: 2px solid var(--border-focus); outline-offset: -2px; }
 .tbody { position: relative; margin: 4px 10px 12px; }
 .task-row { top: 0; cursor: default; user-select: none; }
 .task-row .nm .fi { width: 20px; height: 20px; }
@@ -132,6 +138,7 @@
 .det-err.warn { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
 .det-err .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .det-err div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.det-err .hint { color: var(--fg-primary); }
 .det-err small { color: var(--fg-secondary); word-break: break-word; }
 .det-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); flex: none; }
 .det-foot .btn.grow { flex: 1; justify-content: center; }
