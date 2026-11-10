@@ -11,6 +11,10 @@
 .nav-item .cnt { margin-left: auto; font-size: .78rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .nav-item[aria-current="true"] .cnt { color: inherit; opacity: .8; }
 .sb-label { padding: 14px 12px 4px; font-size: .75rem; font-weight: 500; color: var(--fg-muted); }
+/* In a short window the filters and categories scroll before the settings sections below them
+   (omni-ui keeps this list at full height, so the sections were the ones cut off). */
+.sb-nav { flex: 0 1000 auto; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
+.sb-nav > * { flex: none; }
 .task-sum .sum-pct { font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- command bar */

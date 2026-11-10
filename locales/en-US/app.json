@@ -224,6 +224,7 @@
     },
     "settingsTabs": {
       "general": "General",
+      "appearance": "Appearance",
       "download": "Downloads",
       "network": "Network",
       "torrent": "BT",

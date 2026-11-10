@@ -15,7 +15,7 @@ import { errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
 export type SortKey = 'added' | 'name' | 'size' | 'progress' | 'speed' | 'status';
-export type SettingsTab = 'general' | 'download' | 'network' | 'torrent' | 'browser';
+export type SettingsTab = 'general' | 'appearance' | 'download' | 'network' | 'torrent' | 'browser';
 export type View = 'tasks' | 'settings';
 
 export type Dialog =

@@ -49,6 +49,7 @@ const CATEGORY_ICON: Record<Category, IconName> = {
  *  `settingsTabs()` or `settingsTabLabel(id)`. */
 export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
   ['general', 'shell.settingsTabs.general', 'layout'],
+  ['appearance', 'shell.settingsTabs.appearance', 'palette'],
   ['download', 'shell.settingsTabs.download', 'download'],
   ['network', 'shell.settingsTabs.network', 'globe'],
   ['torrent', 'shell.settingsTabs.torrent', 'magnet'],

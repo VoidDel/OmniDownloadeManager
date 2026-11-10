@@ -66,7 +66,7 @@
         "micaAlt": "Mica Alt",
         "acrylic": "亚克力"
       },
-      "mode": "外观",
+      "mode": "模式",
       "modes": {
         "light": "浅色",
         "dark": "深色",
@@ -224,6 +224,7 @@
     },
     "settingsTabs": {
       "general": "常规",
+      "appearance": "外观",
       "download": "下载",
       "network": "网络",
       "torrent": "BT",
