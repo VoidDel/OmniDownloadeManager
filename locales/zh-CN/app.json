@@ -9,7 +9,8 @@
     "failed": "失败",
     "removed": "已删除",
     "fetchingTorrent": "获取种子信息",
-    "fileMissing": "文件已删除"
+    "fileMissing": "文件已删除",
+    "checksumMismatch": "校验不符"
   },
   "category": {
     "video": "视频",
@@ -55,8 +56,10 @@
       "file_missing": "任务用的种子文件读不到了。重新添加这个种子，或改用磁力链接。",
       "disk_full": "清理出空间后点“重试”，已下载的部分会保留。",
       "io": "检查保存位置是否还在、能否写入（移动硬盘、网络盘是否已连接），然后重试。",
-      "internal": "重试一次；如果还出现，请带上日志反馈（“设置 › 常规 › 日志”）。"
-    }
+      "internal": "重试一次；如果还出现，请带上日志反馈（“设置 › 常规 › 日志”）。",
+      "checksum_mismatch": "文件可能下载出错或被篡改。点“重新下载”再下一次；如果确认填写的值有误，可以在下面改正或清除。"
+    },
+    "checksum_mismatch": "文件的校验值和填写的不一致"
   },
   "format": {
     "s": "{s} 秒",
@@ -135,7 +138,11 @@
       "soundBuiltIn": "内置提示音",
       "soundTest": "试听",
       "soundPick": "选择 WAV 文件…",
-      "soundReset": "恢复内置提示音"
+      "soundReset": "恢复内置提示音",
+      "floatBall": "显示悬浮球",
+      "floatBallHint": "始终在最前面显示下载进度；把链接拖到上面即可下载，双击打开主窗口",
+      "watchClipboard": "监视剪贴板",
+      "watchClipboardHint": "复制视频、压缩包、安装包等文件的下载链接或磁力链接时，询问是否下载"
     },
     "download": {
       "folder": "默认下载文件夹",
@@ -459,7 +466,23 @@
     },
     "fileMissing": "文件已不存在，可能被删除或移出了保存位置。可以重新下载。",
     "showMore": "展开",
-    "showLess": "收起"
+    "showLess": "收起",
+    "checksum": {
+      "title": "文件校验",
+      "clear": "清除",
+      "pending": "下载完成后核对",
+      "ok": "校验通过",
+      "bad": "校验不符",
+      "placeholder": "粘贴网站给出的校验值",
+      "replace": "粘贴新的校验值",
+      "check": "核对",
+      "set": "设置",
+      "compute": "计算 MD5 / SHA-1 / SHA-256",
+      "computing": "正在计算…",
+      "copy": "复制",
+      "copyAlgo": "复制 {algo}",
+      "copied": "已复制校验值"
+    }
   },
   "table": {
     "label": "下载任务",
@@ -546,7 +569,12 @@
       "connections": "将使用 {count} 个连接",
       "sessions": "将使用 {count} 个会话"
     },
-    "dirByCategory": "按类型分别保存"
+    "dirByCategory": "按类型分别保存",
+    "checksum": "校验值",
+    "checksumPlaceholder": "可选：MD5 / SHA-1 / SHA-256 值",
+    "checksumHint": "下载完成后自动核对，不一致会提示",
+    "checksumOneFile": "只能用于单个 HTTP 或 FTP 链接",
+    "checksumAlgo": "{algo}，下载完成后核对"
   },
   "dialogs": {
     "close": "关闭",
@@ -597,7 +625,10 @@
     "keyLater": "稍后",
     "useBrowser": "改用浏览器下载",
     "later": "稍后下载",
-    "start": "开始下载"
+    "start": "开始下载",
+    "fromClipboard": "剪贴板中的下载链接",
+    "fromFloat": "拖到悬浮球的链接",
+    "keyCancel": "忽略"
   },
   "tray": {
     "show": "显示主窗口",
@@ -605,7 +636,8 @@
   },
   "notify": {
     "done": "下载完成",
-    "failed": "下载失败"
+    "failed": "下载失败",
+    "checksum": "下载完成，但校验不符"
   },
   "update": {
     "check": "检查更新",
@@ -636,5 +668,13 @@
     "next": "下一步",
     "skip": "跳过",
     "done": "开始使用"
+  },
+  "checksum": {
+    "invalid": "不是有效的校验值（支持 MD5、SHA-1、SHA-256、SHA-512）"
+  },
+  "float": {
+    "hide": "隐藏悬浮球",
+    "idle": "没有正在下载的任务",
+    "hint": "拖入链接即可下载 · 双击打开主窗口"
   }
 }

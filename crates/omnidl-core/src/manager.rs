@@ -447,6 +447,15 @@ impl TaskManager {
                         TaskStatus::Paused | TaskStatus::Failed | TaskStatus::Completed
                     )
                 {
+                    // A finished file that failed its checksum makes way for the new download
+                    // (which would otherwise be numbered beside it).
+                    if t.status == TaskStatus::Completed
+                        && t.error
+                            .as_ref()
+                            .is_some_and(|e| e.code == ErrorCode::ChecksumMismatch)
+                    {
+                        remove_file(&t.path());
+                    }
                     t.status = TaskStatus::Queued;
                     t.error = None;
                     t.downloaded_bytes = 0;
@@ -549,6 +558,56 @@ impl TaskManager {
         }
         self.inner.changed(id).await;
         Ok(())
+    }
+
+    /// Sets (or with `None` clears) the checksum a download should meet. A finished download is
+    /// checked at once; the others when they finish.
+    pub async fn set_checksum(&self, id: TaskId, sum: Option<crate::Checksum>) -> Result<Task> {
+        let check = {
+            let mut st = self.inner.state.lock();
+            let t = st.tasks.get_mut(&id).ok_or_else(|| missing(id))?;
+            if t.kind == TaskKind::Torrent {
+                return Err(Error::invalid("a torrent checks its own pieces"));
+            }
+            t.options.checksum = sum.clone();
+            let finished = t.status == TaskStatus::Completed;
+            let mismatch = t
+                .error
+                .as_ref()
+                .is_some_and(|e| e.code == ErrorCode::ChecksumMismatch);
+            if mismatch {
+                t.error = None;
+            }
+            sum.filter(|_| finished).map(|s| (s, t.path()))
+        };
+        if let Some((sum, path)) = check {
+            let error = verify(sum, path).await;
+            if let Some(t) = self.inner.state.lock().tasks.get_mut(&id)
+                && t.status == TaskStatus::Completed
+            {
+                t.error = error;
+            }
+        }
+        self.inner.changed(id).await;
+        self.get(id).ok_or_else(|| missing(id))
+    }
+
+    /// The checksums of a finished download's file, in one pass over it.
+    pub async fn digests(
+        &self,
+        id: TaskId,
+        algos: Vec<crate::HashAlgo>,
+    ) -> Result<Vec<(crate::HashAlgo, String)>> {
+        let t = self.get(id).ok_or_else(|| missing(id))?;
+        if t.status != TaskStatus::Completed || t.kind == TaskKind::Torrent {
+            return Err(Error::invalid("not a finished file"));
+        }
+        let path = t.path();
+        tokio::task::spawn_blocking(move || {
+            crate::checksum::digests(&path, &algos).map_err(|e| Error::io(&e, path.display()))
+        })
+        .await
+        .map_err(Error::internal)?
     }
 
     /// Stops every download, waits (a bounded time) for them to save their progress, and closes
@@ -782,6 +841,22 @@ impl Inner {
         {
             tracing::error!("saving progress of {id}: {e}");
         }
+        // A finished file with a checksum to meet: checked before it shows as finished.
+        let mismatch = match (&outcome, &stop) {
+            (Outcome::Completed { file_name, .. }, Stop::None) => {
+                let wanted = self.state.lock().tasks.get(&id).and_then(|t| {
+                    (t.kind != TaskKind::Torrent)
+                        .then(|| t.options.checksum.clone())
+                        .flatten()
+                        .map(|c| (c, std::path::Path::new(&t.save_dir).join(file_name)))
+                });
+                match wanted {
+                    Some((sum, path)) => verify(sum, path).await,
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         if let Stop::Purge { delete_files } = stop {
             if let Err(e) = self.delete(&[id], delete_files).await {
                 tracing::error!("deleting {id}: {e}");
@@ -810,7 +885,7 @@ impl Inner {
                             if !seeding || t.completed_at.is_none() {
                                 t.completed_at = Some(now_ms());
                             }
-                            t.error = None;
+                            t.error = mismatch.clone();
                             TaskStatus::Completed
                         }
                         Outcome::Stopped(s) => {
@@ -887,6 +962,29 @@ impl Inner {
             ids: removed.iter().map(|t| t.id).collect(),
         });
         Ok(())
+    }
+}
+
+/// Checks a finished file against `sum` (off the async threads: a large file takes a while).
+/// The error to keep on the task when it does not match; a file that cannot be read is logged
+/// and passes (the download itself went fine).
+async fn verify(sum: crate::Checksum, path: std::path::PathBuf) -> Option<Error> {
+    let shown = path.display().to_string();
+    let result = tokio::task::spawn_blocking(move || sum.matches(&path).map(|ok| (ok, sum))).await;
+    match result {
+        Ok(Ok((true, _))) => None,
+        Ok(Ok((false, sum))) => Some(Error::new(
+            ErrorCode::ChecksumMismatch,
+            format!("{} of {shown} is not {}", sum.algo.name(), sum.hex),
+        )),
+        Ok(Err(e)) => {
+            tracing::warn!("checking {shown}: {e}");
+            None
+        }
+        Err(e) => {
+            tracing::warn!("checking {shown}: {e}");
+            None
+        }
     }
 }
 

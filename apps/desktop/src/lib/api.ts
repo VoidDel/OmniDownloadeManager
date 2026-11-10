@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
+import type { AppError, Bootstrap, FloatState, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -42,6 +42,10 @@ export const api = {
   purge: (ids: string[], deleteFiles: boolean) => invoke<void>('task_purge', { ids, deleteFiles }),
   detail: (id: string) => invoke<TaskDetail>('task_detail', { id }),
   setTaskSpeedLimit: (id: string, limit: number | null) => invoke<void>('task_set_speed_limit', { id, limit }),
+  /** The checksum the file should have, as typed (empty clears it); a finished file is checked now. */
+  setChecksum: (id: string, value: string) => invoke<Task>('task_set_checksum', { id, value }),
+  /** MD5, SHA-1 and SHA-256 of a finished file: [algorithm, hex] pairs. */
+  digests: (id: string) => invoke<[string, string][]>('task_digests', { id }),
   setTorrentFiles: (id: string, files: number[]) => invoke<void>('task_files_set', { id, files }),
   magnetStatus: () => invoke<MagnetHandler>('magnet_status'),
   magnetRegister: () => invoke<MagnetHandler>('magnet_register'),
@@ -57,6 +61,12 @@ export const api = {
   httpBridgeNewToken: () => invoke<Integration>('http_bridge_new_token'),
   quickRequest: () => invoke<QuickRequest | null>('quick_request'),
   quickResolve: (decision: QuickDecision) => invoke<void>('quick_resolve', { decision }),
+
+  floatState: () => invoke<FloatState>('float_state'),
+  floatDrop: (text: string) => invoke<void>('float_drop', { text }),
+  floatDropTorrent: (name: string, data: number[]) => invoke<void>('float_drop_torrent', { name, data }),
+  floatOpen: () => invoke<void>('float_open'),
+  floatMenu: () => invoke<void>('float_menu'),
 };
 
 /** Window-level events from the app (not tasks). */

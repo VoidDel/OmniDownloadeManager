@@ -14,6 +14,11 @@ export function statusText(t: Pick<Task, 'status' | 'kind'>): string {
   return statusLabel(t.status);
 }
 
+/** Finished, but the file does not have the checksum the user gave. */
+export function checksumFailed(t: Pick<Task, 'status' | 'error'>): boolean {
+  return t.status === 'completed' && t.error?.code === 'checksum_mismatch';
+}
+
 /** State colours (docs/development-plan.md §6.1): colour only says state. */
 export const STATUS_COLOR: Record<TaskStatus, string> = {
   queued: 'var(--fg-muted)',

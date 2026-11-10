@@ -28,7 +28,8 @@ omnidl-ftp.workspace = true
 # The browser bridge.
 omnidl-ipc = { workspace = true, features = ["tokio"] }
 # The notification-area icon, and its "busy" variant drawn at run time.
-tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+# macos-private-api: the floating ball's transparent window on macOS.
+tauri = { workspace = true, features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-dialog.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-single-instance.workspace = true
@@ -50,6 +51,8 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 axum.workspace = true
 url.workspace = true
+# Reading the clipboard when watching it (text only).
+arboard = { version = "3", default-features = false }
 uuid.workspace = true
 
 # Notifications: WinRT toasts on Windows (clicking one shows the file), the plugin elsewhere.
@@ -59,7 +62,7 @@ tauri-plugin-notification.workspace = true
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.8"
 windows-registry = "0.100"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_LibraryLoader", "Win32_Media_Audio", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Cryptography", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_Media_Audio", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile.workspace = true

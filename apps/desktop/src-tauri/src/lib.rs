@@ -6,9 +6,12 @@
 //! (docs/development-plan.md §7.3–7.4).
 
 mod browser;
+mod clipboard;
 mod commands;
 mod events;
+mod float;
 mod i18n;
+mod intake;
 mod links;
 mod material;
 mod notify;
@@ -189,6 +192,8 @@ pub fn run() {
                 tracing::warn!("global shortcut {keys} is taken by another app");
             }
             browser::start(handle);
+            float::sync(handle);
+            clipboard::start(handle.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -212,6 +217,8 @@ pub fn run() {
             commands::task_purge,
             commands::task_detail,
             commands::task_set_speed_limit,
+            commands::task_set_checksum,
+            commands::task_digests,
             commands::task_files_set,
             commands::magnet_status,
             commands::magnet_register,
@@ -225,6 +232,11 @@ pub fn run() {
             browser::http_bridge_new_token,
             browser::quick_request,
             browser::quick_resolve,
+            float::float_state,
+            float::float_drop,
+            float::float_drop_torrent,
+            float::float_open,
+            float::float_menu,
         ])
         .on_window_event(|window, event| {
             // Closed to the notification area: the window goes (and its WebView's memory with
@@ -242,10 +254,20 @@ pub fn run() {
                 && let Some(state) = window.try_state::<AppState>()
             {
                 state.page_ready.store(false, Ordering::SeqCst);
+                // Closed for good (not to the notification area): the floating ball goes too, so
+                // that the app exits as it did without it.
+                if !state.in_tray.load(Ordering::SeqCst)
+                    && let Some(ball) = window.app_handle().get_webview_window(float::LABEL)
+                {
+                    let _ = ball.close();
+                }
             }
             // Moved to a display with another scale: icons for the new DPI.
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
                 window_icons(window);
+                if window.label() == float::LABEL {
+                    float::clip(window);
+                }
             }
             #[cfg(windows)]
             if let tauri::WindowEvent::Destroyed = event

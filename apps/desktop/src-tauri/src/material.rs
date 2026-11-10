@@ -75,10 +75,13 @@ pub fn prepare<'a>(
     }
 }
 
-/// Applies the material settings to every open window.
+/// Applies the material settings to every open window but the floating ball (see `float::clip`).
 pub fn apply(app: &AppHandle, settings: &Settings) {
     let fx = effects(settings);
-    for w in app.webview_windows().values() {
+    for (label, w) in app.webview_windows() {
+        if label == crate::float::LABEL {
+            continue;
+        }
         let _ = w.set_effects(fx.clone());
     }
 }

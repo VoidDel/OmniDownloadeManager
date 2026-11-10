@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { FileIcon, Icon } from '../../components/Icon';
 import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
+import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
 import { nameFromUrl, parseLinks, type Link } from '../../lib/links';
 import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
@@ -112,6 +113,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [referer, setReferer] = useState(initial.referer ?? '');
   const [cookies, setCookies] = useState(initial.cookies ?? '');
   const [userAgent, setUserAgent] = useState(initial.userAgent ?? '');
+  const [checksum, setChecksum] = useState('');
   // From a browser the request details are filled in: show them.
   const [advancedOpen] = useState(Boolean(initial.referer || initial.cookies || initial.userAgent));
   const [proxyMode, setProxyMode] = useState<ProxyMode>('inherit');
@@ -185,7 +187,11 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const totalKnown = choosing
     ? torrentFiles.filter((f) => chosen.has(f.index)).reduce((n, f) => n + f.size, 0)
     : known.reduce((n, p) => n + (p.info.total ?? 0), 0);
-  const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim());
+  // One file to check: a single HTTP or FTP link (a torrent checks its own pieces).
+  const sum = parseChecksum(checksum);
+  const sumApplies = addable.length === 1 && addable[0].kind !== 'torrent';
+  const sumInvalid = checksum.trim() !== '' && (!sum || !sumApplies);
+  const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim()) || sumInvalid;
 
   const addTorrentFiles = async () => {
     const files = await open({ multiple: true, title: t('newTask.pickTorrents'), filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
@@ -220,6 +226,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           ...opts,
           fileName: single?.kind === 'http' && name?.trim() ? name.trim() : null,
           onlyFiles: l === single && choosing ? [...chosen].sort((a, b) => a - b) : null,
+          checksum: sumApplies ? sum : null,
         },
         start,
         probe: p?.state === 'ok' ? p.info : null,
@@ -384,6 +391,28 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           <input id="nt-cookie" className="inp mono" value={cookies} placeholder="name=value; other=value" onChange={(e) => setCookies(e.target.value)} />
           <label htmlFor="nt-ua">User-Agent</label>
           <input id="nt-ua" className="inp mono" value={userAgent} placeholder={t('newTask.followSettings')} onChange={(e) => setUserAgent(e.target.value)} />
+          <label htmlFor="nt-sum">{t('newTask.checksum')}</label>
+          <div className="nt-sum-field">
+            <input
+              id="nt-sum"
+              className="inp mono"
+              value={checksum}
+              placeholder={t('newTask.checksumPlaceholder')}
+              aria-invalid={sumInvalid}
+              aria-describedby="nt-sum-hint"
+              spellCheck={false}
+              onChange={(e) => setChecksum(e.target.value)}
+            />
+            <small id="nt-sum-hint" className={sumInvalid ? 'err-text' : 'muted'}>
+              {checksum.trim() === ''
+                ? t('newTask.checksumHint')
+                : !sumApplies
+                  ? t('newTask.checksumOneFile')
+                  : sum
+                    ? t('newTask.checksumAlgo', { algo: ALGO_NAME[sum.algo] })
+                    : t('checksum.invalid')}
+            </small>
+          </div>
           <label htmlFor="nt-proxy">{t('newTask.proxy')}</label>
           <div className="inline">
             <Select<ProxyMode>

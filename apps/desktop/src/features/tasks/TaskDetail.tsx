@@ -2,16 +2,17 @@
 // and the speed of the last two minutes; a torrent shows its files (to choose from), peers and
 // trackers instead of segments. Actions at the bottom follow its state.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
 import { Tabs } from '../../components/ui';
 import { api } from '../../lib/api';
+import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
 import { hostOf } from '../../lib/links';
 import type { TaskDetail as Detail, SegmentView, Task, TorrentDetail } from '../../lib/types';
-import { STATUS_COLOR, errorHint, errorText, nameParts, statusText, textColor } from '../../lib/words';
+import { STATUS_COLOR, checksumFailed, errorHint, errorText, nameParts, statusText, textColor } from '../../lib/words';
 import { speedHistory, useApp } from '../../store/app';
 import { FileTree } from './FileTree';
 
@@ -196,10 +197,12 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
           <div>
             <b>{errorText(t.error)}</b>
             {errorHint(t.error) && <span className="hint">{errorHint(t.error)}</span>}
-            <small>{t.error.message}</small>
+            {/* A checksum mismatch's detail (path, value) is in the checksum block below. */}
+            {t.error.code !== 'checksum_mismatch' && <small>{t.error.message}</small>}
           </div>
         </div>
       )}
+      {!bt && <ChecksumBlock t={t} />}
       {/* Pushed to the bottom of the panel; the facts above stay at the top. */}
       <div className="det-bottom" aria-hidden="true" />
       {!bt && t.totalBytes != null && t.totalBytes > 0 && (
@@ -217,6 +220,98 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
       )}
       {running && <SpeedChart id={t.id} speed={t.speedBps} />}
     </>
+  );
+}
+
+/** File checksums: the value the download should have (checked when it finishes, or now for a
+ *  finished one), and the values of a finished file, to compare with the site's by eye. */
+function ChecksumBlock({ t }: { t: Task }) {
+  const { t: tr } = useTranslation();
+  const run = useApp((s) => s.run);
+  const toast = useApp((s) => s.toast);
+  const gone = useApp((s) => !!s.missing[t.id]);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState<'set' | 'hash' | null>(null);
+  const [digests, setDigests] = useState<[string, string][] | null>(null);
+  const finished = t.status === 'completed' && !gone;
+  const sum = t.options.checksum ?? null;
+  const bad = checksumFailed(t);
+  const parsed = parseChecksum(value);
+  const apply = async () => {
+    if (!parsed || busy) return;
+    setBusy('set');
+    const done = await run(() => api.setChecksum(t.id, value));
+    setBusy(null);
+    if (done) setValue('');
+  };
+  const compute = async () => {
+    setBusy('hash');
+    const d = await run(() => api.digests(t.id));
+    setBusy(null);
+    if (d) setDigests(d);
+  };
+  const copy = (hex: string) => void navigator.clipboard.writeText(hex).then(() => toast('success', tr('detail.checksum.copied')));
+  return (
+    <div className="det-sum">
+      <div className="det-head">
+        <span>{tr('detail.checksum.title')}</span>
+        {sum && (
+          <button type="button" className="lnk" onClick={() => void run(() => api.setChecksum(t.id, ''))}>
+            {tr('detail.checksum.clear')}
+          </button>
+        )}
+      </div>
+      {sum && (
+        <div className={`sum-state ${!finished ? 'wait' : bad ? 'bad' : 'ok'}`}>
+          <Icon name={!finished ? 'clock' : bad ? 'alert' : 'checkCircle'} />
+          <span className="grow">{tr(!finished ? 'detail.checksum.pending' : bad ? 'detail.checksum.bad' : 'detail.checksum.ok')}</span>
+          <code className="mono" title={sum.hex}>
+            {ALGO_NAME[sum.algo]}
+          </code>
+        </div>
+      )}
+      {sum && <code className="mono path sum-hex">{sum.hex}</code>}
+      <form
+        className="inline sum-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void apply();
+        }}
+      >
+        <input
+          className="inp mono"
+          value={value}
+          spellCheck={false}
+          aria-label={tr('detail.checksum.placeholder')}
+          aria-invalid={value.trim() !== '' && !parsed}
+          placeholder={tr(sum ? 'detail.checksum.replace' : 'detail.checksum.placeholder')}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button type="submit" className="btn outline" disabled={!parsed || busy !== null}>
+          {tr(finished ? 'detail.checksum.check' : 'detail.checksum.set')}
+        </button>
+      </form>
+      {finished &&
+        (digests ? (
+          <dl className="det-dl sum-list">
+            {digests.map(([algo, hex]) => (
+              <Fragment key={algo}>
+                <dt>{algo}</dt>
+                <dd className="sum-row">
+                  <span className="mono path">{hex}</span>
+                  <button type="button" className="iconbtn" title={tr('detail.checksum.copy')} aria-label={tr('detail.checksum.copyAlgo', { algo })} onClick={() => copy(hex)}>
+                    <Icon name="copy" />
+                  </button>
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        ) : (
+          <button type="button" className="lnk sum-compute" disabled={busy !== null} onClick={() => void compute()}>
+            {tr(busy === 'hash' ? 'detail.checksum.computing' : 'detail.checksum.compute')}
+          </button>
+        ))}
+    </div>
   );
 }
 

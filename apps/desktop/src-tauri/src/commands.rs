@@ -8,7 +8,7 @@ use omnidl_core::{
     TaskStatus,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -131,6 +131,11 @@ pub async fn save_settings(app: &AppHandle, settings: Settings) -> Result<Settin
     if a.0.material != a.1.material || a.0.material_kind != a.1.material_kind {
         crate::material::apply(app, &settings);
     }
+    if settings.general.float_ball != before.general.float_ball {
+        crate::float::sync(app);
+    }
+    // The ball is a page of its own: it follows the theme, material and language too.
+    let _ = app.emit_to(crate::float::LABEL, "settings:changed", &settings);
     // The menu is in the UI language and checks the speed limit.
     if settings.language != before.language
         || settings.engine.speed_limit != before.engine.speed_limit
@@ -232,6 +237,40 @@ pub async fn task_set_speed_limit(
     limit: Option<u64>,
 ) -> Result<()> {
     state.manager.set_task_speed_limit(id, limit).await
+}
+
+/// Sets the checksum a download should meet, as the user typed it (`sha256:…`, bare hex…); empty
+/// clears it. A finished download is checked at once.
+#[tauri::command]
+pub async fn task_set_checksum(
+    state: State<'_, AppState>,
+    id: TaskId,
+    value: String,
+) -> Result<Task> {
+    let sum = if value.trim().is_empty() {
+        None
+    } else {
+        let l = i18n::resolve(&state.settings().language);
+        Some(
+            omnidl_core::Checksum::parse(&value)
+                .ok_or_else(|| Error::invalid(i18n::tr(l, "checksum.invalid", &[])))?,
+        )
+    };
+    state.manager.set_checksum(id, sum).await
+}
+
+/// MD5, SHA-1 and SHA-256 of a finished download, as `[algorithm, hex]` pairs.
+#[tauri::command]
+pub async fn task_digests(state: State<'_, AppState>, id: TaskId) -> Result<Vec<(String, String)>> {
+    use omnidl_core::HashAlgo;
+    let got = state
+        .manager
+        .digests(id, vec![HashAlgo::Md5, HashAlgo::Sha1, HashAlgo::Sha256])
+        .await?;
+    Ok(got
+        .into_iter()
+        .map(|(a, h)| (a.name().to_owned(), h))
+        .collect())
 }
 
 /// Opens a finished download with its default app.

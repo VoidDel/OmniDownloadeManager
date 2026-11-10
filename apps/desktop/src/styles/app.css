@@ -171,6 +171,25 @@
 .det-err { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-text, var(--danger)); font-size: .86rem; }
 .det-err.warn { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning-text, var(--warning)); }
 .det-err .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+/* File checksums in the details panel. */
+.det-sum { display: flex; flex-direction: column; gap: 8px; }
+.det-sum .lnk { padding: 0; background: none; border: 0; cursor: pointer; color: var(--accent-text, var(--accent)); }
+.det-sum .lnk:hover:not(:disabled) { text-decoration: underline; }
+.det-sum .lnk:disabled { color: var(--fg-muted); cursor: default; }
+.det-sum .det-head .lnk { font-size: .8rem; }
+.sum-state { display: flex; align-items: center; gap: 8px; font-size: .86rem; }
+.sum-state .ic { width: 16px; height: 16px; flex: none; }
+.sum-state.ok { color: var(--success-text, var(--success)); }
+.sum-state.bad { color: var(--danger-text, var(--danger)); }
+.sum-state.wait { color: var(--fg-secondary); }
+.sum-state code { font-size: .75rem; color: var(--fg-muted); }
+.sum-hex { font-size: .78rem; color: var(--fg-secondary); word-break: break-all; }
+.sum-form .inp { flex: 1; min-width: 0; font-size: .8rem; }
+.sum-list dd.sum-row { display: flex; align-items: flex-start; gap: 4px; }
+.sum-list .sum-row .path { flex: 1; min-width: 0; word-break: break-all; font-size: .76rem; }
+.sum-list .sum-row .iconbtn { width: 24px; height: 24px; }
+.sum-list .sum-row .iconbtn .ic { width: 14px; height: 14px; }
+.sum-compute { align-self: flex-start; font-size: .84rem; }
 .det-err div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .det-err .hint { color: var(--fg-primary); }
 .det-err small { color: var(--fg-secondary); word-break: break-word; }
@@ -204,6 +223,8 @@
 .nt-adv summary .ic { width: 14px; height: 14px; transition: transform var(--dur); }
 .nt-adv[open] summary .ic { transform: rotate(90deg); }
 .nt-adv summary small { color: var(--fg-muted); font-size: .8rem; margin-left: 4px; }
+.nt-sum-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nt-sum-field small { font-size: .78rem; }
 .nt-adv .frow { padding-top: 12px; }
 .nt-sum { font-size: .8rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 .nt-sum b { color: var(--fg-primary); font-weight: 600; }
@@ -336,3 +357,28 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .set-body { scrollbar-gutter: stable both-edges; }
 /* The links box grows with what is pasted into it, up to eight lines. */
 .nt-urls { field-sizing: content; min-height: calc(3lh + 18px); max-height: calc(8lh + 18px); }
+
+/* ---------------------------------------------------------------- floating ball */
+/* The window is transparent: only the ball shows. */
+html.float-root, html.float-root body, html.float-root #root { background: transparent !important; overflow: hidden; }
+.float { width: 100vw; height: 100vh; display: grid; place-items: center; user-select: none; }
+.ball {
+  position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg-surface); color: var(--accent); cursor: grab;
+  box-shadow: 0 0 0 1px var(--border-default), 0 3px 10px rgb(0 0 0 / .18);
+  transition: transform var(--dur), background var(--dur), color var(--dur);
+}
+.ball:active { cursor: grabbing; }
+.ball svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.ball .track { fill: none; stroke: var(--bg-pressed); stroke-width: 3; }
+.ball .arc { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
+.ball .arc.spin { transform-origin: 28px 28px; animation: ball-spin 1.2s linear infinite; }
+@keyframes ball-spin { to { transform: rotate(360deg); } }
+.ball .ico { width: 22px; height: 22px; }
+.ball .spd { display: flex; flex-direction: column; align-items: center; line-height: 1.05; color: var(--fg-primary); font-variant-numeric: tabular-nums; pointer-events: none; }
+.ball .spd b { font-size: 13px; font-weight: 650; }
+.ball .spd small { font-size: 9px; color: var(--fg-secondary); }
+/* A link dragged over it. */
+.ball[data-over="true"] { transform: scale(1.08); background: var(--accent); color: var(--accent-fg, #fff); }
+.ball[data-over="true"] .track { stroke: transparent; }
+@media (prefers-reduced-motion: reduce) { .ball, .ball .arc { transition: none; } .ball .arc.spin { animation: none; } }

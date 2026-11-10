@@ -9,7 +9,8 @@
     "failed": "Failed",
     "removed": "Deleted",
     "fetchingTorrent": "Fetching metadata",
-    "fileMissing": "File deleted"
+    "fileMissing": "File deleted",
+    "checksumMismatch": "Checksum mismatch"
   },
   "category": {
     "video": "Video",
@@ -55,8 +56,10 @@
       "file_missing": "The torrent file this download was added from can no longer be read. Add the torrent again, or use its magnet link.",
       "disk_full": "Free up space, then choose Retry. What was downloaded is kept.",
       "io": "Check that the save location still exists and can be written to (is the external or network drive connected?), then retry.",
-      "internal": "Retry once. If it happens again, report it with the logs (Settings › General › Logs)."
-    }
+      "internal": "Retry once. If it happens again, report it with the logs (Settings › General › Logs).",
+      "checksum_mismatch": "The download may be damaged or altered. Choose Download again to get it once more; if the value you entered is wrong, correct or clear it below."
+    },
+    "checksum_mismatch": "The file's checksum doesn't match the one you entered"
   },
   "format": {
     "s": "{s}s",
@@ -135,7 +138,11 @@
       "soundBuiltIn": "Built-in sound",
       "soundTest": "Play",
       "soundPick": "Choose a WAV file…",
-      "soundReset": "Use the built-in sound"
+      "soundReset": "Use the built-in sound",
+      "floatBall": "Show floating ball",
+      "floatBallHint": "Shows download progress above other windows; drop a link on it to download, double-click to open the main window",
+      "watchClipboard": "Watch the clipboard",
+      "watchClipboardHint": "When you copy a download link to a video, archive, installer or similar file, or a magnet link, asks whether to download it"
     },
     "download": {
       "folder": "Default download folder",
@@ -459,7 +466,23 @@
     },
     "fileMissing": "The file is no longer there — it may have been deleted or moved. You can download it again.",
     "showMore": "Show all",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "checksum": {
+      "title": "Checksum",
+      "clear": "Clear",
+      "pending": "Checked when the download finishes",
+      "ok": "Checksum matches",
+      "bad": "Checksum mismatch",
+      "placeholder": "Paste the checksum from the website",
+      "replace": "Paste a new checksum",
+      "check": "Check",
+      "set": "Set",
+      "compute": "Calculate MD5 / SHA-1 / SHA-256",
+      "computing": "Calculating…",
+      "copy": "Copy",
+      "copyAlgo": "Copy {algo}",
+      "copied": "Checksum copied"
+    }
   },
   "table": {
     "label": "Downloads",
@@ -546,7 +569,12 @@
       "connections": "Will use {count, plural, one {# connection} other {# connections}}",
       "sessions": "Will use {count, plural, one {# session} other {# sessions}}"
     },
-    "dirByCategory": "Saved by file type"
+    "dirByCategory": "Saved by file type",
+    "checksum": "Checksum",
+    "checksumPlaceholder": "Optional: MD5 / SHA-1 / SHA-256 value",
+    "checksumHint": "Checked when the download finishes; you’re told if it doesn’t match",
+    "checksumOneFile": "Only for a single HTTP or FTP link",
+    "checksumAlgo": "{algo}, checked when the download finishes"
   },
   "dialogs": {
     "close": "Close",
@@ -597,7 +625,10 @@
     "keyLater": "Later",
     "useBrowser": "Download in browser instead",
     "later": "Download later",
-    "start": "Start download"
+    "start": "Start download",
+    "fromClipboard": "Download link from the clipboard",
+    "fromFloat": "Link dropped on the floating ball",
+    "keyCancel": "ignore"
   },
   "tray": {
     "show": "Show Omni Download",
@@ -605,7 +636,8 @@
   },
   "notify": {
     "done": "Download finished",
-    "failed": "Download failed"
+    "failed": "Download failed",
+    "checksum": "Downloaded, but the checksum doesn’t match"
   },
   "update": {
     "check": "Check for updates",
@@ -636,5 +668,13 @@
     "next": "Next",
     "skip": "Skip",
     "done": "Get started"
+  },
+  "checksum": {
+    "invalid": "Not a valid checksum (MD5, SHA-1, SHA-256 or SHA-512)"
+  },
+  "float": {
+    "hide": "Hide floating ball",
+    "idle": "Nothing is downloading",
+    "hint": "Drop a link here to download it · Double-click to open the main window"
   }
 }

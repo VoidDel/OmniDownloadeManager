@@ -9,6 +9,7 @@
 //! - [`DownloadEngine`]: what a protocol crate implements; [`TaskManager`] schedules tasks onto
 //!   engines, persists them through `omnidl-storage` and publishes [`TaskEvent`]s.
 
+pub mod checksum;
 mod config;
 pub mod disk;
 mod engine;
@@ -22,6 +23,7 @@ mod secrets;
 pub mod segments;
 mod task;
 
+pub use checksum::{Checksum, HashAlgo};
 pub use config::{ConflictPolicy, EngineConfig, default_user_agent};
 pub use engine::{
     Checkpoint, DownloadEngine, Job, JobOptions, Outcome, PeerInfo, ProbeFile, ProbeInfo, Progress,

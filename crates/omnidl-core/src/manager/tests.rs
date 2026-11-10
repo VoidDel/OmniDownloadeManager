@@ -488,3 +488,58 @@ async fn seeding_goes_on_after_a_restart() {
     assert_eq!(seeder.runs.load(Ordering::SeqCst), 1);
     m.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn checks_a_finished_file_against_its_checksum() {
+    // The fake engine writes nothing: the "downloaded" files are put there beforehand.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("good.bin"), b"abc").unwrap();
+    std::fs::write(dir.path().join("bad.bin"), b"abc").unwrap();
+    const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    let wrong = crate::Checksum::parse(&"0".repeat(64)).unwrap();
+    let m = manager(FakeEngine::new(3, 3, 1), Db::memory().await.unwrap(), 3).await;
+    let task = |name: &str, sum: &crate::Checksum| NewTask {
+        save_dir: dir.path().to_string_lossy().into_owned(),
+        options: TaskOptions {
+            checksum: Some(sum.clone()),
+            ..Default::default()
+        },
+        ..new_task(&format!("https://example.com/{name}"), true)
+    };
+    let added = m
+        .add(vec![
+            task("good.bin", &crate::Checksum::parse(ABC_SHA256).unwrap()),
+            task("bad.bin", &wrong),
+        ])
+        .await
+        .unwrap();
+    let good = wait_for(&m, added[0].id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(good.error, None);
+    let bad = wait_for(&m, added[1].id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(bad.error.map(|e| e.code), Some(ErrorCode::ChecksumMismatch));
+    // The finished file stays; giving the right value clears the mismatch.
+    let fixed = m
+        .set_checksum(
+            added[1].id,
+            crate::Checksum::parse(&format!("sha256:{ABC_SHA256}")),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fixed.error, None);
+    let digests = m
+        .digests(added[1].id, vec![crate::HashAlgo::Sha256])
+        .await
+        .unwrap();
+    assert_eq!(
+        digests,
+        vec![(crate::HashAlgo::Sha256, ABC_SHA256.to_owned())]
+    );
+    // Wrong again, then downloaded again: the file that failed goes first.
+    let again = m.set_checksum(added[1].id, Some(wrong)).await.unwrap();
+    assert_eq!(
+        again.error.map(|e| e.code),
+        Some(ErrorCode::ChecksumMismatch)
+    );
+    m.restart(&[added[1].id]).await.unwrap();
+    assert!(!dir.path().join("bad.bin").exists());
+}

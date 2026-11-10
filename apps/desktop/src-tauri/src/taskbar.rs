@@ -50,7 +50,9 @@ impl Taskbar {
         }
     }
 
-    fn wanted(&self) -> Shown {
+    /// What shows: nothing, busy without a figure, or a percent (the floating ball shows it
+    /// too).
+    pub fn wanted(&self) -> Shown {
         if self.running.is_empty() {
             return None;
         }

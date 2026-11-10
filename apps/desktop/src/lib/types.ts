@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'remote_changed'
   | 'file_missing'
+  | 'checksum_mismatch'
   | 'disk_full'
   | 'io'
   | 'invalid_request'
@@ -53,6 +54,15 @@ export interface TaskOptions {
   ftpActive: boolean | null;
   /** FTPS: accept a certificate that does not verify. */
   insecureTls: boolean | null;
+  /** The value the finished file should have (checked when it finishes). */
+  checksum?: Checksum | null;
+}
+
+export type HashAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512';
+
+export interface Checksum {
+  algo: HashAlgo;
+  hex: string;
 }
 
 export interface Task {
@@ -231,6 +241,10 @@ export interface Settings {
     /** A sound when a download finishes: the built-in one, or `soundFile` (WAV) when set. */
     soundDone: boolean;
     soundFile: string;
+    /** The floating ball: overall progress above other windows; links dropped on it download. */
+    floatBall: boolean;
+    /** Download links copied anywhere are offered for download. */
+    watchClipboard: boolean;
   };
   appearance: {
     mode: ThemeMode;
@@ -329,6 +343,8 @@ export interface QuickRequest {
   saveDir: string;
   connections: number;
   options: TaskOptions;
+  /** Where the link came from: the browser's extension, the clipboard or the floating ball. */
+  origin: 'browser' | 'clipboard' | 'float';
 }
 
 export interface QuickDecision {
@@ -363,4 +379,14 @@ export const emptyOptions = (): TaskOptions => ({
   password: null,
   ftpActive: null,
   insecureTls: null,
+  checksum: null,
 });
+
+/** What the floating ball shows. */
+export interface FloatState {
+  busy: boolean;
+  /** Overall percent of the running downloads, when their sizes are known. */
+  percent: number | null;
+  /** Bytes per second. */
+  speed: number;
+}

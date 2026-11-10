@@ -31,6 +31,10 @@ pub struct TaskOptions {
     pub ftp_active: Option<bool>,
     /// FTPS: accept a certificate that does not verify (self-signed servers).
     pub insecure_tls: Option<bool>,
+    /// The value the finished file should have (HTTP and FTP; a torrent checks its own pieces).
+    /// Checked when the download finishes: a mismatch keeps the file and says so
+    /// (`ErrorCode::ChecksumMismatch`).
+    pub checksum: Option<crate::Checksum>,
 }
 
 /// Where requests go.

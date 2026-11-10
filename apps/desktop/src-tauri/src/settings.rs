@@ -57,6 +57,11 @@ pub struct General {
     pub shortcut_new: String,
     /// Look for a new version a little after starting.
     pub check_updates: bool,
+    /// The floating ball: a small always-on-top circle with the overall progress; links dropped
+    /// on it are downloaded (see `float`).
+    pub float_ball: bool,
+    /// Download links copied anywhere are offered for download (see `clipboard`).
+    pub watch_clipboard: bool,
     /// The first-run guide has been through (or skipped).
     pub onboarded: bool,
 }
@@ -72,6 +77,8 @@ impl Default for General {
             shortcut_show: String::new(),
             shortcut_new: String::new(),
             check_updates: true,
+            float_ball: false,
+            watch_clipboard: false,
             onboarded: false,
         }
     }

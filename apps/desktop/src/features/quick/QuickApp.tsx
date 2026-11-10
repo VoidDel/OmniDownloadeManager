@@ -1,6 +1,8 @@
 // The quick-download window (docs/development-plan.md §6.3): a download taken over from the
 // browser, waiting for the user. Enter starts it, Esc adds it paused, "let the browser download
-// it" hands it back. The window shows itself once it has something to show.
+// it" hands it back. A link copied to the clipboard or dropped on the floating ball asks the same
+// way, without the browser's parts; for a copied link Esc drops it (copying is not asking). The
+// window shows itself once it has something to show.
 
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -43,6 +45,7 @@ export function QuickApp() {
         return;
       }
       setReq(r);
+      if (r.origin === 'clipboard') escape.current = 'cancel';
       setName(r.fileName ?? nameFromUrl(r.url) ?? '');
       setDir(r.saveDir);
       setConnections(String(r.connections));
@@ -99,12 +102,13 @@ export function QuickApp() {
     decideRef.current = decide;
   });
 
-  // Enter starts, Esc adds it for later (buttons keep their own Enter).
+  // Enter starts, Esc adds it for later, or drops a copied link (buttons keep their own Enter).
+  const escape = useRef<QuickDecision['action']>('later');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        decideRef.current('later');
+        decideRef.current(escape.current);
       } else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         decideRef.current('start');
@@ -139,12 +143,15 @@ export function QuickApp() {
           ? t('quick.attached.referer')
           : '';
   const browser = BROWSER[req.browser ?? ''];
+  const fromBrowser = req.origin === 'browser';
+  const heading = fromBrowser ? (browser ? t('quick.fromBrowser', { browser }) : t('quick.fromAnyBrowser')) : req.origin === 'clipboard' ? t('quick.fromClipboard') : t('quick.fromFloat');
+  const proto = /^ftps?:/i.test(req.url) ? 'FTP' : 'HTTP';
   return (
     <div className="quick">
       <header data-tauri-drag-region>
         <Logo size={18} />
         <h1 data-tauri-drag-region>
-          {browser ? t('quick.fromBrowser', { browser }) : t('quick.fromAnyBrowser')}
+          {heading}
           <span>{req.site}</span>
         </h1>
         <button type="button" className="q-close" aria-label={t('quick.close')} title={t('quick.closeTitle')} onClick={() => decide('cancel')}>
@@ -170,7 +177,7 @@ export function QuickApp() {
         <span />
         <div className="q-info">
           <b>{size != null ? fmt.bytes(size) : t('quick.sizeUnknown')}</b>
-          <span className="badge proto-http">HTTP</span>
+          <span className={`badge proto-${proto.toLowerCase()}`}>{proto}</span>
           {!probe && !probeError && (
             <span className="q-probing">
               <span className="pulse" aria-hidden="true" />
@@ -223,19 +230,25 @@ export function QuickApp() {
             onChange={(e) => setLimit(e.target.value)}
           />
         </div>
-        <span />
-        <label className="chk q-remember">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          {req.site ? t('quick.remember', { site: req.site }) : t('quick.rememberAnySite')}
-        </label>
+        {fromBrowser && (
+          <>
+            <span />
+            <label className="chk q-remember">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              {req.site ? t('quick.remember', { site: req.site }) : t('quick.rememberAnySite')}
+            </label>
+          </>
+        )}
       </div>
       <footer>
         <span className="q-keys">
-          <kbd>Enter</kbd> {t('quick.keyStart')} · <kbd>Esc</kbd> {t('quick.keyLater')}
+          <kbd>Enter</kbd> {t('quick.keyStart')} · <kbd>Esc</kbd> {req.origin === 'clipboard' ? t('quick.keyCancel') : t('quick.keyLater')}
         </span>
-        <button type="button" className="btn subtle" onClick={() => decide('browser')}>
-          {t('quick.useBrowser')}
-        </button>
+        {fromBrowser && (
+          <button type="button" className="btn subtle" onClick={() => decide('browser')}>
+            {t('quick.useBrowser')}
+          </button>
+        )}
         <button type="button" className="btn outline" onClick={() => decide('later')}>
           {t('quick.later')}
         </button>

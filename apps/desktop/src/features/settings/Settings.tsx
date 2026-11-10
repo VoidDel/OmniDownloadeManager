@@ -254,6 +254,14 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         </Row>
       </div>
       <div className="set-group">
+        <Row label={t('settings.general.floatBall')} hint={t('settings.general.floatBallHint')}>
+          <Switch label={t('settings.general.floatBall')} checked={g.floatBall} onChange={(v) => set((x) => (x.general.floatBall = v))} />
+        </Row>
+        <Row label={t('settings.general.watchClipboard')} hint={t('settings.general.watchClipboardHint')}>
+          <Switch label={t('settings.general.watchClipboard')} checked={g.watchClipboard} onChange={(v) => set((x) => (x.general.watchClipboard = v))} />
+        </Row>
+      </div>
+      <div className="set-group">
         <Row label={t('settings.general.soundDone')} hint={t('settings.general.soundDoneHint')}>
           <Switch label={t('settings.general.soundDone')} checked={g.soundDone} onChange={(v) => set((x) => (x.general.soundDone = v))} />
         </Row>

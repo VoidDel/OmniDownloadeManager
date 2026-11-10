@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { FloatApp } from './features/float/FloatApp';
 import { QuickApp } from './features/quick/QuickApp';
 import { nextFrame } from './lib/frame';
 import { detectPlatform } from './lib/platform';
@@ -24,8 +25,11 @@ document.addEventListener('contextmenu', (e) => {
   if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
 });
 
-// The same page serves the main window and the quick-download windows (`quick-<n>`).
-const quick = isTauri() && getCurrentWindow().label.startsWith('quick-');
+// The same page serves the main window, the quick-download windows (`quick-<n>`) and the
+// floating ball (`float`).
+const label = isTauri() ? getCurrentWindow().label : 'main';
+const quick = label.startsWith('quick-');
+const float = label === 'float';
 
 // Settings, theme and tasks first, so the first frame is the real one.
 void useApp
@@ -34,14 +38,14 @@ void useApp
   .then((background) => {
     createRoot(document.getElementById('root')!).render(
       <StrictMode>
-        <Language>{quick ? <QuickApp /> : <App platform={platform} />}</Language>
+        <Language>{float ? <FloatApp /> : quick ? <QuickApp /> : <App platform={platform} />}</Language>
       </StrictMode>,
     );
     // The main window is created hidden; it shows once the first frame is painted (no white
     // flash), unless the browser bridge started the app in the background. Quick-download
-    // windows show themselves once they have their request.
+    // windows show themselves once they have their request, the ball once it is drawn.
     // A window coming back from the notification area was asked for: it takes the focus too.
-    if (isTauri() && !quick && !background) {
+    if (isTauri() && !quick && !float && !background) {
       nextFrame(() =>
         nextFrame(() => {
           const w = getCurrentWindow();

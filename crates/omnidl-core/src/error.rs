@@ -27,6 +27,8 @@ pub enum ErrorCode {
     RemoteChanged,
     /// The partial file disappeared.
     FileMissing,
+    /// The finished file does not have the checksum the user gave (the file stays).
+    ChecksumMismatch,
     DiskFull,
     Io,
     /// A task id that does not exist, an operation that does not apply.

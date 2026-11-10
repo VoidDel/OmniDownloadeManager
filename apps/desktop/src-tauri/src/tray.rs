@@ -192,51 +192,57 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
         "show" => crate::focus_main(&app),
         "new" => new_download(&app),
         "quit" => app.exit(0),
-        _ => {
+        "start-all" | "pause-all" => run_all(&app, id == "start-all"),
+        other => {
+            let Some(Ok(limit)) = other.strip_prefix("limit:").map(str::parse::<u64>) else {
+                return;
+            };
             tauri::async_runtime::spawn(async move {
-                let state = app.state::<AppState>();
-                let ids = |keep: fn(TaskStatus) -> bool| {
-                    state
-                        .manager
-                        .list()
-                        .into_iter()
-                        .filter(|t| keep(t.status))
-                        .map(|t| t.id)
-                        .collect::<Vec<_>>()
-                };
-                let r = match id.as_str() {
-                    "start-all" => {
-                        state
-                            .manager
-                            .resume(&ids(|s| s == TaskStatus::Paused))
-                            .await
-                    }
-                    "pause-all" => {
-                        let running = ids(|s| {
-                            matches!(
-                                s,
-                                TaskStatus::Queued | TaskStatus::Probing | TaskStatus::Downloading
-                            )
-                        });
-                        state.manager.pause(&running).await
-                    }
-                    other => match other.strip_prefix("limit:").map(str::parse::<u64>) {
-                        Some(Ok(limit)) => {
-                            let mut s = state.settings();
-                            s.engine.speed_limit = Some(limit).filter(|&l| l > 0);
-                            crate::commands::save_settings(&app, s)
-                                .await
-                                .map(|s| drop(app.emit("settings:changed", s)))
-                        }
-                        _ => Ok(()),
-                    },
-                };
-                if let Err(e) = r {
+                let mut s = app.state::<AppState>().settings();
+                s.engine.speed_limit = Some(limit).filter(|&l| l > 0);
+                if let Err(e) = crate::commands::save_settings(&app, s)
+                    .await
+                    .map(|s| drop(app.emit("settings:changed", s)))
+                {
                     tracing::warn!("tray {id}: {e}");
                 }
             });
         }
     }
+}
+
+/// Starts every paused download, or pauses every running and waiting one.
+pub fn run_all(app: &AppHandle, start: bool) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        let ids = |keep: fn(TaskStatus) -> bool| {
+            state
+                .manager
+                .list()
+                .into_iter()
+                .filter(|t| keep(t.status))
+                .map(|t| t.id)
+                .collect::<Vec<_>>()
+        };
+        let r = if start {
+            state
+                .manager
+                .resume(&ids(|s| s == TaskStatus::Paused))
+                .await
+        } else {
+            let running = ids(|s| {
+                matches!(
+                    s,
+                    TaskStatus::Queued | TaskStatus::Probing | TaskStatus::Downloading
+                )
+            });
+            state.manager.pause(&running).await
+        };
+        if let Err(e) = r {
+            tracing::warn!("{} all: {e}", if start { "starting" } else { "pausing" });
+        }
+    });
 }
 
 /// Shows the main window with the new-download dialog open.

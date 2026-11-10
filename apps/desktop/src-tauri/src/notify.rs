@@ -60,13 +60,19 @@ pub fn changed(app: &AppHandle, before: Option<TaskStatus>, task: &Task) {
     };
     // The sound plays whether or not the window is in front (it says the download is done, which
     // the list does not unless one looks).
-    if news == News::Done {
+    // Finished, but not with the checksum the user gave: told as a failure, without the chime.
+    let mismatch = news == News::Done
+        && task
+            .error
+            .as_ref()
+            .is_some_and(|e| e.code == omnidl_core::ErrorCode::ChecksumMismatch);
+    if news == News::Done && !mismatch {
         crate::sound::done(app);
     }
     let general = app.state::<AppState>().settings().general;
     let wanted = match news {
-        News::Done => general.notify_done,
-        News::Failed => general.notify_failed,
+        News::Done if !mismatch => general.notify_done,
+        _ => general.notify_failed,
     };
     let in_front = app
         .get_webview_window("main")
@@ -76,6 +82,14 @@ pub fn changed(app: &AppHandle, before: Option<TaskStatus>, task: &Task) {
     }
     let l = i18n::current(app);
     let (title, body) = match news {
+        News::Done if mismatch => (
+            i18n::tr(l, "notify.checksum", &[]),
+            format!(
+                "{}\n{}",
+                task.file_name,
+                i18n::tr(l, "errors.checksum_mismatch", &[])
+            ),
+        ),
         News::Done => (i18n::tr(l, "notify.done", &[]), task.file_name.clone()),
         News::Failed => (
             i18n::tr(l, "notify.failed", &[]),

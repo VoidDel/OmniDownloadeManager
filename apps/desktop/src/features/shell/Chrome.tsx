@@ -18,7 +18,7 @@ import { CATEGORY_ICON } from '../../lib/category';
 import * as fmt from '../../lib/format';
 import { isDark } from '../../lib/theme';
 import type { Category, ThemeMode } from '../../lib/types';
-import { categoryLabel } from '../../lib/words';
+import { categoryLabel, checksumFailed } from '../../lib/words';
 import { countAll, detailTask, inFilter, matches, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
 
 /** The fixed filters; their labels are `shell.filters.<id>` (see `filterLabel`). */
@@ -475,7 +475,7 @@ export function CommandBar() {
     useShallow((s) =>
       selection.filter((id) => {
         const t = s.tasks[id];
-        return t && ((t.status === 'completed' && s.missing[id]) || t.error?.code === 'remote_changed');
+        return t && ((t.status === 'completed' && s.missing[id]) || t.error?.code === 'remote_changed' || checksumFailed(t));
       }),
     ),
   );

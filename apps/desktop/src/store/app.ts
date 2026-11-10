@@ -34,7 +34,7 @@ export type Dialog =
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
-  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '' },
+  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '', floatBall: false, watchClipboard: false },
   appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
   categoryDirs: {},

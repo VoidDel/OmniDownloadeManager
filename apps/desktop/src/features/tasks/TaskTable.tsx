@@ -14,7 +14,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { ROW_HEIGHT } from '../../lib/theme';
 import type { Task } from '../../lib/types';
-import { STATUS_COLOR, errorText, nameParts, statusText, textColor } from '../../lib/words';
+import { STATUS_COLOR, checksumFailed, errorText, nameParts, statusText, textColor } from '../../lib/words';
 import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
@@ -48,8 +48,8 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   const canPause = list.some((t) => ['queued', 'probing', 'downloading'].includes(t.status));
   const canResume = list.some((t) => t.status === 'paused' || t.status === 'failed');
   const seeding = list.filter((t) => t.status === 'seeding').map((t) => t.id);
-  // The remote file changed, or the finished file was deleted: download it again.
-  const changed = list.filter((t) => t.error?.code === 'remote_changed' || (t.status === 'completed' && missing[t.id])).map((t) => t.id);
+  // The remote file changed, the finished file was deleted or failed its checksum: download it again.
+  const changed = list.filter((t) => t.error?.code === 'remote_changed' || checksumFailed(t) || (t.status === 'completed' && missing[t.id])).map((t) => t.id);
   const items: MenuItem[] = [];
   if ((one?.status === 'completed' && !missing[one.id]) || one?.status === 'seeding') items.push({ label: i18n.t('table.menu.open'), icon: 'external', kbd: 'Enter', run: () => void openTask(one.id) });
   if (canResume) items.push({ label: i18n.t('table.menu.start'), icon: 'play', run: () => void run(() => api.resume(ids)) });
@@ -92,7 +92,8 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
   if (!t) return null;
   // Finished, but the file was deleted or moved since.
   const fileGone = gone && t.status === 'completed';
-  const color = fileGone ? 'var(--warning)' : STATUS_COLOR[t.status];
+  const badSum = checksumFailed(t);
+  const color = fileGone ? 'var(--warning)' : badSum ? 'var(--danger)' : STATUS_COLOR[t.status];
   const running = t.status === 'downloading' || t.status === 'probing';
   const p = progressOf(t);
   const seeding = t.status === 'seeding';
@@ -141,7 +142,7 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
       <span className="st" role="gridcell" style={{ color: textColor(color) }} title={title}>
         <i className="sdot" style={{ background: color }} />
         {/* The reason is in the tooltip and the details panel; the column only says the state. */}
-        {fileGone ? i18n.t('status.fileMissing') : statusText(t)}
+        {fileGone ? i18n.t('status.fileMissing') : badSum ? i18n.t('status.checksumMismatch') : statusText(t)}
       </span>
     </div>
   );

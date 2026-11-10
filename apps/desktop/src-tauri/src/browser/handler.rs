@@ -201,6 +201,7 @@ async fn add_download(
             save_dir: task.save_dir.clone(),
             connections: settings.engine.connections,
             options: task.options.clone(),
+            origin: quick::Origin::Browser,
         };
         let decision = quick::ask(app, request).await;
         match decision.action {
@@ -219,19 +220,9 @@ async fn add_download(
                 });
             }
             QuickAction::Start | QuickAction::Later => {
-                task.start = decision.action == QuickAction::Start;
-                if let Some(n) = decision.file_name.filter(|n| !n.trim().is_empty()) {
-                    task.options.file_name = Some(filename::sanitize(&n));
-                }
-                if let Some(dir) = decision.save_dir.filter(|d| !d.trim().is_empty()) {
-                    task.save_dir = dir;
-                }
-                task.options.connections = decision
-                    .connections
-                    .filter(|&c| c != settings.engine.connections);
-                task.options.speed_limit = decision.speed_limit.filter(|&l| l > 0);
-                task.probe = decision.probe;
-                if decision.remember && !site.is_empty() {
+                let remember = decision.remember;
+                decision.apply(&mut task, settings.engine.connections);
+                if remember && !site.is_empty() {
                     state.update_settings(|s| {
                         if !s.browser.silent_sites.contains(&site) {
                             s.browser.silent_sites.push(site.clone());

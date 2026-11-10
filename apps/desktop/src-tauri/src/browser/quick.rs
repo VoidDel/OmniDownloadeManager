@@ -30,6 +30,17 @@ pub struct QuickRequest {
     pub connections: u32,
     /// The request details, for probing the server as the browser would.
     pub options: TaskOptions,
+    /// Where the link came from: the browser, the clipboard or the floating ball (the window
+    /// words its title by it, and offers "let the browser download it" for the browser only).
+    pub origin: Origin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Origin {
+    Browser,
+    Clipboard,
+    Float,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -73,6 +84,23 @@ impl Decision {
             remember: false,
             probe: None,
         }
+    }
+}
+
+impl Decision {
+    /// Puts what the user chose (start or later) into `task`. `connections` is the global
+    /// default: the same number is not stored on the task.
+    pub fn apply(self, task: &mut omnidl_core::NewTask, connections: u32) {
+        task.start = self.action == QuickAction::Start;
+        if let Some(n) = self.file_name.filter(|n| !n.trim().is_empty()) {
+            task.options.file_name = Some(omnidl_core::filename::sanitize(&n));
+        }
+        if let Some(dir) = self.save_dir.filter(|d| !d.trim().is_empty()) {
+            task.save_dir = dir;
+        }
+        task.options.connections = self.connections.filter(|&c| c != connections);
+        task.options.speed_limit = self.speed_limit.filter(|&l| l > 0);
+        task.probe = self.probe;
     }
 }
 
