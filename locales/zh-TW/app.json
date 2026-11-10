@@ -442,7 +442,8 @@
       "segmentProgress": "分段進度",
       "segmentCount": "{count} 個分段",
       "avgSpeed": "平均速度",
-      "peakSpeed": "最高速度"
+      "peakSpeed": "最高速度",
+      "mirrors": "鏡像"
     },
     "segments": {
       "merged": "下載已完成，分段已合併為完整檔案。",
@@ -593,7 +594,13 @@
     "checksumOneFile": "只能用於單一 HTTP 或 FTP 連結",
     "checksumAlgo": "{algo}，下載完成後核對",
     "batchMade": "批次連結已展開為 {count} 個任務",
-    "batchCapped": "批次連結已展開為 {count} 個任務（一次最多 {count} 個）"
+    "batchCapped": "批次連結已展開為 {count} 個任務（一次最多 {count} 個）",
+    "mirrors": "鏡像位址",
+    "mirrorsPlaceholder": "選填：同一檔案的其他下載位址，每行一個",
+    "mirrorsHint": "多個連線會分攤到這些位址同時下載；大小不同或出錯的位址會自動停用",
+    "mirrorsOneLink": "只能用於單一 HTTP 連結",
+    "mirrorsInvalid": "鏡像位址要以 http:// 或 https:// 開頭",
+    "mirrorsCount": "{count} 個鏡像位址"
   },
   "dialogs": {
     "close": "關閉",

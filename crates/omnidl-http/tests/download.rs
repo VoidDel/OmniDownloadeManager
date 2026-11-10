@@ -410,3 +410,62 @@ async fn large_file() {
     assert_content(&dir.path().join(name), size);
     println!("verified in {:.1} s", t2.elapsed().as_secs_f64());
 }
+
+/// A job for `url` with `mirrors`.
+fn mirrored(url: &str, mirrors: Vec<String>, dir: &Path) -> Run {
+    let mut r = job(url, dir, None, 8);
+    r.job.options.mirrors = mirrors;
+    r
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn spreads_the_connections_over_mirrors() {
+    let (link, mirror) = (start().await, start().await);
+    let dir = tempfile::tempdir().unwrap();
+    let size = 16 * MIB;
+    let path = format!("/file/{size}");
+    let r = mirrored(&link.url(&path), vec![mirror.url(&path)], dir.path());
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(name), size);
+    let ranged = |s: &common::Server| s.stats.ranges.lock().len();
+    assert!(ranged(&link) > 0, "the link served ranges");
+    assert!(ranged(&mirror) > 0, "the mirror served ranges");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn leaves_out_mirrors_of_another_file_or_that_fail() {
+    let (link, other) = (start().await, start().await);
+    let dir = tempfile::tempdir().unwrap();
+    let size = 8 * MIB;
+    let path = format!("/file/{size}");
+    let mirrors = vec![
+        // Another length, missing, no ranges, not HTTP: all left out before the download.
+        other.url(&format!("/file/{}", size + 1)),
+        other.url("/missing"),
+        other.url(&format!("/norange/{size}")),
+        "ftp://example.com/x".into(),
+    ];
+    let r = mirrored(&link.url(&path), mirrors, dir.path());
+    let (name, _) = completed(engine().run(r.job).await);
+    assert_content(&dir.path().join(name), size);
+    assert!(
+        other.stats.ranges.lock().is_empty(),
+        "no ranges asked of the bad mirrors"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn carries_on_when_a_mirror_breaks_off() {
+    let (link, mirror) = (start().await, start().await);
+    let dir = tempfile::tempdir().unwrap();
+    let size = 8 * MIB;
+    // `/flaky` breaks its first bodies off early: that mirror is left out on its first failure.
+    let r = mirrored(
+        &link.url(&format!("/file/{size}")),
+        vec![mirror.url(&format!("/flaky/{size}"))],
+        dir.path(),
+    );
+    let (name, _) = completed(engine().run(r.job).await);
+    assert_content(&dir.path().join(name), size);
+}

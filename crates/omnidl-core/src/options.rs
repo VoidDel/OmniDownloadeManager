@@ -35,6 +35,10 @@ pub struct TaskOptions {
     /// Checked when the download finishes: a mismatch keeps the file and says so
     /// (`ErrorCode::ChecksumMismatch`).
     pub checksum: Option<crate::Checksum>,
+    /// HTTP(S): other addresses of the same file. The connections are spread over them and the
+    /// link; one that serves another file, refuses ranges or fails is left out.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mirrors: Vec<String>,
 }
 
 /// Where requests go.

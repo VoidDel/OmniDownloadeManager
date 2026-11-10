@@ -442,7 +442,8 @@
       "segmentProgress": "セグメントの進捗",
       "segmentCount": "{count} セグメント",
       "avgSpeed": "平均速度",
-      "peakSpeed": "最大速度"
+      "peakSpeed": "最大速度",
+      "mirrors": "ミラー"
     },
     "segments": {
       "merged": "ダウンロードが完了し、セグメントは 1 つのファイルに結合されました。",
@@ -593,7 +594,13 @@
     "checksumOneFile": "単一の HTTP または FTP リンクにのみ使えます",
     "checksumAlgo": "{algo}、ダウンロード完了後に照合",
     "batchMade": "連番リンクから {count} 件のダウンロードを作成します",
-    "batchCapped": "連番リンクから {count} 件のダウンロードを作成します（一度に最大 {count} 件）"
+    "batchCapped": "連番リンクから {count} 件のダウンロードを作成します（一度に最大 {count} 件）",
+    "mirrors": "ミラー",
+    "mirrorsPlaceholder": "任意：同じファイルの別のダウンロード先を 1 行に 1 つ",
+    "mirrorsHint": "接続をこれらのアドレスに分散してダウンロードします。サイズが違う・エラーになるアドレスは自動で外します",
+    "mirrorsOneLink": "単一の HTTP リンクにのみ使えます",
+    "mirrorsInvalid": "ミラーは http:// または https:// で始めてください",
+    "mirrorsCount": "ミラー {count} 件"
   },
   "dialogs": {
     "close": "閉じる",

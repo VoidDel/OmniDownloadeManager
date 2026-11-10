@@ -56,6 +56,8 @@ export interface TaskOptions {
   insecureTls: boolean | null;
   /** The value the finished file should have (checked when it finishes). */
   checksum?: Checksum | null;
+  /** HTTP: other addresses of the same file; the connections are spread over them. */
+  mirrors?: string[];
 }
 
 export type HashAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512';

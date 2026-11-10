@@ -13,7 +13,7 @@ import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
-import { BATCH_MAX, hasBatch, nameFromUrl, parseLinks, type Link } from '../../lib/links';
+import { BATCH_MAX, hasBatch, kindOf, nameFromUrl, parseLinks, type Link } from '../../lib/links';
 import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
 import { errorText } from '../../lib/words';
 import { useApp } from '../../store/app';
@@ -114,6 +114,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [cookies, setCookies] = useState(initial.cookies ?? '');
   const [userAgent, setUserAgent] = useState(initial.userAgent ?? '');
   const [checksum, setChecksum] = useState('');
+  const [mirrorText, setMirrorText] = useState('');
   // From a browser the request details are filled in: show them.
   const [advancedOpen] = useState(Boolean(initial.referer || initial.cookies || initial.userAgent));
   const [proxyMode, setProxyMode] = useState<ProxyMode>('inherit');
@@ -191,7 +192,14 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const sum = parseChecksum(checksum);
   const sumApplies = addable.length === 1 && addable[0].kind !== 'torrent';
   const sumInvalid = checksum.trim() !== '' && (!sum || !sumApplies);
-  const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim()) || sumInvalid;
+  // Mirrors: other HTTP addresses of a single HTTP link's file.
+  const mirrors = mirrorText
+    .split(/\s+/)
+    .map((m) => m.trim())
+    .filter(Boolean);
+  const mirrorsApply = addable.length === 1 && addable[0].kind === 'http';
+  const mirrorsInvalid = mirrors.length > 0 && (!mirrorsApply || mirrors.some((m) => kindOf(m) !== 'http'));
+  const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim()) || sumInvalid || mirrorsInvalid;
 
   const addTorrentFiles = async () => {
     const files = await open({ multiple: true, title: t('newTask.pickTorrents'), filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
@@ -227,6 +235,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           fileName: single?.kind === 'http' && name?.trim() ? name.trim() : null,
           onlyFiles: l === single && choosing ? [...chosen].sort((a, b) => a - b) : null,
           checksum: sumApplies ? sum : null,
+          mirrors: mirrorsApply ? mirrors : [],
         },
         start,
         probe: p?.state === 'ok' ? p.info : null,
@@ -393,6 +402,29 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           <input id="nt-cookie" className="inp mono" value={cookies} placeholder="name=value; other=value" onChange={(e) => setCookies(e.target.value)} />
           <label htmlFor="nt-ua">User-Agent</label>
           <input id="nt-ua" className="inp mono" value={userAgent} placeholder={t('newTask.followSettings')} onChange={(e) => setUserAgent(e.target.value)} />
+          <label htmlFor="nt-mirrors">{t('newTask.mirrors')}</label>
+          <div className="nt-sum-field">
+            <textarea
+              id="nt-mirrors"
+              className="inp mono nt-mirrors"
+              rows={2}
+              value={mirrorText}
+              placeholder={t('newTask.mirrorsPlaceholder')}
+              aria-invalid={mirrorsInvalid}
+              aria-describedby="nt-mirrors-hint"
+              spellCheck={false}
+              onChange={(e) => setMirrorText(e.target.value)}
+            />
+            <small id="nt-mirrors-hint" className={mirrorsInvalid ? 'err-text' : 'muted'}>
+              {!mirrors.length
+                ? t('newTask.mirrorsHint')
+                : !mirrorsApply
+                  ? t('newTask.mirrorsOneLink')
+                  : mirrorsInvalid
+                    ? t('newTask.mirrorsInvalid')
+                    : t('newTask.mirrorsCount', { count: mirrors.length })}
+            </small>
+          </div>
           <label htmlFor="nt-sum">{t('newTask.checksum')}</label>
           <div className="nt-sum-field">
             <input

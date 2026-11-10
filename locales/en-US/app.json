@@ -442,7 +442,8 @@
       "segmentProgress": "Segment progress",
       "segmentCount": "{count, plural, one {# segment} other {# segments}}",
       "avgSpeed": "Average speed",
-      "peakSpeed": "Peak speed"
+      "peakSpeed": "Peak speed",
+      "mirrors": "Mirrors"
     },
     "segments": {
       "merged": "The download is complete and the segments have been merged into the full file.",
@@ -593,7 +594,13 @@
     "checksumOneFile": "Only for a single HTTP or FTP link",
     "checksumAlgo": "{algo}, checked when the download finishes",
     "batchMade": "The series makes {count} downloads",
-    "batchCapped": "The series makes {count} downloads (at most {count} at a time)"
+    "batchCapped": "The series makes {count} downloads (at most {count} at a time)",
+    "mirrors": "Mirrors",
+    "mirrorsPlaceholder": "Optional: other addresses of the same file, one per line",
+    "mirrorsHint": "The connections are spread over these addresses; one with another size or that fails is left out",
+    "mirrorsOneLink": "Only for a single HTTP link",
+    "mirrorsInvalid": "Mirrors must start with http:// or https://",
+    "mirrorsCount": "{count} mirror(s)"
   },
   "dialogs": {
     "close": "Close",

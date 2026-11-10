@@ -181,6 +181,14 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
         <dd>
           <LongText text={t.source} />
         </dd>
+        {!!t.options.mirrors?.length && (
+          <>
+            <dt>{tr('detail.overview.mirrors')}</dt>
+            <dd>
+              <LongText text={t.options.mirrors.join('\n')} />
+            </dd>
+          </>
+        )}
       </dl>
       {gone && (
         <div className="det-err warn" role="status">

@@ -116,11 +116,18 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Download> {
     if total.is_none() {
         resumable = false;
     }
+    // Mirrors serve ranges of the same file: only for a download in segments.
+    let mirrors = if resumable && !job.options.mirrors.is_empty() {
+        check_mirrors(job, &client, &probe).await
+    } else {
+        Vec::new()
+    };
     let writer = FileWriter::spawn(file).map_err(|e| Error::io(&e, "file writer"))?;
     let download = Download {
         job: job.clone(),
         client,
         url: probe.final_url.clone(),
+        mirrors,
         dir,
         retry_delay,
         state: ResumeState {
@@ -170,6 +177,43 @@ async fn probe_retrying(
     }
 }
 
+/// The mirrors that serve the same file as `probe` (same length, ranges accepted), asked at
+/// once and only once each; the others are left out (and said why in the log).
+async fn check_mirrors(job: &Job, client: &Client, probe: &Probe) -> Vec<Url> {
+    let asks = job
+        .options
+        .mirrors
+        .iter()
+        .filter_map(|m| match parse_url(m) {
+            Ok(u) if matches!(u.scheme(), "http" | "https") => Some(u),
+            _ => {
+                tracing::info!("mirror {m}: not an HTTP link; left out");
+                None
+            }
+        });
+    let checks = asks.map(|u| async move {
+        let r = tokio::time::timeout(Duration::from_secs(20), probe::probe(client, &u)).await;
+        (u, r)
+    });
+    let mut good = Vec::new();
+    for (u, r) in futures_util::future::join_all(checks).await {
+        match r {
+            Ok(Ok(p)) if p.resumable && p.total == probe.total => good.push(p.final_url),
+            Ok(Ok(p)) => tracing::info!(
+                "mirror {u}: {} bytes, ranges {}; left out",
+                p.total.map_or("?".into(), |t| t.to_string()),
+                p.resumable
+            ),
+            Ok(Err(e)) => tracing::info!("mirror {u}: {e}; left out"),
+            Err(_) => tracing::info!("mirror {u}: no answer; left out"),
+        }
+    }
+    if !good.is_empty() {
+        tracing::debug!("{}: {} mirror(s) in use", probe.final_url, good.len());
+    }
+    good
+}
+
 /// Why the connections stopped.
 enum Halt {
     Cancelled,
@@ -198,6 +242,8 @@ struct Download {
     job: Arc<Job>,
     client: Client,
     url: Url,
+    /// Other addresses of the file, checked (see `check_mirrors`).
+    mirrors: Vec<Url>,
     dir: PathBuf,
     retry_delay: Duration,
     /// Everything but the segments, which live in `table`.
@@ -237,10 +283,15 @@ impl Download {
     /// fails for good. Saves progress every second meanwhile.
     async fn connections(&mut self) -> Result<(), Halt> {
         let stop = self.job.cancel.child_token();
+        let mut sources = vec![self.url.clone()];
+        if self.state.resumable {
+            sources.extend(self.mirrors.iter().cloned());
+        }
         let conn = Arc::new(Conn {
             job: self.job.clone(),
             client: self.client.clone(),
-            url: self.url.clone(),
+            dropped: Mutex::new(vec![false; sources.len()]),
+            sources,
             table: self.table.clone(),
             writer: self.writer.clone(),
             ranged: self.state.resumable,
@@ -256,9 +307,10 @@ impl Download {
         let mut set = JoinSet::new();
         {
             let mut t = self.table.lock();
-            for _ in 0..count {
+            for n in 0..count as usize {
                 let Some(idx) = t.claim() else { break };
-                set.spawn(conn.clone().work(idx));
+                // Connections take the link and the mirrors in turn.
+                set.spawn(conn.clone().work(idx, n % conn.sources.len()));
             }
         }
         let mut tick = tokio::time::interval(UI_TICK);
@@ -394,7 +446,10 @@ impl Download {
 struct Conn {
     job: Arc<Job>,
     client: Client,
-    url: Url,
+    /// The link, then the mirrors in use.
+    sources: Vec<Url>,
+    /// Mirrors left out after they failed (the link never is).
+    dropped: Mutex<Vec<bool>>,
     table: Arc<Mutex<SegmentTable>>,
     writer: FileWriter,
     /// Requests carry `Range` (the server supports it and the length is known).
@@ -406,10 +461,28 @@ struct Conn {
 }
 
 impl Conn {
-    /// One connection: its segment, then whatever it can claim next.
-    async fn work(self: Arc<Self>, mut idx: usize) -> Result<(), ConnError> {
+    fn url(&self) -> &Url {
+        &self.sources[0]
+    }
+
+    /// Leaves mirror `src` out and gives the source to use instead.
+    fn drop_source(&self, src: usize, why: &dyn std::fmt::Display) -> usize {
+        let mut dropped = self.dropped.lock();
+        if !dropped[src] {
+            dropped[src] = true;
+            tracing::info!("mirror {}: {why}; left out", self.sources[src]);
+        }
+        (1..self.sources.len())
+            .map(|i| (src + i) % self.sources.len())
+            .find(|&i| !dropped[i])
+            .unwrap_or(0)
+    }
+
+    /// One connection: its segment, then whatever it can claim next, from source `src` (the
+    /// link or a mirror).
+    async fn work(self: Arc<Self>, mut idx: usize, mut src: usize) -> Result<(), ConnError> {
         loop {
-            let r = self.segment(idx).await;
+            let r = self.segment(idx, &mut src).await;
             self.table.lock().release(idx);
             r?;
             if self.stop.is_cancelled() {
@@ -422,17 +495,29 @@ impl Conn {
         }
     }
 
-    /// Downloads segment `idx` until it ends, retrying transient failures with backoff.
-    async fn segment(&self, idx: usize) -> Result<(), ConnError> {
+    /// Downloads segment `idx` until it ends, retrying transient failures with backoff. A mirror
+    /// that fails in any way is left out and the segment goes on from another source.
+    async fn segment(&self, idx: usize, src: &mut usize) -> Result<(), ConnError> {
         let mut attempt = 0;
         loop {
             if self.stop.is_cancelled() {
                 return Ok(());
             }
+            if self.dropped.lock()[*src] {
+                *src = 0;
+            }
             let before = self.position(idx);
-            let e = match self.fetch(idx).await {
+            let e = match self.fetch(idx, *src).await {
                 Ok(()) | Err(FetchError::Cancelled) => return Ok(()),
+                Err(FetchError::Fallback) if *src != 0 => {
+                    *src = self.drop_source(*src, &"ignores ranges");
+                    continue;
+                }
                 Err(FetchError::Fallback) => return Err(ConnError::Fallback),
+                Err(FetchError::Failed(e)) if *src != 0 => {
+                    *src = self.drop_source(*src, &e);
+                    continue;
+                }
                 Err(FetchError::Failed(e)) => e,
             };
             if !e.is_transient() {
@@ -443,14 +528,14 @@ impl Conn {
             }
             // A server limiting connections: leave the segment to the others.
             if matches!(e.status, Some(429 | 503)) && self.table.lock().active() > 1 {
-                tracing::debug!("{}: {e}; one connection fewer", self.url);
+                tracing::debug!("{}: {e}; one connection fewer", self.url());
                 return Err(ConnError::GaveUp(e));
             }
             attempt += 1;
             if attempt > self.job.options.max_retries {
                 return Err(ConnError::GaveUp(e));
             }
-            tracing::debug!("{} (retry {attempt}): {e}", self.url);
+            tracing::debug!("{} (retry {attempt}): {e}", self.url());
             tokio::select! {
                 _ = tokio::time::sleep(backoff(self.retry_delay, attempt)) => {}
                 _ = self.stop.cancelled() => return Ok(()),
@@ -467,8 +552,8 @@ impl Conn {
         }
     }
 
-    /// One request for the rest of segment `idx`.
-    async fn fetch(&self, idx: usize) -> Result<(), FetchError> {
+    /// One request for the rest of segment `idx`, to source `src`.
+    async fn fetch(&self, idx: usize, src: usize) -> Result<(), FetchError> {
         let (start, end) = {
             let mut t = self.table.lock();
             if !self.ranged && t.segment(idx).downloaded > 0 {
@@ -482,7 +567,7 @@ impl Conn {
             }
             (s.pos(), s.end)
         };
-        let mut req = self.client.get(self.url.clone());
+        let mut req = self.client.get(self.sources[src].clone());
         if self.ranged {
             let range = match end {
                 Some(e) => format!("bytes={start}-{e}"),

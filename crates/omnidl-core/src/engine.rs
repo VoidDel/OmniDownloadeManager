@@ -256,6 +256,8 @@ pub struct JobOptions {
     pub username: Option<String>,
     pub password: Option<String>,
     pub insecure_tls: bool,
+    /// Other addresses of the same file (HTTP).
+    pub mirrors: Vec<String>,
 }
 
 impl JobOptions {
@@ -289,6 +291,12 @@ impl JobOptions {
             username: task.username.clone().filter(|s| !s.is_empty()),
             password: task.password.clone(),
             insecure_tls: task.insecure_tls.unwrap_or(false),
+            mirrors: task
+                .mirrors
+                .iter()
+                .map(|m| m.trim().to_owned())
+                .filter(|m| !m.is_empty())
+                .collect(),
         }
     }
 }
