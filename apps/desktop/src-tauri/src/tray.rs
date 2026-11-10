@@ -241,6 +241,5 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
 
 /// Shows the main window with the new-download dialog open.
 pub fn new_download(app: &AppHandle) {
-    crate::focus_main(app);
-    let _ = app.emit_to("main", "app:new-task", Prefill::default());
+    crate::new_task(app, Prefill::default());
 }

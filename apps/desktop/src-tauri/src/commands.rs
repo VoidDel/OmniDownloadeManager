@@ -34,6 +34,10 @@ pub struct Bootstrap {
     /// Magnet links and `.torrent` files the app was started with: the new-download dialog
     /// opens with them.
     open_links: Vec<String>,
+    /// The new-download dialog asked for while this window was being made.
+    new_task: Option<crate::browser::Prefill>,
+    /// The first main window of this run, not one coming back from the notification area.
+    first: bool,
     /// The app starts with the system (the system's setting, not ours).
     autostart: bool,
 }
@@ -62,6 +66,16 @@ pub fn app_bootstrap(window: tauri::WebviewWindow, state: State<'_, AppState>) -
         material_supported: crate::material::supported(),
         system_accent: crate::material::system_accent(),
         open_links,
+        new_task: if main {
+            state
+                .prefill
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+        } else {
+            None
+        },
+        first: main && !state.booted.swap(true, Ordering::SeqCst),
         autostart: window
             .app_handle()
             .autolaunch()

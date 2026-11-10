@@ -40,7 +40,15 @@ void useApp
     // The main window is created hidden; it shows once the first frame is painted (no white
     // flash), unless the browser bridge started the app in the background. Quick-download
     // windows show themselves once they have their request.
-    if (isTauri() && !quick && !background) nextFrame(() => nextFrame(() => void getCurrentWindow().show()));
+    // A window coming back from the notification area was asked for: it takes the focus too.
+    if (isTauri() && !quick && !background) {
+      nextFrame(() =>
+        nextFrame(() => {
+          const w = getCurrentWindow();
+          void w.show().then(() => w.setFocus());
+        }),
+      );
+    }
   });
 
 /** Draws everything again when the language changes: texts made outside components (status,

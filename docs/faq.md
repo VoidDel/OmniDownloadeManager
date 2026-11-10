@@ -28,7 +28,7 @@ xattr -cr "/Applications/Omni Download.app"
 
 ### 它占多少内存
 
-应用本身大约 25 MB。界面由系统的 WebView 绘制（Windows 上是 WebView2），这部分另外占 120–150 MB，窗口收到托盘时也还在。
+应用本身大约 10–25 MB。界面由系统的 WebView 绘制（Windows 上是 WebView2），窗口打开时这部分另外占 120–150 MB。窗口收到托盘后界面会被完全关闭，只留下应用本身；再次打开时重新加载，大约要半秒到一秒。
 
 ## 下载
 

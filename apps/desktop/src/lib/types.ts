@@ -258,6 +258,10 @@ export interface Bootstrap {
   seenBrowsers: [string, number][];
   /** Magnet links and .torrent files the app was opened with. */
   openLinks: string[];
+  /** The new-download dialog asked for while this window was being made. */
+  newTask: Prefill | null;
+  /** The first main window of this run, not one coming back from the notification area. */
+  first: boolean;
   /** Window materials exist on this system (Windows 11, macOS). */
   materialSupported: boolean;
   /** The system's accent colour, when known. */

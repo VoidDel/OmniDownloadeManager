@@ -14,7 +14,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { ROW_HEIGHT } from '../../lib/theme';
 import type { Task } from '../../lib/types';
-import { STATUS_COLOR, errorText, statusText } from '../../lib/words';
+import { STATUS_COLOR, errorText, statusText, textColor } from '../../lib/words';
 import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
@@ -123,7 +123,7 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
       <span className="dim num c-eta" role="gridcell">
         {remaining}
       </span>
-      <span className="st" role="gridcell" style={{ color }} title={title}>
+      <span className="st" role="gridcell" style={{ color: textColor(color) }} title={title}>
         <i className="sdot" style={{ background: color }} />
         {/* The reason is in the tooltip and the details panel; the column only says the state. */}
         {fileGone ? i18n.t('status.fileMissing') : statusText(t)}

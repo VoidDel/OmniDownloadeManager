@@ -46,6 +46,13 @@ pub struct AppState {
     pub page_ready: AtomicBool,
     /// Magnet links and `.torrent` files that arrived before it had.
     pub links: Mutex<Vec<String>>,
+    /// The new-download dialog to open once it has (asked for while the window was being made).
+    pub prefill: Mutex<Option<crate::browser::Prefill>>,
+    /// Running without a main window on purpose: started in the background, or closed to the
+    /// notification area. The window (and its WebView's memory) comes back when it is shown.
+    pub in_tray: AtomicBool,
+    /// The main window has loaded once in this run; later ones are it coming back.
+    pub booted: AtomicBool,
 }
 
 impl AppState {

@@ -30,13 +30,13 @@ fn pressed(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     if is(&general.shortcut_new) {
         crate::tray::new_download(app);
     } else if is(&general.shortcut_show) {
-        // Shows the window, or hides it when it is already in front.
+        // Shows the window, or sends it to the notification area when it is already in front.
         if let Some(w) = app.get_webview_window("main")
             && w.is_visible().unwrap_or(false)
             && w.is_focused().unwrap_or(false)
             && crate::tray::shown(app)
         {
-            let _ = w.hide();
+            crate::to_tray(app);
         } else {
             crate::focus_main(app);
         }

@@ -11,7 +11,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { hostOf } from '../../lib/links';
 import type { TaskDetail as Detail, SegmentView, Task, TorrentDetail } from '../../lib/types';
-import { STATUS_COLOR, errorHint, errorText, statusText } from '../../lib/words';
+import { STATUS_COLOR, errorHint, errorText, statusText, textColor } from '../../lib/words';
 import { speedHistory, useApp } from '../../store/app';
 import { FileTree } from './FileTree';
 
@@ -439,7 +439,7 @@ export function TaskDetail({ id }: { id: string }) {
       </div>
       <div className="det-meta">
         <span className={`badge proto-${t.kind}`}>{PROTO[t.kind]}</span>
-        <span className="st" style={{ color }}>
+        <span className="st" style={{ color: textColor(color) }}>
           <i className="sdot" style={{ background: color }} />
           {statusText(t)}
         </span>

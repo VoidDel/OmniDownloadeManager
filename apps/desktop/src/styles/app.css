@@ -74,18 +74,20 @@
 .prog .bar > i { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; transition: width 240ms linear; }
 .prog .bar.indeterminate > i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
 .prog .pct { width: 34px; flex: none; text-align: end; font-size: .8rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+/* On the selection's tint the secondary colour is too faint for text. */
+.task-row[aria-selected="true"] .pct { color: var(--selection-fg); }
 .st { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .sdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 
 /* Protocol badges, each a tint of its own colour: HTTP the accent blue, FTP teal (`--ftp`),
    BitTorrent violet (`--bt`). The text leans towards the text colour, so it stays readable on
    light and dark themes alike. */
-.badge.proto-http { --proto: var(--accent); }
+.badge.proto-http { --proto: var(--accent); --proto-text: var(--accent-text); }
 .badge.proto-ftp { --proto: var(--ftp, #0f9b8e); }
-.badge.proto-torrent { --proto: var(--bt, #7a5af8); }
+.badge.proto-torrent { --proto: var(--bt, #7a5af8); --proto-text: var(--bt-text); }
 .badge:is(.proto-http, .proto-ftp, .proto-torrent) {
   --badge-bg: color-mix(in srgb, var(--proto) 16%, transparent);
-  --badge-fg: color-mix(in srgb, var(--proto) 80%, var(--fg-primary));
+  --badge-fg: var(--proto-text, color-mix(in srgb, var(--proto) 50%, var(--fg-primary)));
 }
 
 /* ---------------------------------------------------------------- details panel */
@@ -134,8 +136,8 @@
 .minibar { position: relative; display: block; height: 3px; border-radius: 2px; background: var(--bg-pressed); }
 .minibar > i { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; background: var(--accent); }
 .spark { display: block; width: 100%; height: 56px; border-radius: var(--radius-md); background: var(--bg-subtle); }
-.det-err { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size: .86rem; }
-.det-err.warn { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
+.det-err { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-text, var(--danger)); font-size: .86rem; }
+.det-err.warn { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning-text, var(--warning)); }
 .det-err .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .det-err div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .det-err .hint { color: var(--fg-primary); }
@@ -156,8 +158,8 @@
 .nt-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nt-sub { font-size: .8rem; color: var(--fg-secondary); display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nt-sub > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.warn-text { color: var(--warning); }
-.err-text { color: var(--danger); }
+.warn-text { color: var(--warning-text, var(--warning)); }
+.err-text { color: var(--danger-text, var(--danger)); }
 .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 @media (prefers-reduced-motion: no-preference) {
   .pulse { animation: nt-pulse 1.6s ease-in-out infinite; }
@@ -192,7 +194,7 @@
 /* The global download limit: a quiet button at the right end, the accent while a limit is on. */
 .sb-limit { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin-right: -6px; padding: 0 6px; border-radius: var(--radius-sm); color: inherit; font: inherit; }
 .sb-limit:hover, .sb-limit[aria-expanded="true"] { background: var(--bg-hover); color: var(--fg-primary); }
-.sb-limit[data-on="true"] { color: var(--accent); }
+.sb-limit[data-on="true"] { color: var(--accent-text, var(--accent)); }
 .sb-limit .ic { width: 14px; height: 14px; }
 .sb-limit .chev { width: 12px; height: 12px; color: var(--fg-muted); }
 .statusbar .seen i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
@@ -200,9 +202,9 @@
 /* ---------------------------------------------------------------- settings: browser */
 .bstate { display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; color: var(--fg-secondary); white-space: nowrap; }
 .bstate i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-muted); }
-.bstate.ok { color: var(--success); }
+.bstate.ok { color: var(--success-text, var(--success)); }
 .bstate.ok i { background: var(--success); }
-.bstate.warn { color: var(--warning); }
+.bstate.warn { color: var(--warning-text, var(--warning)); }
 .bstate.warn i { background: var(--warning); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .site-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 2px; }
@@ -228,7 +230,7 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .q-info b { color: var(--fg-primary); font-weight: 500; }
 .q-info .q-part + .q-part::before, .q-info .q-part + .q-ok::before { content: ''; display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); margin: 0 8px 2px 0; vertical-align: middle; }
 .q-probing { display: inline-flex; align-items: center; gap: 6px; }
-.q-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--success); }
+.q-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--success-text, var(--success)); }
 .q-ok .ic { width: 13px; height: 13px; }
 .q-nums .inp { flex: 0 0 72px; min-width: 0; }
 .q-nums > label { font-size: .86rem; color: var(--fg-secondary); }
@@ -252,7 +254,7 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .ft-ic, .ft-file .fi { width: 16px; height: 16px; flex: none; }
 .ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ft-size { display: flex; gap: 8px; font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ft-pct { color: var(--accent); }
+.ft-pct { color: var(--accent-text, var(--accent)); }
 .nt-hintrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .nt-hintrow .btn .ic { width: 14px; height: 14px; }
 
@@ -270,7 +272,7 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 /* Looks like a text field (omni-ui styles only real inputs as one). */
 .field-look { height: var(--ctrl-h); padding: 0 10px; border-radius: var(--radius-md); border: 1px solid var(--border-default); background: var(--bg-surface); font-size: .9rem; color: var(--fg-primary); display: inline-flex; align-items: center; min-width: 0; }
 .shortcut-key { min-width: 170px; justify-content: center; font-family: var(--font-mono); font-size: .84rem; cursor: pointer; }
-.shortcut-key:focus-visible, .shortcut-key.rec { outline: 0; color: var(--accent); border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-subtle); }
+.shortcut-key:focus-visible, .shortcut-key.rec { outline: 0; color: var(--accent-text, var(--accent)); border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-subtle); }
 
 /* First-run guide. */
 .welcome { display: flex; flex-direction: column; gap: 14px; }

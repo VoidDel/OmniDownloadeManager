@@ -277,8 +277,7 @@ fn open_batch(app: &AppHandle, b: AddBatch) {
         cookies: first.cookies,
         user_agent: first.user_agent,
     };
-    crate::focus_main(app);
-    let _ = app.emit_to("main", "app:new-task", prefill);
+    crate::new_task(app, prefill);
 }
 
 #[cfg(test)]

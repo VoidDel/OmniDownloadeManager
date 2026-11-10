@@ -26,6 +26,12 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
   removed: 'var(--fg-muted)',
 };
 
+/** A status colour for text: its `-text` variant, which reads at 4.5:1 (the colour itself is for
+ *  dots and bars). omni-ui before those tokens falls back to the colour. */
+export function textColor(color: string): string {
+  return color.replace(/^var\(--(accent|success|warning|danger|info|bt)\)$/, 'var(--$1-text, var(--$1))');
+}
+
 export function categoryLabel(c: Category): string {
   return i18n.t(`category.${c}`);
 }

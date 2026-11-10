@@ -271,15 +271,17 @@ export const useApp = create<State>((set, get) => ({
       });
       setSystemLook(boot);
       // Opened with magnet links or .torrent files.
-      if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
+      if (boot.newTask) set({ dialog: { kind: 'new', ...boot.newTask, text: [boot.newTask.text, ...boot.openLinks].filter(Boolean).join('\n') } });
+      else if (boot.openLinks.length > 0) set({ dialog: { kind: 'new', text: boot.openLinks.join('\n') } });
       background = boot.background;
       void get().checkFiles();
       if (isTauri() && getCurrentWindow().label === 'main') {
         // First run: the guide (language, folder, browsers) before anything else.
         if (!boot.settings.general.onboarded && !get().dialog) set({ dialog: { kind: 'welcome' } });
         // Not while the app is starting up: a little later, and quietly unless there is news.
-        // Development builds don't: the release they'd find is not what they run.
-        if (import.meta.env.PROD && boot.settings.general.checkUpdates) setTimeout(() => void get().checkUpdate(false), 8000);
+        // Development builds don't: the release they'd find is not what they run. Once per run,
+        // not each time the window comes back from the notification area.
+        if (import.meta.env.PROD && boot.first && boot.settings.general.checkUpdates) setTimeout(() => void get().checkUpdate(false), 8000);
       }
     } catch (e) {
       // Outside the app (the page in a browser) or a failed start: an empty list.

@@ -146,6 +146,9 @@ pub fn run() {
                 seen: Default::default(),
                 page_ready: Default::default(),
                 links: Mutex::new(opened),
+                prefill: Default::default(),
+                in_tray: Default::default(),
+                booted: Default::default(),
             });
             // macOS hands magnet links and opened `.torrent` files over as URLs (Windows and
             // Linux start a second instance with them, see above).
@@ -156,8 +159,23 @@ pub fn run() {
                     links::open(&app, links::from_urls(event.urls()));
                 });
             }
-            main_window(handle)?;
             tray::sync(handle);
+            // Started in the background with an icon to come back from: no window, and so no
+            // WebView, until it is asked for.
+            let state = handle.state::<AppState>();
+            if state.background.load(Ordering::SeqCst)
+                && tray::shown(handle)
+                && state
+                    .links
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_empty()
+            {
+                state.background.store(false, Ordering::SeqCst);
+                state.in_tray.store(true, Ordering::SeqCst);
+            } else {
+                main_window(handle)?;
+            }
             if let Err(keys) =
                 shortcuts::apply(handle, &handle.state::<AppState>().settings().general)
             {
@@ -201,18 +219,21 @@ pub fn run() {
             browser::quick_resolve,
         ])
         .on_window_event(|window, event| {
-            // Closed to the notification area: the window hides, downloads go on; the icon's
-            // menu quits.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+            // Closed to the notification area: the window goes (and its WebView's memory with
+            // it), the app stays and downloads go on; the icon brings it back or quits.
+            if let tauri::WindowEvent::CloseRequested { .. } = event
                 && window.label() == "main"
                 && tray::shown(window.app_handle())
-                && window
-                    .try_state::<AppState>()
-                    .is_some_and(|s| s.settings().general.close_to_tray)
+                && let Some(state) = window.try_state::<AppState>()
+                && state.settings().general.close_to_tray
             {
-                api.prevent_close();
-                let _ = window.hide();
-                return;
+                state.in_tray.store(true, Ordering::SeqCst);
+            }
+            if let tauri::WindowEvent::Destroyed = event
+                && window.label() == "main"
+                && let Some(state) = window.try_state::<AppState>()
+            {
+                state.page_ready.store(false, Ordering::SeqCst);
             }
             // Moved to a display with another scale: icons for the new DPI.
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
@@ -235,6 +256,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Omni Download")
         .run(|app, event| match event {
+            // The last window closed while the app stays in the notification area.
+            RunEvent::ExitRequested {
+                api, code: None, ..
+            } if app.try_state::<AppState>().is_some_and(|s| {
+                s.in_tray.load(Ordering::SeqCst) && !s.quitting.load(Ordering::SeqCst)
+            }) =>
+            {
+                api.prevent_exit();
+            }
             RunEvent::ExitRequested { api, .. } => quit(app, &api),
             // macOS: the Dock icon clicked while the window is hidden.
             #[cfg(target_os = "macos")]
@@ -296,11 +326,54 @@ pub(crate) fn window_icons(window: &tauri::Window) {
     let _ = window;
 }
 
+/// Brings the main window to the front, making it first when the app is in the notification
+/// area without one (the page shows the window once it has drawn).
 pub(crate) fn focus_main(app: &AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.in_tray.store(false, Ordering::SeqCst);
+        state.background.store(false, Ordering::SeqCst);
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        return;
+    }
+    // Windows are made on the main thread; this may be the bridge's or a shortcut's.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if handle.get_webview_window("main").is_none()
+            && let Err(e) = main_window(&handle)
+        {
+            tracing::error!("opening the main window: {e}");
+        }
+    });
+}
+
+/// Sends the main window to the notification area: it closes, the app stays.
+pub(crate) fn to_tray(app: &AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.in_tray.store(true, Ordering::SeqCst);
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.close();
+    }
+}
+
+/// Shows the main window with the new-download dialog open on `prefill`. A window that is
+/// still loading gets it with its first data.
+pub(crate) fn new_task(app: &AppHandle, prefill: browser::Prefill) {
+    use tauri::Emitter;
+    let ready = app.try_state::<AppState>().is_some_and(|state| {
+        let ready = state.page_ready.load(Ordering::SeqCst);
+        if !ready {
+            *state.prefill.lock().unwrap_or_else(|e| e.into_inner()) = Some(prefill.clone());
+        }
+        ready
+    });
+    focus_main(app);
+    if ready {
+        let _ = app.emit_to("main", "app:new-task", prefill);
     }
 }
 

@@ -30,7 +30,7 @@ importers:
         version: 12.1.5
       omni-ui:
         specifier: github:VoidDel/omni-ui#main
-        version: https://codeload.github.com/VoidDel/omni-ui/tar.gz/02b6c46ac569ba9702a1d56b836c23e05c5c19fb(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -88,7 +88,7 @@ importers:
     dependencies:
       omni-ui:
         specifier: github:VoidDel/omni-ui#main
-        version: https://codeload.github.com/VoidDel/omni-ui/tar.gz/02b6c46ac569ba9702a1d56b836c23e05c5c19fb(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -1258,8 +1258,8 @@ packages:
   ohash@2.0.12:
     resolution: {integrity: sha512-65S/5gk9YSsaRjcyf7Nfa6h/d3E8/1gslpXfI4W7Dxn/oap8IKRuNT5VXkLQ1YFKIEg4apRY4Pj6aiwFzrDdmw==}
 
-  omni-ui@https://codeload.github.com/VoidDel/omni-ui/tar.gz/02b6c46ac569ba9702a1d56b836c23e05c5c19fb:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/VoidDel/omni-ui/tar.gz/02b6c46ac569ba9702a1d56b836c23e05c5c19fb}
+  omni-ui@https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8:
+    resolution: {gitHosted: true, integrity: sha512-/azrZFMkImRMg1Z0/3BbuV+1ZxOC3Dcm2e9yULLX2CBLMBcb7g2kSOSEWIFe8ysYCinfYIsttod5SX+vwdB0Iw==, tarball: https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8}
     version: 0.1.0
     engines: {node: '>=22'}
     peerDependencies:
@@ -2737,7 +2737,7 @@ snapshots:
 
   ohash@2.0.12: {}
 
-  omni-ui@https://codeload.github.com/VoidDel/omni-ui/tar.gz/02b6c46ac569ba9702a1d56b836c23e05c5c19fb(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  omni-ui@https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
