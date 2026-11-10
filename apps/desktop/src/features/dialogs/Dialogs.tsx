@@ -1,6 +1,6 @@
 // The dialog host: renders the open dialog (one at a time).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Modal } from '../../components/ui';
@@ -8,6 +8,7 @@ import { UpdateDialog } from './UpdateDialog';
 import { Welcome } from './Welcome';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
+import type { WhenDone } from '../../lib/types';
 import { useApp } from '../../store/app';
 import { NewTaskDialog } from './NewTaskDialog';
 
@@ -94,6 +95,49 @@ function SpeedDialog() {
   );
 }
 
+/** Everything downloaded: the computer sleeps or shuts down when the count reaches zero (the app
+ *  does it; this only shows the count and can stop it). */
+function PowerDialog({ action, seconds }: { action: WhenDone; seconds: number }) {
+  const { t } = useTranslation();
+  const { closeDialog, run } = useApp.getState();
+  const [deadline] = useState(() => Date.now() + seconds * 1000);
+  const [left, setLeft] = useState(seconds);
+  useEffect(() => {
+    const timer = setInterval(() => setLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 250);
+    return () => clearInterval(timer);
+  }, [deadline]);
+  const cancel = () => {
+    closeDialog();
+    void run(() => api.powerCancel());
+  };
+  const now = () => {
+    closeDialog();
+    void run(() => api.powerNow());
+  };
+  return (
+    <Modal
+      title={t(`dialogs.power.title.${action}`)}
+      onClose={cancel}
+      width={420}
+      closeLabel={t('dialogs.cancel')}
+      footer={
+        <>
+          <button type="button" className="btn outline" data-autofocus onClick={cancel}>
+            {t('dialogs.cancel')}
+          </button>
+          <button type="button" className="btn primary danger-fill" onClick={now}>
+            {t(`dialogs.power.now.${action}`)}
+          </button>
+        </>
+      }
+    >
+      <p className="dlg-text" role="timer" aria-live="polite">
+        {t(`dialogs.power.text.${action}`, { count: left })}
+      </p>
+    </Modal>
+  );
+}
+
 export function Dialogs() {
   const dialog = useApp((s) => s.dialog);
   if (!dialog) return null;
@@ -108,5 +152,7 @@ export function Dialogs() {
       return <UpdateDialog />;
     case 'welcome':
       return <Welcome />;
+    case 'power':
+      return <PowerDialog action={dialog.action} seconds={dialog.seconds} />;
   }
 }

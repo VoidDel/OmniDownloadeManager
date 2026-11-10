@@ -13,7 +13,7 @@ import { Icon } from '../../components/Icon';
 import { ShortcutInput } from '../../components/ShortcutInput';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { Category, Density, MaterialKind, Settings as S, ThemeMode } from '../../lib/types';
+import type { Category, Density, MaterialKind, Settings as S, ThemeMode, WhenDone } from '../../lib/types';
 import { categoryLabel } from '../../lib/words';
 import { useApp } from '../../store/app';
 import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
@@ -411,7 +411,81 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
           <Switch label={t('settings.download.syncWrites')} checked={e.syncWrites} onChange={(v) => set((x) => (x.engine.syncWrites = v))} />
         </Row>
       </div>
+      <ScheduleSettings s={s} set={set} />
     </>
+  );
+}
+
+/** Weekday names, Sunday first, in the UI language (`日`, `Sun`, `日`…). */
+function weekdays(lang: string): string[] {
+  // 2024-01-07 was a Sunday.
+  const fmtDay = new Intl.DateTimeFormat(lang, { weekday: lang.startsWith('zh') ? 'narrow' : 'short' });
+  return Array.from({ length: 7 }, (_, i) => fmtDay.format(new Date(2024, 0, 7 + i)));
+}
+
+/** Scheduled downloads: start and stop times, the days they apply on, what happens once
+ *  everything is downloaded. */
+function ScheduleSettings({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
+  const { t, i18n } = useTranslation();
+  const sc = s.schedule;
+  const days = weekdays(i18n.language);
+  const time = (key: 'startAt' | 'stopAt', label: string, disabled: boolean) => (
+    <input
+      type="time"
+      className="inp set-time"
+      aria-label={label}
+      value={sc[key]}
+      disabled={disabled}
+      onChange={(ev) => ev.target.value && set((x) => (x.schedule[key] = ev.target.value))}
+    />
+  );
+  return (
+    <div className="set-group">
+      <Row label={t('settings.schedule.start')} hint={t('settings.schedule.startHint')}>
+        {time('startAt', t('settings.schedule.startAt'), !sc.start)}
+        <Switch label={t('settings.schedule.start')} checked={sc.start} onChange={(v) => set((x) => (x.schedule.start = v))} />
+      </Row>
+      <Row label={t('settings.schedule.stop')} hint={t('settings.schedule.stopHint')}>
+        {time('stopAt', t('settings.schedule.stopAt'), !sc.stop)}
+        <Switch label={t('settings.schedule.stop')} checked={sc.stop} onChange={(v) => set((x) => (x.schedule.stop = v))} />
+      </Row>
+      <Row label={t('settings.schedule.days')}>
+        <div className="set-days" role="group" aria-label={t('settings.schedule.days')}>
+          {days.map((name, d) => (
+            <button
+              key={d}
+              type="button"
+              className="day"
+              aria-pressed={sc.days.includes(d)}
+              disabled={!sc.start && !sc.stop}
+              // The last day stays: no day at all would mean never.
+              onClick={() =>
+                set((x) => {
+                  const on = x.schedule.days.includes(d);
+                  if (on && x.schedule.days.length === 1) return;
+                  x.schedule.days = on ? x.schedule.days.filter((n) => n !== d) : [...x.schedule.days, d].sort();
+                })
+              }
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      </Row>
+      <Row label={t('settings.schedule.whenDone')} hint={t('settings.schedule.whenDoneHint')}>
+        <Select<WhenDone>
+          label={t('settings.schedule.whenDone')}
+          value={sc.whenDone}
+          onChange={(v) => set((x) => (x.schedule.whenDone = v))}
+          options={[
+            ['nothing', t('settings.schedule.nothing')],
+            ['quit', t('settings.schedule.quit')],
+            ['sleep', t('settings.schedule.sleep')],
+            ['shutdown', t('settings.schedule.shutdown')],
+          ]}
+        />
+      </Row>
+    </div>
   );
 }
 

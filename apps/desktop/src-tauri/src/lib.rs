@@ -15,6 +15,7 @@ mod intake;
 mod links;
 mod material;
 mod notify;
+mod schedule;
 mod secrets;
 mod settings;
 mod shortcuts;
@@ -193,6 +194,7 @@ pub fn run() {
             }
             browser::start(handle);
             float::sync(handle);
+            schedule::start(handle.clone());
             clipboard::start(handle.clone());
             Ok(())
         })
@@ -237,6 +239,9 @@ pub fn run() {
             float::float_drop_torrent,
             float::float_open,
             float::float_menu,
+            schedule::power_pending,
+            schedule::power_cancel,
+            schedule::power_now,
         ])
         .on_window_event(|window, event| {
             // Closed to the notification area: the window goes (and its WebView's memory with

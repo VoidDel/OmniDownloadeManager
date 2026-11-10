@@ -20,6 +20,8 @@ pub struct Settings {
     pub category_dirs: BTreeMap<String, String>,
     pub engine: EngineConfig,
     pub browser: BrowserSettings,
+    /// Starting and stopping at set times, and what to do once everything is downloaded.
+    pub schedule: crate::schedule::Schedule,
 }
 
 impl Default for Settings {
@@ -32,6 +34,7 @@ impl Default for Settings {
             category_dirs: BTreeMap::new(),
             engine: EngineConfig::default(),
             browser: BrowserSettings::default(),
+            schedule: crate::schedule::Schedule::default(),
         }
     }
 }
@@ -206,6 +209,7 @@ impl Settings {
         if !(hex || matches!(a.accent.as_str(), "theme" | "system")) {
             a.accent = "theme".into();
         }
+        self.schedule = self.schedule.normalized();
         let g = &mut self.general;
         for s in [&mut g.shortcut_show, &mut g.shortcut_new] {
             *s = s.trim().to_owned();

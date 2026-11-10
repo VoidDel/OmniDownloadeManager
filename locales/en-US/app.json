@@ -250,6 +250,21 @@
       "copied": "Pairing code copied",
       "copy": "Copy",
       "regenerate": "Regenerate"
+    },
+    "schedule": {
+      "start": "Start at a set time",
+      "startHint": "Starts every paused download at that time",
+      "startAt": "Start time",
+      "stop": "Stop at a set time",
+      "stopHint": "Pauses every running and waiting download at that time",
+      "stopAt": "Stop time",
+      "days": "Repeat on",
+      "whenDone": "When everything is downloaded",
+      "whenDoneHint": "Sleeping and shutting down wait 60 seconds first, and can be cancelled",
+      "nothing": "Do nothing",
+      "quit": "Quit Omni Download",
+      "sleep": "Sleep",
+      "shutdown": "Shut down"
     }
   },
   "shell": {
@@ -598,6 +613,20 @@
       "invalid": "Not recognized; for example 500K, 2M or 1.5MB/s",
       "empty": "Leave empty for no limit",
       "perSecond": "{size} per second"
+    },
+    "power": {
+      "title": {
+        "sleep": "Going to sleep",
+        "shutdown": "Shutting down"
+      },
+      "text": {
+        "sleep": "Everything is downloaded. The computer goes to sleep in {count} s.",
+        "shutdown": "Everything is downloaded. The computer shuts down in {count} s."
+      },
+      "now": {
+        "sleep": "Sleep now",
+        "shutdown": "Shut down now"
+      }
     }
   },
   "quick": {

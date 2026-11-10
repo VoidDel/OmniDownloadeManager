@@ -223,6 +223,25 @@ export interface BrowserSettings {
   httpToken: string;
 }
 
+/** What happens once everything is downloaded. */
+export type WhenDone = 'nothing' | 'quit' | 'sleep' | 'shutdown';
+
+/** Scheduled downloads: start and stop times (`HH:MM`, local), days (0 = Sunday). */
+export interface Schedule {
+  start: boolean;
+  startAt: string;
+  stop: boolean;
+  stopAt: string;
+  days: number[];
+  whenDone: WhenDone;
+}
+
+/** A countdown to sleep or shut down, under way. */
+export interface PowerPending {
+  action: WhenDone;
+  seconds: number;
+}
+
 export interface Settings {
   /** `auto` (the system's) or a supported language tag. */
   language: string;
@@ -265,6 +284,7 @@ export interface Settings {
   categoryDirs: Partial<Record<Category, string>>;
   engine: EngineConfig;
   browser: BrowserSettings;
+  schedule: Schedule;
 }
 
 export interface Bootstrap {

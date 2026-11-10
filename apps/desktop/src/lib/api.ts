@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, FloatState, Integration, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
+import type { AppError, Bootstrap, FloatState, Integration, PowerPending, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -62,6 +62,10 @@ export const api = {
   quickRequest: () => invoke<QuickRequest | null>('quick_request'),
   quickResolve: (decision: QuickDecision) => invoke<void>('quick_resolve', { decision }),
 
+  powerPending: () => invoke<PowerPending | null>('power_pending'),
+  powerCancel: () => invoke<void>('power_cancel'),
+  powerNow: () => invoke<void>('power_now'),
+
   floatState: () => invoke<FloatState>('float_state'),
   floatDrop: (text: string) => invoke<void>('float_drop', { text }),
   floatDropTorrent: (name: string, data: number[]) => invoke<void>('float_drop_torrent', { name, data }),
@@ -77,6 +81,8 @@ export interface AppEvents {
   browserSeen: (seen: [string, number][]) => void;
   /** The backend changed the settings (a site added to "don't ask again", the tray's limit). */
   settingsChanged: (s: Settings) => void;
+  /** Everything downloaded: the computer sleeps or shuts down after a countdown. */
+  powerCountdown: (p: PowerPending) => void;
   /** An update package downloading. */
   updateProgress: (p: UpdateProgress) => void;
 }
@@ -86,6 +92,7 @@ export async function listenApp(h: AppEvents): Promise<UnlistenFn> {
     listen<Prefill>('app:new-task', (e) => h.newTask(e.payload)),
     listen<[string, number][]>('browser:seen', (e) => h.browserSeen(e.payload)),
     listen<Settings>('settings:changed', (e) => h.settingsChanged(e.payload)),
+    listen<PowerPending | null>('power:countdown', (e) => e.payload && h.powerCountdown(e.payload)),
     listen<UpdateProgress>('update:progress', (e) => h.updateProgress(e.payload)),
   ]);
   return () => off.forEach((f) => f());

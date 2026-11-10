@@ -11,7 +11,7 @@ import { api, asError, listenApp, listenTasks } from '../lib/api';
 import i18n, { initI18n, resolveLang, setLanguage } from '../i18n';
 import { categoryOf } from '../lib/category';
 import { applyTheme, setSystemLook } from '../lib/theme';
-import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus, UpdateInfo, UpdateProgress } from '../lib/types';
+import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus, UpdateInfo, UpdateProgress, WhenDone } from '../lib/types';
 import { errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
@@ -30,6 +30,8 @@ export type Dialog =
   | { kind: 'update' }
   /** The first-run guide. */
   | { kind: 'welcome' }
+  /** Everything downloaded: sleeping or shutting down in `seconds`, unless cancelled. */
+  | { kind: 'power'; action: WhenDone; seconds: number }
   | null;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
     ftpActive: false,
   },
   browser: { quickDialog: true, silentSites: [], httpBridge: false, httpPort: 0, httpToken: '' },
+  schedule: { start: false, startAt: '02:00', stop: false, stopAt: '08:00', days: [0, 1, 2, 3, 4, 5, 6], whenDone: 'nothing' },
 };
 
 interface State {
@@ -219,6 +222,7 @@ export const useApp = create<State>((set, get) => ({
         newTask: (p) => set({ dialog: { kind: 'new', ...p }, view: 'tasks' }),
         browserSeen: (seenBrowsers) => set({ seenBrowsers }),
         settingsChanged: (settings) => set({ settings }),
+        powerCountdown: (p) => set({ dialog: { kind: 'power', ...p } }),
         updateProgress: (updateProgress) => set({ updateProgress }),
       });
       // Listen first: nothing that happens while the list loads is missed.
@@ -292,6 +296,8 @@ export const useApp = create<State>((set, get) => ({
       background = boot.background;
       void get().checkFiles();
       if (isTauri() && getCurrentWindow().label === 'main') {
+        // A countdown to sleep or shut down that opened this window.
+        void api.powerPending().then((p) => p && set({ dialog: { kind: 'power', ...p } }));
         // First run: the guide (language, folder, browsers) before anything else.
         if (!boot.settings.general.onboarded && !get().dialog) set({ dialog: { kind: 'welcome' } });
         // Not while the app is starting up: a little later, and quietly unless there is news.

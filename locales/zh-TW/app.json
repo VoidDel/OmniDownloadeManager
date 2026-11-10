@@ -250,6 +250,21 @@
       "copied": "已複製配對碼",
       "copy": "複製",
       "regenerate": "重新產生"
+    },
+    "schedule": {
+      "start": "定時開始",
+      "startHint": "時間到時開始所有已暫停的任務",
+      "startAt": "開始時間",
+      "stop": "定時停止",
+      "stopHint": "時間到時暫停所有正在下載和等待中的任務",
+      "stopAt": "停止時間",
+      "days": "重複",
+      "whenDone": "全部下載完成後",
+      "whenDoneHint": "睡眠和關機前有 60 秒倒數，可以取消",
+      "nothing": "不做任何事",
+      "quit": "結束 Omni Download",
+      "sleep": "睡眠",
+      "shutdown": "關機"
     }
   },
   "shell": {
@@ -598,6 +613,20 @@
       "invalid": "無法辨識，例如 500K、2M、1.5MB/s",
       "empty": "留空表示不限速",
       "perSecond": "每秒 {size}"
+    },
+    "power": {
+      "title": {
+        "sleep": "即將睡眠",
+        "shutdown": "即將關機"
+      },
+      "text": {
+        "sleep": "所有下載都已完成，{count} 秒後電腦將進入睡眠。",
+        "shutdown": "所有下載都已完成，{count} 秒後電腦將關機。"
+      },
+      "now": {
+        "sleep": "立即睡眠",
+        "shutdown": "立即關機"
+      }
     }
   },
   "quick": {

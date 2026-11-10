@@ -382,3 +382,14 @@ html.float-root, html.float-root body, html.float-root #root { background: trans
 .ball[data-over="true"] { transform: scale(1.08); background: var(--accent); color: var(--accent-fg, #fff); }
 .ball[data-over="true"] .track { stroke: transparent; }
 @media (prefers-reduced-motion: reduce) { .ball, .ball .arc { transition: none; } .ball .arc.spin { animation: none; } }
+
+/* ---------------------------------------------------------------- scheduled downloads */
+.set-time { width: 148px; font-variant-numeric: tabular-nums; }
+.set-days { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.set-days .day {
+  min-width: 34px; height: 28px; padding: 0 8px; border-radius: var(--radius-md); font-size: .82rem;
+  border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--fg-secondary);
+}
+.set-days .day:hover:not(:disabled) { background: var(--bg-hover); }
+.set-days .day[aria-pressed="true"] { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-text, var(--accent)); font-weight: 600; }
+.set-days .day:disabled { opacity: .5; }

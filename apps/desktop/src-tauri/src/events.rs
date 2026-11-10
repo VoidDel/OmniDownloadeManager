@@ -42,6 +42,7 @@ pub fn spawn(app: AppHandle, manager: &TaskManager) {
                     let before = watch.seen(&task);
                     notify::changed(&app, before, &task);
                     crate::intake::torrent_done(&app, before, &task);
+                    crate::schedule::changed(&app, before, &task);
                     taskbar.status(task.id, Some(task.status));
                     taskbar.apply(&app);
                     float(&app, &taskbar, None);

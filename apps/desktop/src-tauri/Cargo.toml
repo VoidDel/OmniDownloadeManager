@@ -42,6 +42,8 @@ tauri-plugin-updater.workspace = true
 sys-locale = "0.3"
 # Release dates of updates.
 time = { version = "0.3", features = ["formatting"] }
+# Local time for scheduled downloads.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -62,7 +64,7 @@ tauri-plugin-notification.workspace = true
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.8"
 windows-registry = "0.100"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Cryptography", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_Media_Audio", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security_Cryptography", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Power", "Win32_Media_Audio", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile.workspace = true
