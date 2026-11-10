@@ -4316,6 +4316,7 @@ dependencies = [
 name = "omnidl-http"
 version = "0.1.2"
 dependencies = [
+ "aes",
  "async-trait",
  "axum",
  "bytes",

@@ -27,7 +27,7 @@ use url::Url;
 
 use crate::{
     client::{self, request_error, status_error},
-    parse_url,
+    hls, parse_url,
     probe::{self, Probe},
 };
 
@@ -38,8 +38,15 @@ const SAVE_EVERY: Duration = Duration::from_secs(1);
 
 pub(crate) async fn run(retry_delay: Duration, job: Job) -> Outcome {
     let job = Arc::new(job);
+    let playlist = parse_url(&job.source).is_ok_and(|u| hls::is_playlist_url(&u))
+        || job.resume.as_ref().is_some_and(hls::is_hls_state);
+    if playlist {
+        return hls::run(retry_delay, job).await;
+    }
     match prepare(retry_delay, &job).await {
-        Ok(download) => download.transfer().await,
+        Ok(Prepared::File(download)) => (*download).transfer().await,
+        // A playlist behind a link without `.m3u8` (its Content-Type says so).
+        Ok(Prepared::Playlist) => hls::run(retry_delay, job).await,
         Err(_) if job.cancel.is_cancelled() => {
             Outcome::Stopped(job.resume.clone().unwrap_or_default())
         }
@@ -47,11 +54,19 @@ pub(crate) async fn run(retry_delay: Duration, job: Job) -> Outcome {
     }
 }
 
+enum Prepared {
+    File(Box<Download>),
+    Playlist,
+}
+
 /// Probes, settles name and partial file, and reports the start.
-async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Download> {
+async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
     let url = parse_url(&job.source)?;
     let client = client::build(&job.options)?;
     let probe = probe_retrying(retry_delay, job, &client, &url).await?;
+    if hls::is_playlist_type(probe.content_type.as_deref()) {
+        return Ok(Prepared::Playlist);
+    }
     let dir = job.save_dir.clone();
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(&e, dir.display()))?;
 
@@ -148,7 +163,7 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Download> {
     job.progress
         .set_downloaded(download.table.lock().downloaded());
     job.checkpoint.started(&download.snapshot()).await?;
-    Ok(download)
+    Ok(Prepared::File(Box::new(download)))
 }
 
 async fn probe_retrying(

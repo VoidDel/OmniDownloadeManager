@@ -469,3 +469,93 @@ async fn carries_on_when_a_mirror_breaks_off() {
     let (name, _) = completed(engine().run(r.job).await);
     assert_content(&dir.path().join(name), size);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_an_hls_stream_into_one_file() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = job(&server.url("/hls/plain/5/index.m3u8"), dir.path(), None, 4);
+    let (name, total) = completed(engine().run(r.job).await);
+    // `index` says nothing: the folder's name.
+    assert_eq!(name, "5.ts");
+    assert_eq!(total, 5 * common::HLS_SEG);
+    assert_eq!(
+        std::fs::read(dir.path().join(name)).unwrap(),
+        common::hls_content(5)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn decrypts_aes_128_segments() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = job(&server.url("/hls/enc/4/index.m3u8"), dir.path(), None, 4);
+    let (name, _) = completed(engine().run(r.job).await);
+    assert_eq!(
+        std::fs::read(dir.path().join(name)).unwrap(),
+        common::hls_content(4)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn takes_the_best_variant_of_a_master_playlist() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = job(&server.url("/hls/plain/6/master.m3u8"), dir.path(), None, 4);
+    let (_, total) = completed(engine().run(r.job).await);
+    assert_eq!(
+        total,
+        6 * common::HLS_SEG,
+        "the 6-segment variant, not the 1-segment one"
+    );
+    let probe = engine()
+        .probe(
+            &server.url("/hls/plain/6/master.m3u8"),
+            &JobOptions::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(probe.file_name, "6.ts");
+    assert_eq!(probe.total, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn will_not_record_a_live_stream() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = job(&server.url("/hls/live/3/index.m3u8"), dir.path(), None, 4);
+    match engine().run(r.job).await {
+        Outcome::Failed(e, _) => assert_eq!(e.code, ErrorCode::Unsupported),
+        other => panic!("not refused: {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumes_an_hls_stream_after_the_segments_written() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let url = server.url("/hls/slow/10/index.m3u8");
+    let r = job(&url, dir.path(), None, 2);
+    let progress = r.progress.clone();
+    let cancel = r.cancel.clone();
+    let run = tokio::spawn(async move { engine().run(r.job).await });
+    until(|| progress.downloaded() >= 3 * common::HLS_SEG).await;
+    cancel.cancel();
+    let state = match run.await.unwrap() {
+        Outcome::Stopped(s) => s,
+        other => panic!("not stopped: {other:?}"),
+    };
+    let done = state.segments.len() as u64;
+    assert!((3..10).contains(&done), "{done} segments kept");
+    let before = server.stats.requests.load(Ordering::SeqCst);
+    let r = job(&url, dir.path(), Some(state), 2);
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, 10 * common::HLS_SEG);
+    assert_eq!(
+        std::fs::read(dir.path().join(name)).unwrap(),
+        common::hls_content(10)
+    );
+    // The playlist again, and only the segments not written yet.
+    let asked = server.stats.requests.load(Ordering::SeqCst) - before;
+    assert_eq!(asked as u64, 1 + (10 - done));
+}

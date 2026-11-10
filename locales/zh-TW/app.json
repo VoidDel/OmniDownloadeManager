@@ -585,7 +585,8 @@
       "resumable": "支援斷點續傳",
       "notResumable": "不支援斷點續傳",
       "connections": "將使用 {count} 個連線",
-      "sessions": "將使用 {count} 個工作階段"
+      "sessions": "將使用 {count} 個工作階段",
+      "hls": "HLS 影片串流 · 合併為一個影片檔，大小在下載時得知"
     },
     "dirByCategory": "依類型分別儲存",
     "checksum": "校驗值",

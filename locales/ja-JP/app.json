@@ -585,7 +585,8 @@
       "resumable": "レジューム対応",
       "notResumable": "レジューム非対応",
       "connections": "{count} 接続を使用",
-      "sessions": "{count} セッションを使用"
+      "sessions": "{count} セッションを使用",
+      "hls": "HLS ストリーム · 1 つの動画ファイルにまとめます。サイズはダウンロード中にわかります"
     },
     "dirByCategory": "種類ごとに保存",
     "checksum": "チェックサム",

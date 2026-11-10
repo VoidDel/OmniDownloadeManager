@@ -11,6 +11,9 @@ publish.workspace = true
 [dependencies]
 omnidl-core.workspace = true
 omnidl-storage.workspace = true
+# HLS segments encrypted with AES-128 (CBC on top of the block cipher; the version already in
+# the tree).
+aes = "0.8"
 async-trait.workspace = true
 bytes.workspace = true
 futures-util.workspace = true

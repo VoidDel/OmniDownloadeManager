@@ -52,7 +52,8 @@ fn worth_offering(url: &str) -> bool {
             if name == ext || ["txt", "md", "csv", "ts", "json", "xml"].contains(&ext.as_str()) {
                 return false;
             }
-            ext == "torrent"
+            // A torrent, or an HLS stream's playlist (downloaded into one video file).
+            matches!(ext.as_str(), "torrent" | "m3u8")
                 || !matches!(filename::category(&name), Category::Image | Category::Other)
         }
         None => false,
@@ -198,6 +199,7 @@ mod tests {
             "ftp://b.org/pub/distro.iso",
             "https://a.com/files/report.pdf",
             "https://a.com/x.torrent",
+            "https://cdn.a.com/v/1080p/index.m3u8?token=1",
             "magnet:?xt=urn:btih:abc",
         ] {
             assert!(worth_offering(yes), "{yes}");

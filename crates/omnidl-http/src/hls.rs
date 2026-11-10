@@ -1,0 +1,695 @@
+//! HLS (`.m3u8`): a video cut into many short files listed by a playlist. The best variant of a
+//! master playlist is chosen, its segments are fetched several at once (decrypted when the
+//! playlist uses AES-128) and written one after the other into one file: MPEG-TS segments make
+//! a `.ts` file, fragmented MP4 (`#EXT-X-MAP`) an `.mp4`. Live playlists (no `#EXT-X-ENDLIST`)
+//! are not recorded.
+//!
+//! Resuming: the segments written so far are kept in the task's segment table (one entry each,
+//! its byte range in the file); a restart truncates the file to them and goes on from the next.
+//! The playlist's address and segment count (`hls:<n>` in the ETag slot) must be unchanged.
+
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
+use aes::{
+    Aes128,
+    cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
+};
+use futures_util::{StreamExt, stream};
+use omnidl_core::{
+    Error, ErrorCode, Job, Outcome, Result, ResumeState, Segment,
+    disk::{backoff, claim_name, place},
+    filename,
+};
+use reqwest::{Client, StatusCode, header::RANGE};
+use tokio::{io::AsyncWriteExt, sync::Mutex};
+use url::Url;
+
+use crate::client::{self, request_error, status_error};
+
+/// How many segments are fetched at once.
+const MAX_PARALLEL: usize = 8;
+/// How often progress is saved.
+const SAVE_EVERY: Duration = Duration::from_secs(1);
+
+/// Whether `url` names a playlist (`….m3u8`, any query).
+pub(crate) fn is_playlist_url(url: &Url) -> bool {
+    url.path().to_ascii_lowercase().ends_with(".m3u8")
+}
+
+/// Whether a `Content-Type` is a playlist's.
+pub(crate) fn is_playlist_type(content_type: Option<&str>) -> bool {
+    content_type.is_some_and(|c| {
+        let c = c
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        matches!(
+            c.as_str(),
+            "application/vnd.apple.mpegurl"
+                | "application/x-mpegurl"
+                | "audio/mpegurl"
+                | "audio/x-mpegurl"
+        )
+    })
+}
+
+/// A run that stopped in a playlist: its state says so.
+pub(crate) fn is_hls_state(r: &ResumeState) -> bool {
+    r.etag.as_deref().is_some_and(|e| e.starts_with("hls:"))
+}
+
+// ------------------------------------------------------------------------------- the playlist
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Key {
+    uri: Url,
+    iv: Option<[u8; 16]>,
+}
+
+/// One file to fetch: a segment, or the init section of fragmented MP4.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Part {
+    url: Url,
+    /// `(length, offset)` of a byte range of `url`.
+    range: Option<(u64, u64)>,
+    key: Option<Key>,
+    /// Media sequence number (the IV when the key has none).
+    seq: u64,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Media {
+    /// The init section first when there is one, then the segments.
+    parts: Vec<Part>,
+    fmp4: bool,
+    ended: bool,
+}
+
+enum Playlist {
+    /// Variants: (bandwidth, address).
+    Master(Vec<(u64, Url)>),
+    Media(Media),
+}
+
+/// `KEY=value,KEY="quoted, value"` → pairs.
+fn attributes(s: &str) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let mut rest = s.trim();
+    while !rest.is_empty() {
+        let Some((key, after)) = rest.split_once('=') else {
+            break;
+        };
+        let (value, next) = if let Some(q) = after.strip_prefix('"') {
+            match q.split_once('"') {
+                Some((v, n)) => (v, n.trim_start_matches(',')),
+                None => (q, ""),
+            }
+        } else {
+            match after.split_once(',') {
+                Some((v, n)) => (v, n),
+                None => (after, ""),
+            }
+        };
+        out.insert(key.trim().to_ascii_uppercase(), value.trim().to_owned());
+        rest = next.trim_start();
+    }
+    out
+}
+
+fn hex16(s: &str) -> Option<[u8; 16]> {
+    let h = s.trim().trim_start_matches("0x").trim_start_matches("0X");
+    if h.len() > 32 || h.is_empty() {
+        return None;
+    }
+    let h = format!("{h:0>32}");
+    let mut out = [0u8; 16];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&h[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+/// `n[@o]`; without `@o` the range follows the previous one of the same file.
+fn byte_range(s: &str, next: u64) -> Option<(u64, u64)> {
+    let (len, off) = match s.trim().split_once('@') {
+        Some((l, o)) => (l.parse().ok()?, o.parse().ok()?),
+        None => (s.trim().parse().ok()?, next),
+    };
+    Some((len, off))
+}
+
+fn parse(text: &str, base: &Url) -> Result<Playlist> {
+    let bad = |why: &str| Error::new(ErrorCode::InvalidUrl, format!("{base}: {why}"));
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    if lines.next().map(|l| l.trim_start_matches('\u{feff}')) != Some("#EXTM3U") {
+        return Err(bad("not an HLS playlist"));
+    }
+    let join = |u: &str| base.join(u).map_err(|e| bad(&e.to_string()));
+    let mut variants = Vec::new();
+    let mut media = Media::default();
+    let mut seq = 0u64;
+    let mut key: Option<Key> = None;
+    let mut pending_range: Option<String> = None;
+    let mut pending_variant: Option<u64> = None;
+    let mut next_offset: HashMap<Url, u64> = HashMap::new();
+    for line in lines {
+        if let Some(a) = line.strip_prefix("#EXT-X-STREAM-INF:") {
+            let attrs = attributes(a);
+            pending_variant = Some(
+                attrs
+                    .get("BANDWIDTH")
+                    .and_then(|b| b.parse().ok())
+                    .unwrap_or(0),
+            );
+        } else if let Some(n) = line.strip_prefix("#EXT-X-MEDIA-SEQUENCE:") {
+            seq = n.trim().parse().unwrap_or(0);
+        } else if let Some(a) = line.strip_prefix("#EXT-X-KEY:") {
+            let attrs = attributes(a);
+            key = match attrs.get("METHOD").map(String::as_str) {
+                Some("NONE") | None => None,
+                Some("AES-128") => Some(Key {
+                    uri: join(attrs.get("URI").ok_or_else(|| bad("a key without URI"))?)?,
+                    iv: attrs.get("IV").and_then(|v| hex16(v)),
+                }),
+                Some(m) => {
+                    return Err(Error::new(
+                        ErrorCode::Unsupported,
+                        format!("{base}: {m} encryption is not supported"),
+                    ));
+                }
+            };
+        } else if let Some(a) = line.strip_prefix("#EXT-X-MAP:") {
+            let attrs = attributes(a);
+            let url = join(attrs.get("URI").ok_or_else(|| bad("a map without URI"))?)?;
+            let range = attrs.get("BYTERANGE").and_then(|r| byte_range(r, 0));
+            media.fmp4 = true;
+            if !media.parts.iter().any(|p| p.url == url && p.range == range) {
+                media.parts.push(Part {
+                    url,
+                    range,
+                    key: key.clone(),
+                    seq,
+                });
+            }
+        } else if let Some(r) = line.strip_prefix("#EXT-X-BYTERANGE:") {
+            pending_range = Some(r.to_owned());
+        } else if line.starts_with("#EXT-X-ENDLIST") {
+            media.ended = true;
+        } else if line.starts_with('#') {
+            // #EXTINF and the rest: nothing to keep.
+        } else if let Some(bw) = pending_variant.take() {
+            variants.push((bw, join(line)?));
+        } else {
+            let url = join(line)?;
+            let range = pending_range.take().and_then(|r| {
+                let next = next_offset.get(&url).copied().unwrap_or(0);
+                byte_range(&r, next)
+            });
+            if let Some((len, off)) = range {
+                next_offset.insert(url.clone(), off + len);
+            }
+            media.parts.push(Part {
+                url,
+                range,
+                key: key.clone(),
+                seq,
+            });
+            seq += 1;
+        }
+    }
+    if !variants.is_empty() {
+        return Ok(Playlist::Master(variants));
+    }
+    if media.parts.is_empty() {
+        return Err(bad("an empty playlist"));
+    }
+    Ok(Playlist::Media(media))
+}
+
+// ------------------------------------------------------------------------------- fetching
+
+async fn get_text(client: &Client, url: &Url) -> Result<String> {
+    let resp = client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(|e| request_error(&e))?;
+    if !resp.status().is_success() {
+        return Err(status_error(resp.status()));
+    }
+    resp.text().await.map_err(|e| request_error(&e))
+}
+
+/// The media playlist behind `url`: a master's best variant (highest bandwidth).
+async fn media_playlist(client: &Client, url: &Url) -> Result<(Url, Media)> {
+    let mut url = url.clone();
+    for _ in 0..3 {
+        match parse(&get_text(client, &url).await?, &url)? {
+            Playlist::Media(m) => return Ok((url, m)),
+            Playlist::Master(mut v) => {
+                v.sort_by_key(|(bw, _)| std::cmp::Reverse(*bw));
+                url = v.swap_remove(0).1;
+            }
+        }
+    }
+    Err(Error::new(
+        ErrorCode::InvalidUrl,
+        format!("{url}: playlists that never reach the media"),
+    ))
+}
+
+/// What the new-download dialog shows: the file name and that it is a stream.
+pub(crate) async fn probe(
+    client: &Client,
+    url: &Url,
+    file_name: Option<&str>,
+) -> Result<(Url, String)> {
+    let (media_url, m) = media_playlist(client, url).await?;
+    if !m.ended {
+        return Err(live());
+    }
+    Ok((media_url, output_name(url, file_name, m.fmp4)))
+}
+
+fn live() -> Error {
+    Error::new(
+        ErrorCode::Unsupported,
+        "a live stream (the playlist has no end): not recorded",
+    )
+}
+
+/// The name of the file: the one given (with the stream's extension), else the playlist's, else
+/// (generic names such as `index.m3u8`) the folder it is in.
+fn output_name(url: &Url, given: Option<&str>, fmp4: bool) -> String {
+    let ext = if fmp4 { "mp4" } else { "ts" };
+    if let Some(n) = given.map(str::trim).filter(|n| !n.is_empty()) {
+        let stem = n.rsplit_once('.').map_or(n, |(s, e)| {
+            if matches!(e.to_ascii_lowercase().as_str(), "m3u8" | "ts" | "mp4") {
+                s
+            } else {
+                n
+            }
+        });
+        return filename::sanitize(&format!("{stem}.{ext}"));
+    }
+    let segs: Vec<String> = url
+        .path_segments()
+        .map(|s| {
+            s.filter(|p| !p.is_empty())
+                .map(filename::percent_decode)
+                .collect()
+        })
+        .unwrap_or_default();
+    let stem = segs
+        .last()
+        .and_then(|s| s.rsplit_once('.').map(|(a, _)| a.to_owned()))
+        .unwrap_or_default();
+    const GENERIC: [&str; 9] = [
+        "index",
+        "playlist",
+        "master",
+        "prog_index",
+        "chunklist",
+        "video",
+        "main",
+        "mono",
+        "media",
+    ];
+    let stem = if stem.is_empty() || GENERIC.contains(&stem.to_ascii_lowercase().as_str()) {
+        segs.iter()
+            .rev()
+            .nth(1)
+            .cloned()
+            .or_else(|| url.host_str().map(str::to_owned))
+            .unwrap_or_else(|| "video".into())
+    } else {
+        stem
+    };
+    filename::sanitize(&format!("{stem}.{ext}"))
+}
+
+/// AES-128-CBC with PKCS#7 padding.
+fn decrypt(key: &[u8; 16], iv: [u8; 16], data: &[u8]) -> Result<Vec<u8>> {
+    if data.is_empty() || !data.len().is_multiple_of(16) {
+        return Err(Error::new(
+            ErrorCode::Network,
+            "an encrypted segment of a broken length",
+        ));
+    }
+    let cipher = Aes128::new(GenericArray::from_slice(key));
+    let mut prev = iv;
+    let mut out = Vec::with_capacity(data.len());
+    for chunk in data.as_chunks::<16>().0 {
+        let mut block = GenericArray::clone_from_slice(chunk);
+        cipher.decrypt_block(&mut block);
+        out.extend(block.iter().zip(prev.iter()).map(|(b, p)| b ^ p));
+        prev.copy_from_slice(chunk);
+    }
+    let pad = *out.last().unwrap_or(&0) as usize;
+    if (1..=16).contains(&pad)
+        && out.len() >= pad
+        && out[out.len() - pad..].iter().all(|&b| b as usize == pad)
+    {
+        out.truncate(out.len() - pad);
+    }
+    Ok(out)
+}
+
+struct Fetcher {
+    job: Arc<Job>,
+    client: Client,
+    retry_delay: Duration,
+    keys: Mutex<HashMap<Url, [u8; 16]>>,
+}
+
+impl Fetcher {
+    async fn key(&self, uri: &Url) -> Result<[u8; 16]> {
+        if let Some(k) = self.keys.lock().await.get(uri) {
+            return Ok(*k);
+        }
+        let bytes = self.bytes(uri, None).await?;
+        let k: [u8; 16] = bytes.as_slice().try_into().map_err(|_| {
+            Error::new(
+                ErrorCode::Network,
+                format!("{uri}: a key that is not 16 bytes"),
+            )
+        })?;
+        self.keys.lock().await.insert(uri.clone(), k);
+        Ok(k)
+    }
+
+    /// One request, retried while the failure is transient.
+    async fn bytes(&self, url: &Url, range: Option<(u64, u64)>) -> Result<Vec<u8>> {
+        let mut attempt = 0;
+        loop {
+            let mut req = self.client.get(url.clone());
+            if let Some((len, off)) = range {
+                req = req.header(
+                    RANGE,
+                    format!("bytes={off}-{}", off + len.saturating_sub(1)),
+                );
+            }
+            let r = async {
+                let resp = req.send().await.map_err(|e| request_error(&e))?;
+                match resp.status() {
+                    StatusCode::OK | StatusCode::PARTIAL_CONTENT => {}
+                    s => return Err(status_error(s)),
+                }
+                Ok(resp.bytes().await.map_err(|e| request_error(&e))?.to_vec())
+            };
+            let e = tokio::select! {
+                r = r => match r {
+                    Ok(b) => return Ok(b),
+                    Err(e) => e,
+                },
+                _ = self.job.cancel.cancelled() => return Err(Error::internal("cancelled")),
+            };
+            attempt += 1;
+            if !e.is_transient() || attempt > self.job.options.max_retries {
+                return Err(e);
+            }
+            tracing::debug!("{url} (retry {attempt}): {e}");
+            tokio::select! {
+                _ = tokio::time::sleep(backoff(self.retry_delay, attempt)) => {}
+                _ = self.job.cancel.cancelled() => return Err(Error::internal("cancelled")),
+            }
+        }
+    }
+
+    /// A part, decrypted.
+    async fn part(&self, p: &Part) -> Result<Vec<u8>> {
+        let data = self.bytes(&p.url, p.range).await?;
+        match &p.key {
+            None => Ok(data),
+            Some(k) => {
+                let key = self.key(&k.uri).await?;
+                let iv = k.iv.unwrap_or_else(|| (p.seq as u128).to_be_bytes());
+                decrypt(&key, iv, &data)
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------- one run
+
+pub(crate) async fn run(retry_delay: Duration, job: Arc<Job>) -> Outcome {
+    let resume = job.resume.clone();
+    match go(retry_delay, &job).await {
+        Ok(o) => o,
+        Err((_, state)) if job.cancel.is_cancelled() => {
+            Outcome::Stopped(state.or(resume).unwrap_or_default())
+        }
+        Err((e, state)) => Outcome::Failed(e, state.or(resume)),
+    }
+}
+
+type Failed = (Error, Option<ResumeState>);
+
+// The error carries the state to save: large, but once per run.
+#[allow(clippy::result_large_err)]
+async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
+    let early = |e: Error| (e, None);
+    let url = crate::parse_url(&job.source).map_err(early)?;
+    let client = client::build(&job.options).map_err(early)?;
+    let (media_url, media) = media_playlist(&client, &url).await.map_err(early)?;
+    if !media.ended {
+        return Err(early(live()));
+    }
+    let count = media.parts.len();
+    let tag = format!("hls:{count}");
+    let dir = job.save_dir.clone();
+    std::fs::create_dir_all(&dir).map_err(|e| early(Error::io(&e, dir.display())))?;
+
+    // Where it stopped, if the playlist is the same.
+    let resumed = job.resume.as_ref().filter(|r| {
+        r.etag.as_deref() == Some(tag.as_str())
+            && r.final_url.as_deref() == Some(media_url.as_str())
+            && !r.segments.is_empty()
+    });
+    let (file_name, done) = match resumed {
+        Some(r) => {
+            let partial = dir.join(filename::partial(&r.file_name));
+            let written: u64 = r.segments.iter().map(|s| s.downloaded).sum();
+            let ok = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&partial)
+                .and_then(|f| f.set_len(written))
+                .is_ok();
+            if ok {
+                (r.file_name.clone(), r.segments.clone())
+            } else {
+                tracing::warn!("{}: cannot continue; starting over", partial.display());
+                let name = r.file_name.clone();
+                omnidl_storage::file::create(&partial, None)
+                    .map_err(|e| early(Error::io(&e, partial.display())))?;
+                (name, Vec::new())
+            }
+        }
+        None => match job.resume.as_ref().map(|r| r.file_name.clone()) {
+            // Started before (another playlist now): over again, same name.
+            Some(name) => {
+                let partial = dir.join(filename::partial(&name));
+                omnidl_storage::file::create(&partial, None)
+                    .map_err(|e| early(Error::io(&e, partial.display())))?;
+                (name, Vec::new())
+            }
+            None => {
+                let base = output_name(&url, job.file_name.as_deref(), media.fmp4);
+                let (name, _) =
+                    claim_name(&dir, &base, None, job.options.conflict).map_err(early)?;
+                (name, Vec::new())
+            }
+        },
+    };
+    let partial = dir.join(filename::partial(&file_name));
+    let mut state = ResumeState {
+        file_name: file_name.clone(),
+        final_url: Some(media_url.to_string()),
+        total: None,
+        etag: Some(tag),
+        last_modified: None,
+        resumable: true,
+        segments: done,
+        completed_at: None,
+    };
+    let mut written: u64 = state.segments.iter().map(|s| s.downloaded).sum();
+    job.progress.set_downloaded(written);
+    job.checkpoint.started(&state).await.map_err(early)?;
+
+    let mut file = tokio::fs::OpenOptions::new()
+        .append(true)
+        .open(&partial)
+        .await
+        .map_err(|e| (Error::io(&e, partial.display()), Some(state.clone())))?;
+    let fetcher = Arc::new(Fetcher {
+        job: job.clone(),
+        client,
+        retry_delay,
+        keys: Mutex::new(HashMap::new()),
+    });
+    let parallel = (job.options.connections as usize).clamp(1, MAX_PARALLEL);
+    let first = state.segments.len();
+    job.progress
+        .set_connections(parallel.min(count - first) as u32);
+    // In order, `parallel` at a time.
+    let mut parts = stream::iter(media.parts.into_iter().skip(first))
+        .map(|p| {
+            let f = fetcher.clone();
+            async move { f.part(&p).await }
+        })
+        .buffered(parallel);
+    let mut last_save = tokio::time::Instant::now();
+    while let Some(r) = parts.next().await {
+        let data = r.map_err(|e| (e, Some(state.clone())))?;
+        let len = data.len() as u64;
+        tokio::select! {
+            _ = job.throttle(len) => {}
+            _ = job.cancel.cancelled() => return Err((Error::internal("cancelled"), Some(state))),
+        }
+        file.write_all(&data)
+            .await
+            .map_err(|e| (Error::io(&e, "writing the file"), Some(state.clone())))?;
+        state.segments.push(Segment {
+            start: written,
+            end: (len > 0).then(|| written + len - 1),
+            downloaded: len,
+        });
+        written += len;
+        job.progress.add(len);
+        // The size so far, spread over what is left: an estimate until the end.
+        let n = state.segments.len() as u64;
+        job.progress
+            .set_total(((n as usize) < count).then(|| written / n.max(1) * count as u64));
+        if last_save.elapsed() >= SAVE_EVERY {
+            last_save = tokio::time::Instant::now();
+            file.flush()
+                .await
+                .map_err(|e| (Error::io(&e, "writing the file"), Some(state.clone())))?;
+            if job.options.sync_writes {
+                let _ = file.sync_data().await;
+            }
+            job.checkpoint
+                .save(&state)
+                .await
+                .map_err(|e| (e, Some(state.clone())))?;
+        }
+        if job.cancel.is_cancelled() {
+            return Err((Error::internal("cancelled"), Some(state)));
+        }
+    }
+    job.progress.set_connections(0);
+    file.flush()
+        .await
+        .map_err(|e| (Error::io(&e, "writing the file"), Some(state.clone())))?;
+    drop(file);
+    job.progress.set_total(Some(written));
+    let name =
+        place(&dir, &file_name, job.options.conflict).map_err(|e| (e, Some(state.clone())))?;
+    Ok(Outcome::Completed {
+        file_name: name,
+        total: written,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base() -> Url {
+        Url::parse("https://cdn.example.com/show/ep1/index.m3u8").unwrap()
+    }
+
+    #[test]
+    fn reads_a_master_playlist() {
+        let text = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.4d401e,mp4a.40.2\"\nlow/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000\nhigh/index.m3u8\n";
+        let Playlist::Master(v) = parse(text, &base()).unwrap() else {
+            panic!("not a master")
+        };
+        assert_eq!(v.len(), 2);
+        assert_eq!(
+            v[1],
+            (
+                2_800_000,
+                Url::parse("https://cdn.example.com/show/ep1/high/index.m3u8").unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn reads_a_media_playlist_with_keys_and_ranges() {
+        let text = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:7\n\
+            #EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\",IV=0x0102\n#EXTINF:6.0,\nseg0.ts\n\
+            #EXT-X-KEY:METHOD=NONE\n#EXTINF:6.0,\n#EXT-X-BYTERANGE:100@0\nall.ts\n\
+            #EXTINF:6.0,\n#EXT-X-BYTERANGE:50\nall.ts\n#EXT-X-ENDLIST\n";
+        let Playlist::Media(m) = parse(text, &base()).unwrap() else {
+            panic!("not media")
+        };
+        assert!(m.ended && !m.fmp4);
+        assert_eq!(m.parts.len(), 3);
+        let k = m.parts[0].key.as_ref().unwrap();
+        assert_eq!(k.uri.as_str(), "https://cdn.example.com/show/ep1/key.bin");
+        assert_eq!(k.iv.unwrap()[14..], [1, 2]);
+        assert_eq!(m.parts[0].seq, 7);
+        assert!(m.parts[1].key.is_none());
+        assert_eq!(m.parts[1].range, Some((100, 0)));
+        assert_eq!(m.parts[2].range, Some((50, 100)));
+        assert_eq!(m.parts[2].seq, 9);
+    }
+
+    #[test]
+    fn knows_fmp4_live_and_bad_playlists() {
+        let fmp4 = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\na.m4s\n#EXTINF:4,\nb.m4s\n";
+        let Playlist::Media(m) = parse(fmp4, &base()).unwrap() else {
+            panic!()
+        };
+        assert!(m.fmp4 && !m.ended);
+        assert_eq!(
+            m.parts[0].url.as_str(),
+            "https://cdn.example.com/show/ep1/init.mp4"
+        );
+        assert_eq!(m.parts.len(), 3);
+        assert!(parse("<html>", &base()).is_err());
+        let sample = "#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:4,\na.ts\n";
+        assert_eq!(
+            parse(sample, &base()).err().map(|e| e.code),
+            Some(ErrorCode::Unsupported)
+        );
+    }
+
+    #[test]
+    fn names_the_output() {
+        assert_eq!(output_name(&base(), None, false), "ep1.ts");
+        assert_eq!(
+            output_name(
+                &Url::parse("https://a.com/v/movie.m3u8").unwrap(),
+                None,
+                true
+            ),
+            "movie.mp4"
+        );
+        assert_eq!(
+            output_name(&base(), Some("Trailer.m3u8"), false),
+            "Trailer.ts"
+        );
+        assert_eq!(
+            output_name(&base(), Some("Episode 1"), false),
+            "Episode 1.ts"
+        );
+    }
+
+    #[test]
+    fn decrypts_aes_128_cbc() {
+        // One block of "hello" padded with 11 × 0x0b, encrypted with key 00..0f and IV 0.
+        use aes::cipher::BlockEncrypt;
+        let key: [u8; 16] = core::array::from_fn(|i| i as u8);
+        let iv = [0u8; 16];
+        let mut plain = b"hello".to_vec();
+        plain.extend([11u8; 11]);
+        let cipher = Aes128::new(GenericArray::from_slice(&key));
+        let mut block = GenericArray::clone_from_slice(&plain);
+        cipher.encrypt_block(&mut block);
+        assert_eq!(decrypt(&key, iv, &block).unwrap(), b"hello");
+    }
+}

@@ -66,6 +66,9 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
     const i = probe.info;
     const files = i.files?.length ?? 1;
     sub = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), files > 1 || folder ? t('newTask.row.files', { count: files }) : t('newTask.row.singleFile')].join(' · ');
+  } else if (/mpegurl/i.test(probe.info.contentType ?? '')) {
+    // An HLS stream: its size shows while it downloads.
+    sub = t('newTask.row.hls');
   } else {
     const i = probe.info;
     const parts = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), i.resumable ? t('newTask.row.resumable') : t('newTask.row.notResumable')];

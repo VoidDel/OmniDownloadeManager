@@ -105,6 +105,7 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
         .route("/chunked/{size}", get(chunked))
+        .route("/hls/{kind}/{n}/{name}", get(hls))
         .route("/missing", get(|| async { StatusCode::NOT_FOUND }))
         .route(
             "/redirect",
@@ -335,4 +336,93 @@ fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats
         }
     });
     b.body(Body::from_stream(body)).unwrap()
+}
+
+// ------------------------------------------------------------------------------- HLS
+
+/// Bytes of each HLS segment (not a multiple of 16: the encrypted ones need padding).
+pub const HLS_SEG: u64 = 100_003;
+/// The AES-128 key of the encrypted streams.
+pub const HLS_KEY: [u8; 16] = *b"0123456789abcdef";
+
+/// What `n` segments make once joined (and decrypted).
+pub fn hls_content(n: u64) -> Vec<u8> {
+    content(n * HLS_SEG)
+}
+
+fn encrypt(data: &[u8], iv: [u8; 16]) -> Vec<u8> {
+    use aes::{
+        Aes128,
+        cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
+    };
+    let cipher = Aes128::new(GenericArray::from_slice(&HLS_KEY));
+    let pad = 16 - data.len() % 16;
+    let mut plain = data.to_vec();
+    plain.extend(std::iter::repeat_n(pad as u8, pad));
+    let mut prev = iv;
+    let mut out = Vec::with_capacity(plain.len());
+    for chunk in plain.chunks(16) {
+        let mut block = GenericArray::clone_from_slice(chunk);
+        for (b, p) in block.iter_mut().zip(prev) {
+            *b ^= p;
+        }
+        cipher.encrypt_block(&mut block);
+        prev.copy_from_slice(&block);
+        out.extend_from_slice(&block);
+    }
+    out
+}
+
+/// `/hls/{kind}/{n}/…`: `kind` is `plain`, `enc` (AES-128, IV = sequence number), `slow`
+/// (each segment 200 ms late) or `live` (no end). `master.m3u8` offers this stream and a smaller
+/// one; `index.m3u8` lists `n` segments `seg<i>.ts`.
+async fn hls(State(s): S, UrlPath((kind, n, name)): UrlPath<(String, u64, String)>) -> Response {
+    s.requests.fetch_add(1, Ordering::SeqCst);
+    let playlist = |text: String| {
+        (
+            [(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")],
+            text,
+        )
+            .into_response()
+    };
+    match name.as_str() {
+        "master.m3u8" => playlist(format!(
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=200000\n/hls/{kind}/1/index.m3u8\n\
+             #EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=1280x720\n/hls/{kind}/{n}/index.m3u8\n"
+        )),
+        "index.m3u8" => {
+            let mut t = String::from("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n");
+            if kind == "enc" {
+                t.push_str("#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n");
+            }
+            for i in 0..n {
+                t.push_str(&format!("#EXTINF:2.0,\nseg{i}.ts\n"));
+            }
+            if kind != "live" {
+                t.push_str("#EXT-X-ENDLIST\n");
+            }
+            playlist(t)
+        }
+        "key.bin" => HLS_KEY.to_vec().into_response(),
+        seg => {
+            let Some(i) = seg
+                .strip_prefix("seg")
+                .and_then(|r| r.strip_suffix(".ts"))
+                .and_then(|i| i.parse::<u64>().ok())
+                .filter(|&i| i < n)
+            else {
+                return StatusCode::NOT_FOUND.into_response();
+            };
+            if kind == "slow" {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+            let data: Vec<u8> = (i * HLS_SEG..(i + 1) * HLS_SEG).map(byte_at).collect();
+            let body = if kind == "enc" {
+                encrypt(&data, (i as u128).to_be_bytes())
+            } else {
+                data
+            };
+            ([(header::CONTENT_TYPE, "video/mp2t")], body).into_response()
+        }
+    }
 }

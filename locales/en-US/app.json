@@ -585,7 +585,8 @@
       "resumable": "Can resume",
       "notResumable": "Cannot resume",
       "connections": "Will use {count, plural, one {# connection} other {# connections}}",
-      "sessions": "Will use {count, plural, one {# session} other {# sessions}}"
+      "sessions": "Will use {count, plural, one {# session} other {# sessions}}",
+      "hls": "HLS stream · joined into one video file; its size shows while it downloads"
     },
     "dirByCategory": "Saved by file type",
     "checksum": "Checksum",

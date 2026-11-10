@@ -585,7 +585,8 @@
       "resumable": "支持断点续传",
       "notResumable": "不支持断点续传",
       "connections": "将使用 {count} 个连接",
-      "sessions": "将使用 {count} 个会话"
+      "sessions": "将使用 {count} 个会话",
+      "hls": "HLS 视频流 · 合并为一个视频文件，大小在下载中得知"
     },
     "dirByCategory": "按类型分别保存",
     "checksum": "校验值",

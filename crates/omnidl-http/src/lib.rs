@@ -4,9 +4,11 @@
 //! several connections, hands the rest of a slow segment to idle connections (work stealing),
 //! and resumes after a pause or a restart when the server's ETag / Last-Modified / length are
 //! unchanged. Servers that ignore ranges get one connection and start over after a pause.
+//! An HLS playlist (`.m3u8`) is downloaded segment by segment into one video file (`hls`).
 
 mod client;
 mod download;
+mod hls;
 mod probe;
 
 use std::time::Duration;
@@ -52,7 +54,13 @@ impl DownloadEngine for HttpEngine {
     async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo> {
         let url = parse_url(source)?;
         let client = client::build(options)?;
+        if hls::is_playlist_url(&url) {
+            return playlist(&client, &url, options).await;
+        }
         let p = probe::probe(&client, &url).await?;
+        if hls::is_playlist_type(p.content_type.as_deref()) {
+            return playlist(&client, &url, options).await;
+        }
         Ok(ProbeInfo {
             file_name: p.file_name(&url),
             final_url: p.final_url.to_string(),
@@ -68,6 +76,22 @@ impl DownloadEngine for HttpEngine {
     async fn run(&self, job: Job) -> Outcome {
         download::run(self.retry_delay, job).await
     }
+}
+
+/// A playlist: its video file's name; the size is learned while downloading.
+async fn playlist(client: &reqwest::Client, url: &Url, o: &JobOptions) -> Result<ProbeInfo> {
+    let (_, file_name) = hls::probe(client, url, None).await?;
+    let _ = o;
+    Ok(ProbeInfo {
+        file_name,
+        final_url: url.to_string(),
+        total: None,
+        resumable: true,
+        content_type: Some("application/vnd.apple.mpegurl".into()),
+        etag: None,
+        last_modified: None,
+        files: Vec::new(),
+    })
 }
 
 fn parse_url(source: &str) -> Result<Url> {
