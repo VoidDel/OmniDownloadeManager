@@ -222,9 +222,8 @@
       "ipFilter": "IP 過濾",
       "ipFilterHint": "不與清單中的 IP 連線，也拒絕它們連入。變更在下次啟動應用程式後生效",
       "ipFilterList": "過濾清單",
-      "ipFilterListHint": "網址或本機檔案；支援 P2P、eMule ipfilter.dat、CIDR 格式，可為 gzip 壓縮",
+      "ipFilterListHint": "每行一個網址或本機檔案；支援 P2P、eMule ipfilter.dat、CIDR 格式，可為 gzip 壓縮。任一取得失敗時不更新",
       "ipFilterBrowse": "選擇檔案…",
-      "ipFilterPick": "選擇 IP 過濾清單",
       "ipBanned": "手動封鎖的 IP",
       "ipBannedHint": "每行一個：單一 IP、CIDR（如 198.51.100.0/24）或範圍（如 a-b）",
       "ipFilterRules": "目前規則",
@@ -233,7 +232,18 @@
       "ipFilterCount": "{count} 條",
       "ipFilterUpdate": "更新",
       "ipFilterUpdating": "正在更新…",
-      "ipFilterUpdated": "IP 過濾已更新：{count} 條規則，下次啟動應用程式後生效"
+      "ipFilterUpdated": "IP 過濾已更新：{count} 條規則，下次啟動應用程式後生效",
+      "trackers": "附加 Tracker",
+      "trackersHint": "為公開的種子與磁力連結附加下列 Tracker，幫助找到更多節點；私有種子不受影響。之後開始的任務生效",
+      "trackersList": "Tracker 清單",
+      "trackersListHint": "每行一個，支援 http、https、udp",
+      "trackersUrl": "訂閱清單",
+      "trackersUrlHint": "每行一個網址或本機檔案，每天自動更新一次，與上面的清單合併",
+      "trackersInUse": "目前附加",
+      "trackersInUseHint": "訂閱更新於 {when}：已取得 {ready}/{sources} 個清單，共 {fetched} 個 Tracker",
+      "trackersNever": "填好訂閱清單後點「更新」，或等它自動更新",
+      "trackersCount": "{count} 個",
+      "trackersUpdated": "Tracker 訂閱已更新：共 {count} 個"
     },
     "browser": {
       "state": {

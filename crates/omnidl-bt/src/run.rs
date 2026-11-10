@@ -90,6 +90,8 @@ pub(crate) async fn run(engine: &BtEngine, job: Job) -> Outcome {
         output_folder: Some(folder.to_string_lossy().into_owned()),
         only_files: only,
         initial_peers: Some(peers),
+        // Besides the torrent's own; never for a private one (BEP 27).
+        trackers: (!meta.private).then(|| engine.extra_trackers()),
         ratelimits: LimitsConfig {
             download_bps: bps(job.options.speed_limit),
             upload_bps: None,

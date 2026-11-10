@@ -1,6 +1,7 @@
-//! IP filtering (BT settings): the block list BitTorrent reads when it starts, made from the list
-//! the user chose (a web address or a file, in any of the usual formats) and the addresses
-//! blocked by hand (`omnidl_bt::ipfilter`). Made again when the user asks ("Update"), and on
+//! IP filtering (BT settings): the block list BitTorrent reads when it starts, made from the lists
+//! the user chose (web addresses or files, in any of the usual formats) and the addresses
+//! blocked by hand (`omnidl_bt::ipfilter`). A list that cannot be fetched fails the update and
+//! the list in use stays: leaving it out would quietly block less. Made again when the user asks ("Update"), and on
 //! starting when it is on and there is none yet. Changes apply from the next start of the app.
 
 use std::{
@@ -56,14 +57,17 @@ pub async fn ip_filter_update(app: AppHandle) -> Result<IpFilterStatus> {
     let state = app.state::<AppState>();
     let e = state.settings().engine;
     let out = current(&app).ok_or_else(|| Error::internal("no data folder"))?;
-    let source = e.bt_ip_filter_list.trim().to_owned();
-    let list = if source.is_empty() {
-        None
-    } else {
-        Some(fetch(&source).await?)
-    };
+    let mut lists = Vec::new();
+    for source in e
+        .bt_ip_filter_lists
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        lists.push(fetch(source).await?);
+    }
     let n = tokio::task::spawn_blocking(move || {
-        omnidl_bt::ipfilter::write(list.as_deref(), &e.bt_banned, &out)
+        omnidl_bt::ipfilter::write(&lists, &e.bt_banned, &out)
             .map_err(|err| Error::io(&err, out.display()))
     })
     .await
@@ -72,8 +76,9 @@ pub async fn ip_filter_update(app: AppHandle) -> Result<IpFilterStatus> {
     Ok(ip_filter_status(app))
 }
 
-/// The bytes of a list: downloaded from a web address, else read from a file.
-async fn fetch(source: &str) -> Result<Vec<u8>> {
+/// The bytes of a list: downloaded from a web address, else read from a file (also the tracker
+/// list's, `trackers::update`).
+pub(crate) async fn fetch(source: &str) -> Result<Vec<u8>> {
     if source.starts_with("http://") || source.starts_with("https://") {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))

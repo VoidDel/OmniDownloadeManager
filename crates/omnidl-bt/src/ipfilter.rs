@@ -114,11 +114,11 @@ pub fn to_p2p(text: &str) -> (String, usize) {
     (out, n)
 }
 
-/// Writes the list librqbit reads (`out`): the ranges of `list` and of the addresses the user
+/// Writes the list librqbit reads (`out`): the ranges of `lists` and of the addresses the user
 /// blocked by hand. Returns how many there are.
-pub fn write(list: Option<&[u8]>, manual: &[String], out: &Path) -> std::io::Result<usize> {
+pub fn write(lists: &[Vec<u8>], manual: &[String], out: &Path) -> std::io::Result<usize> {
     let mut text = manual.join("\n");
-    if let Some(bytes) = list {
+    for bytes in lists {
         text.push('\n');
         text.push_str(&decode(bytes));
     }
@@ -178,12 +178,13 @@ not an address
         let bytes = gz.finish().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("ipfilter.p2p");
-        let n = write(Some(&bytes), &["8.8.8.8".into()], &out).unwrap();
-        assert_eq!(n, 2);
-        assert_eq!(count(&out), 2);
+        let plain = b"7.7.7.7".to_vec();
+        let n = write(&[bytes, plain], &["8.8.8.8".into()], &out).unwrap();
+        assert_eq!(n, 3);
+        assert_eq!(count(&out), 3);
         assert_eq!(
             std::fs::read_to_string(&out).unwrap(),
-            "omni:8.8.8.8-8.8.8.8\nomni:9.9.9.0-9.9.9.9\n"
+            "omni:8.8.8.8-8.8.8.8\nomni:9.9.9.0-9.9.9.9\nomni:7.7.7.7-7.7.7.7\n"
         );
     }
 }

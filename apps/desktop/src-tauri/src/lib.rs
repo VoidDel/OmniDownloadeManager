@@ -23,6 +23,7 @@ mod shortcuts;
 mod sound;
 mod state;
 mod taskbar;
+mod trackers;
 mod tray;
 mod update;
 #[cfg(windows)]
@@ -118,6 +119,7 @@ pub fn run() {
                 dht: engine_config.bt_dht,
                 upnp: engine_config.bt_upnp,
                 blocklist: engine_config.bt_ip_filter.then(|| blocklist.clone()),
+                extra_trackers: trackers::in_use(&engine_config, &data_dir),
                 ..BtConfig::new(data_dir.join("torrents"))
             }));
             let upload_limit = engine_config.upload_limit;
@@ -199,6 +201,7 @@ pub fn run() {
             float::sync(handle);
             schedule::start(handle.clone());
             ipfilter::prepare(handle);
+            trackers::start(handle.clone());
             clipboard::start(handle.clone());
             Ok(())
         })
@@ -248,6 +251,8 @@ pub fn run() {
             schedule::power_now,
             ipfilter::ip_filter_status,
             ipfilter::ip_filter_update,
+            trackers::trackers_status,
+            trackers::trackers_update,
         ])
         .on_window_event(|window, event| {
             // Closed to the notification area: the window goes (and its WebView's memory with

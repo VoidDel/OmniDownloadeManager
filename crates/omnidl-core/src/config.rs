@@ -52,11 +52,19 @@ pub struct EngineConfig {
     pub bt_dht: bool,
     /// Ask the router to forward `bt_port` (UPnP).
     pub bt_upnp: bool,
-    /// IP filtering: peers in the block list (`bt_ip_filter_list`, an address or a file, and
-    /// the addresses in `bt_banned`) are not connected to. Read when BitTorrent starts.
+    /// IP filtering: peers in the block lists (`bt_ip_filter_lists`, web addresses or files,
+    /// and the addresses in `bt_banned`) are not connected to. Read when BitTorrent starts.
     pub bt_ip_filter: bool,
-    pub bt_ip_filter_list: String,
+    /// Was a single `btIpFilterList`.
+    #[serde(alias = "btIpFilterList", deserialize_with = "one_or_many")]
+    pub bt_ip_filter_lists: Vec<String>,
     pub bt_banned: Vec<String>,
+    /// Trackers added to every torrent that is not private: `bt_trackers`, and the lists
+    /// fetched from `bt_trackers_urls` (web addresses or files, kept by the app, refreshed
+    /// daily). Used by tasks that start after a change.
+    pub bt_extra_trackers: bool,
+    pub bt_trackers: Vec<String>,
+    pub bt_trackers_urls: Vec<String>,
     /// FTP sessions per download unless the task says otherwise (servers often limit them).
     pub ftp_connections: u32,
     /// FTP active mode by default.
@@ -85,8 +93,11 @@ impl Default for EngineConfig {
             bt_dht: true,
             bt_upnp: true,
             bt_ip_filter: false,
-            bt_ip_filter_list: String::new(),
+            bt_ip_filter_lists: Vec::new(),
             bt_banned: Vec::new(),
+            bt_extra_trackers: false,
+            bt_trackers: Vec::new(),
+            bt_trackers_urls: Vec::new(),
             ftp_connections: 2,
             ftp_active: false,
         }
@@ -119,6 +130,21 @@ impl EngineConfig {
     }
 }
 
+/// A list, or the single value an older settings file has (empty: none).
+fn one_or_many<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(String),
+        Many(Vec<String>),
+    }
+    Ok(match OneOrMany::deserialize(d)? {
+        OneOrMany::One(s) if s.trim().is_empty() => Vec::new(),
+        OneOrMany::One(s) => vec![s.trim().to_owned()],
+        OneOrMany::Many(v) => v,
+    })
+}
+
 /// A desktop Chrome user agent for this platform. Some servers refuse unknown clients; a
 /// browser's string is what download managers send by default (each task can override it).
 pub fn default_user_agent() -> &'static str {
@@ -131,5 +157,21 @@ pub fn default_user_agent() -> &'static str {
     } else {
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
          Chrome/142.0.0.0 Safari/537.36"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_the_single_block_list_of_older_settings() {
+        let old: EngineConfig =
+            serde_json::from_str(r#"{"btIpFilterList": " https://a.example/list.gz "}"#).unwrap();
+        assert_eq!(old.bt_ip_filter_lists, ["https://a.example/list.gz"]);
+        let none: EngineConfig = serde_json::from_str(r#"{"btIpFilterList": ""}"#).unwrap();
+        assert!(none.bt_ip_filter_lists.is_empty());
+        let new: EngineConfig = serde_json::from_str(r#"{"btIpFilterLists": ["a", "b"]}"#).unwrap();
+        assert_eq!(new.bt_ip_filter_lists, ["a", "b"]);
     }
 }

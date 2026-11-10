@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, FloatState, Integration, PowerPending, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, UpdateInfo, UpdateProgress } from './types';
+import type { AppError, Bootstrap, FloatState, Integration, PowerPending, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, TrackersStatus, UpdateInfo, UpdateProgress } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -65,6 +65,9 @@ export const api = {
   ipFilterStatus: () => invoke<{ rules: number; updatedAt: number | null }>('ip_filter_status'),
   /** Makes the block list again from the settings (downloads it when it is a web address). */
   ipFilterUpdate: () => invoke<{ rules: number; updatedAt: number | null }>('ip_filter_update'),
+  trackersStatus: () => invoke<TrackersStatus>('trackers_status'),
+  /** Fetches the subscribed tracker list again. */
+  trackersUpdate: () => invoke<TrackersStatus>('trackers_update'),
   powerPending: () => invoke<PowerPending | null>('power_pending'),
   powerCancel: () => invoke<void>('power_cancel'),
   powerNow: () => invoke<void>('power_now'),

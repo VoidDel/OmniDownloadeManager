@@ -252,6 +252,23 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_single_ip_filter_list_of_older_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.toml");
+        std::fs::write(
+            &path,
+            "[engine]\nbtIpFilter = true\nbtIpFilterList = \"https://a.example/level1.gz\"\n",
+        )
+        .unwrap();
+        let mut s = Settings::load(&path);
+        assert!(s.engine.bt_ip_filter);
+        assert_eq!(s.engine.bt_ip_filter_lists, ["https://a.example/level1.gz"]);
+        s.engine.bt_ip_filter_lists.push("/lists/more.p2p".into());
+        s.save(&path).unwrap();
+        assert_eq!(Settings::load(&path), s);
+    }
+
+    #[test]
     fn repairs_bad_values() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.toml");

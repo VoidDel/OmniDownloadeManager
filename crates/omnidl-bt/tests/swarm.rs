@@ -388,7 +388,7 @@ async fn keeps_away_from_blocked_addresses() {
 
     // The only peer is on 127.0.0.1, which the list blocks (CIDR, as users write it).
     let list = d.state.join("ipfilter.p2p");
-    let n = omnidl_bt::ipfilter::write(None, &["127.0.0.0/8".into(), "::1".into()], &list).unwrap();
+    let n = omnidl_bt::ipfilter::write(&[], &["127.0.0.0/8".into(), "::1".into()], &list).unwrap();
     assert_eq!(n, 2);
     let mut c = BtConfig::new(&d.state);
     c.listen_port = 0;
@@ -415,6 +415,187 @@ async fn keeps_away_from_blocked_addresses() {
     tokio::time::sleep(Duration::from_secs(5)).await;
     let t = m.get(id).unwrap();
     assert_eq!(t.downloaded_bytes, 0, "nothing from a blocked address");
+    m.shutdown().await;
+    bt.stop().await;
+}
+
+/// A tracker on loopback that answers every announce with `peer` and counts them.
+struct Tracker {
+    url: String,
+    announces: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl Tracker {
+    async fn start(peer: Option<SocketAddr>) -> Self {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
+        let url = format!("http://{}/announce", listener.local_addr().unwrap());
+        let announces = Arc::new(AtomicUsize::new(0));
+        let count = announces.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut conn, _)) = listener.accept().await else {
+                    return;
+                };
+                let count = count.clone();
+                tokio::spawn(async move {
+                    let mut req = Vec::new();
+                    let mut buf = [0u8; 1024];
+                    while !req.windows(4).any(|w| w == b"\r\n\r\n") {
+                        match conn.read(&mut buf).await {
+                            Ok(0) | Err(_) => return,
+                            Ok(n) => req.extend_from_slice(&buf[..n]),
+                        }
+                    }
+                    if req.starts_with(b"GET /announce?") {
+                        count.fetch_add(1, Ordering::SeqCst);
+                    }
+                    // Compact peers: four address bytes and the port, big-endian.
+                    let mut peers = Vec::new();
+                    if let Some(SocketAddr::V4(a)) = peer {
+                        peers.extend_from_slice(&a.ip().octets());
+                        peers.extend_from_slice(&a.port().to_be_bytes());
+                    }
+                    let mut body = format!("d8:intervali60e5:peers{}:", peers.len()).into_bytes();
+                    body.extend_from_slice(&peers);
+                    body.push(b'e');
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = conn.write_all(head.as_bytes()).await;
+                    let _ = conn.write_all(&body).await;
+                    let _ = conn.shutdown().await;
+                });
+            }
+        });
+        Self { url, announces }
+    }
+
+    fn announces(&self) -> usize {
+        self.announces.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// An engine that finds peers only through the trackers of the settings.
+fn engine_with_trackers(state: &Path, trackers: Vec<String>) -> Arc<BtEngine> {
+    let mut c = BtConfig::new(state);
+    c.listen_port = 0;
+    c.dht = false;
+    c.upnp = false;
+    c.trackers = true;
+    c.local_discovery = false;
+    c.extra_trackers = trackers;
+    Arc::new(BtEngine::new(c))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn finds_peers_through_the_trackers_of_the_settings() {
+    let d = dirs();
+    let file = d.seed.join("public.bin");
+    write(&file, &content(2 * MIB, 4));
+    let seeder = Seeder::start(&file, None).await;
+    // The torrent names no tracker: the seeder is only known to the one of the settings.
+    let torrent = d.downloads.join("public.torrent");
+    write(&torrent, &seeder.torrent);
+    let tracker = Tracker::start(Some(seeder.addr())).await;
+
+    let bt = engine_with_trackers(&d.state, vec![tracker.url.clone()]);
+    let m = manager(Db::memory().await.unwrap(), bt.clone(), no_seeding()).await;
+    let source = torrent.to_string_lossy().into_owned();
+    let id = m
+        .add(vec![new_task(
+            &source,
+            &d.downloads,
+            TaskOptions::default(),
+        )])
+        .await
+        .unwrap()[0]
+        .id;
+    let t = wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    assert!(tracker.announces() > 0);
+    same(&file, &d.downloads.join(&t.file_name));
+    let detail = m.detail(id).await.unwrap().torrent.unwrap();
+    assert_eq!(detail.trackers, std::slice::from_ref(&tracker.url));
+    m.shutdown().await;
+    bt.stop().await;
+}
+
+/// `torrent` marked private (BEP 27): `private` is the last key of the info dictionary, which
+/// is the last key of a torrent without trackers.
+fn private(torrent: &[u8]) -> Vec<u8> {
+    let mut t = torrent.to_vec();
+    let at = t.len() - 2;
+    t.splice(at..at, b"7:privatei1e".iter().copied());
+    let parsed = librqbit::torrent_from_bytes(&t).expect("still a torrent");
+    assert!(parsed.info.data.private, "marked private");
+    t
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn private_torrents_keep_to_their_own_trackers() {
+    let d = dirs();
+    let file = d.seed.join("private.bin");
+    write(&file, &content(MIB, 5));
+    let seeder = Seeder::start(&file, None).await;
+    let torrent = d.downloads.join("private.torrent");
+    write(&torrent, &private(&seeder.torrent));
+    let tracker = Tracker::start(Some(seeder.addr())).await;
+
+    let bt = engine_with_trackers(&d.state, vec![tracker.url.clone()]);
+    let m = manager(Db::memory().await.unwrap(), bt.clone(), no_seeding()).await;
+    let source = torrent.to_string_lossy().into_owned();
+    let id = m
+        .add(vec![new_task(
+            &source,
+            &d.downloads,
+            TaskOptions::default(),
+        )])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(
+        tracker.announces(),
+        0,
+        "the info hash goes to no other tracker"
+    );
+    let detail = m.detail(id).await.unwrap().torrent.unwrap();
+    assert!(detail.trackers.is_empty(), "{:?}", detail.trackers);
+    m.shutdown().await;
+    bt.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn magnet_links_use_the_trackers_of_the_settings() {
+    let d = dirs();
+    let file = d.seed.join("magnet.bin");
+    write(&file, &content(MIB + 777, 6));
+    let seeder = Seeder::start(&file, None).await;
+    let tracker = Tracker::start(Some(seeder.addr())).await;
+    // No `tr` and no `x.pe`: the metadata can only come through the tracker of the settings.
+    let magnet = format!("magnet:?xt=urn:btih:{}", seeder.info_hash);
+
+    let bt = engine_with_trackers(&d.state, vec![tracker.url.clone()]);
+    let m = manager(Db::memory().await.unwrap(), bt.clone(), no_seeding()).await;
+    let probe = m.probe(&magnet, &TaskOptions::default()).await.unwrap();
+    assert_eq!(probe.total, Some(MIB as u64 + 777));
+    let id = m
+        .add(vec![new_task(
+            &magnet,
+            &d.downloads,
+            TaskOptions::default(),
+        )])
+        .await
+        .unwrap()[0]
+        .id;
+    let t = wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    same(&file, &d.downloads.join(&t.file_name));
     m.shutdown().await;
     bt.stop().await;
 }

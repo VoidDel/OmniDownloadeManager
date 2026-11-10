@@ -12,6 +12,8 @@ pub(crate) struct Meta {
     pub piece_size: u64,
     pub pieces: u32,
     pub trackers: Vec<String>,
+    /// Only the torrent's own tracker may be used (BEP 27).
+    pub private: bool,
 }
 
 impl Meta {
@@ -23,6 +25,7 @@ impl Meta {
             )
         };
         let t = torrent_from_bytes(bytes).map_err(|e| invalid(&e))?;
+        let private = t.info.data.private;
         let info = t.info.data.clone().validate().map_err(|e| invalid(&e))?;
         let files = info
             .iter_file_details()
@@ -46,6 +49,7 @@ impl Meta {
             piece_size: info.lengths().default_piece_length().into(),
             pieces: info.lengths().total_pieces(),
             trackers,
+            private,
         })
     }
 

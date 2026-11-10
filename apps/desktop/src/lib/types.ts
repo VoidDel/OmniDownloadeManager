@@ -137,6 +137,18 @@ export interface TaskDetail {
   torrent?: TorrentDetail;
 }
 
+/** Settings › BT › Extra trackers. */
+export interface TrackersStatus {
+  /** Trackers added to torrents, the user's and the subscribed ones together. */
+  count: number;
+  /** Trackers in the subscribed lists. */
+  fetched: number;
+  /** Subscribed addresses, and how many of them were fetched. */
+  sources: number;
+  ready: number;
+  updatedAt: number | null;
+}
+
 export interface TorrentDetail {
   infoHash: string;
   name: string;
@@ -213,10 +225,14 @@ export interface EngineConfig {
   btPort: number;
   btDht: boolean;
   btUpnp: boolean;
-  /** IP filtering: a block list (web address or file) and addresses blocked by hand. */
+  /** IP filtering: block lists (web addresses or files) and addresses blocked by hand. */
   btIpFilter: boolean;
-  btIpFilterList: string;
+  btIpFilterLists: string[];
   btBanned: string[];
+  /** Trackers added to torrents that are not private: the user's and subscribed lists. */
+  btExtraTrackers: boolean;
+  btTrackers: string[];
+  btTrackersUrls: string[];
   ftpConnections: number;
   ftpActive: boolean;
 }

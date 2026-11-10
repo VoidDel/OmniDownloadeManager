@@ -222,9 +222,8 @@
       "ipFilter": "IP filtering",
       "ipFilterHint": "Peers in the list are not connected to, and their connections are refused. Changes apply the next time the app starts",
       "ipFilterList": "Block list",
-      "ipFilterListHint": "A web address or a file in the P2P, eMule ipfilter.dat or CIDR format, gzip-compressed or not",
+      "ipFilterListHint": "Web addresses or files, one per line, in the P2P, eMule ipfilter.dat or CIDR format, gzip-compressed or not. Nothing changes if one of them cannot be fetched",
       "ipFilterBrowse": "Choose file…",
-      "ipFilterPick": "Choose an IP block list",
       "ipBanned": "Blocked by hand",
       "ipBannedHint": "One per line: an address, a CIDR block (198.51.100.0/24) or a range (a-b)",
       "ipFilterRules": "Rules in use",
@@ -233,7 +232,18 @@
       "ipFilterCount": "{count} ranges",
       "ipFilterUpdate": "Update",
       "ipFilterUpdating": "Updating…",
-      "ipFilterUpdated": "IP filter updated: {count} ranges, from the next start of the app"
+      "ipFilterUpdated": "IP filter updated: {count} ranges, from the next start of the app",
+      "trackers": "Extra trackers",
+      "trackersHint": "Adds the trackers below to public torrents and magnet links to find more peers; private torrents are left alone. Applies to tasks that start from then on",
+      "trackersList": "Tracker list",
+      "trackersListHint": "One per line: http, https or udp",
+      "trackersUrl": "Subscribed list",
+      "trackersUrlHint": "Web addresses or files, one per line, updated once a day and merged with the list above",
+      "trackersInUse": "Trackers added",
+      "trackersInUseHint": "Subscriptions updated {when}: {ready} of {sources} lists fetched, {fetched} trackers",
+      "trackersNever": "Choose Update after entering the subscribed lists, or wait for them to update",
+      "trackersCount": "{count}",
+      "trackersUpdated": "Tracker subscriptions updated: {count} trackers"
     },
     "browser": {
       "state": {

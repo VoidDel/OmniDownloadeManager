@@ -222,9 +222,8 @@
       "ipFilter": "IP 过滤",
       "ipFilterHint": "不与列表中的 IP 连接，也拒绝它们连入。改动在下次启动应用后生效",
       "ipFilterList": "过滤列表",
-      "ipFilterListHint": "网址或本地文件；支持 P2P、eMule ipfilter.dat、CIDR 格式，可以是 gzip 压缩",
+      "ipFilterListHint": "每行一个网址或本地文件；支持 P2P、eMule ipfilter.dat、CIDR 格式，可以是 gzip 压缩。任何一个获取失败时不更新",
       "ipFilterBrowse": "选择文件…",
-      "ipFilterPick": "选择 IP 过滤列表",
       "ipBanned": "手动屏蔽的 IP",
       "ipBannedHint": "每行一个：单个 IP、CIDR（如 198.51.100.0/24）或范围（如 a-b）",
       "ipFilterRules": "当前规则",
@@ -233,7 +232,18 @@
       "ipFilterCount": "{count} 条",
       "ipFilterUpdate": "更新",
       "ipFilterUpdating": "正在更新…",
-      "ipFilterUpdated": "IP 过滤已更新：{count} 条规则，下次启动应用后生效"
+      "ipFilterUpdated": "IP 过滤已更新：{count} 条规则，下次启动应用后生效",
+      "trackers": "附加 Tracker",
+      "trackersHint": "给公开的种子和磁力链接附加下面的 Tracker，帮助找到更多节点；私有种子不受影响。之后开始的任务生效",
+      "trackersList": "Tracker 列表",
+      "trackersListHint": "每行一个，支持 http、https、udp",
+      "trackersUrl": "订阅列表",
+      "trackersUrlHint": "每行一个网址或本地文件，每天自动更新一次，与上面的列表合并",
+      "trackersInUse": "当前附加",
+      "trackersInUseHint": "订阅更新于 {when}：已获取 {ready}/{sources} 个列表，共 {fetched} 个 Tracker",
+      "trackersNever": "填好订阅列表后点“更新”，或等它自动更新",
+      "trackersCount": "{count} 个",
+      "trackersUpdated": "Tracker 订阅已更新：共 {count} 个"
     },
     "browser": {
       "state": {

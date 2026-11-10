@@ -1,5 +1,6 @@
 // Settings › BT (docs/development-plan.md §4.4, §6.3): seeding policy, upload limit, the
-// network the BitTorrent engine uses, IP filtering, and whether this app opens magnet links.
+// network the BitTorrent engine uses, extra trackers, IP filtering, and whether this app opens
+// magnet links.
 
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -9,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
-import type { MagnetHandler, Settings } from '../../lib/types';
+import type { MagnetHandler, Settings, TrackersStatus } from '../../lib/types';
 import { useApp } from '../../store/app';
 
 function Row({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children?: ReactNode }) {
@@ -140,6 +141,7 @@ export function TorrentSettings({ s, set }: { s: Settings; set: (f: (s: Settings
           <Switch label={t('settings.torrent.upnp')} checked={e.btUpnp} onChange={(v) => set((x) => (x.engine.btUpnp = v))} />
         </Row>
       </div>
+      <Trackers s={s} />
       <IpFilter s={s} set={set} />
       <div className="set-group">
         <MagnetRow />
@@ -161,8 +163,69 @@ function useDraft(value: string, save: (v: string) => void) {
   };
 }
 
-/** IP filtering: on/off, the list (web address or file), the addresses blocked by hand, and how
- *  many ranges the list in use has. Read when BitTorrent starts (the next start of the app). */
+/** Lines of a text box, trimmed, without empty ones. */
+const lines = (v: string) =>
+  v
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+/** Subscribed lists: web addresses or files, one per line; “Choose file…” adds a line. */
+function Sources({
+  label,
+  hint,
+  placeholder,
+  value,
+  disabled,
+  filter,
+  onSave,
+}: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  value: string[];
+  disabled: boolean;
+  filter: { name: string; extensions: string[] };
+  onSave: (v: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const text = useDraft(value.join('\n'), (v) => onSave(lines(v)));
+  const pick = async () => {
+    const f = await open({ title: label, multiple: true, filters: [filter] }).catch(() => null);
+    const picked = (Array.isArray(f) ? f : f ? [f] : []).filter((p) => !value.includes(p));
+    if (picked.length) onSave([...value, ...picked]);
+  };
+  return (
+    <div className="set-row col">
+      <div className="lab">
+        <span>{label}</span>
+        <small>{hint}</small>
+      </div>
+      <div className="ctl">
+        <div className="inline top">
+          <textarea
+            className="inp mono set-lines grow"
+            rows={Math.min(Math.max(value.length, 2), 6)}
+            aria-label={label}
+            placeholder={placeholder}
+            spellCheck={false}
+            wrap="off"
+            disabled={disabled}
+            value={text.value}
+            onChange={(ev) => text.onChange(ev.target.value)}
+            onBlur={text.onBlur}
+          />
+          <button type="button" className="btn outline" disabled={disabled || !isTauri()} onClick={() => void pick()}>
+            {t('settings.torrent.ipFilterBrowse')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** IP filtering: on/off, the lists (web addresses or files), the addresses blocked by hand, and
+ *  how many ranges the list in use has. Read when BitTorrent starts (the next start of the app). */
 function IpFilter({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => void }) {
   const { t } = useTranslation();
   const run = useApp((st) => st.run);
@@ -173,16 +236,7 @@ function IpFilter({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => 
   useEffect(() => {
     if (isTauri()) void api.ipFilterStatus().then(setStatus);
   }, []);
-  const list = useDraft(e.btIpFilterList, (v) => set((x) => (x.engine.btIpFilterList = v.trim())));
-  const banned = useDraft(e.btBanned.join('\n'), (v) =>
-    set(
-      (x) =>
-        (x.engine.btBanned = v
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean)),
-    ),
-  );
+  const banned = useDraft(e.btBanned.join('\n'), (v) => set((x) => (x.engine.btBanned = lines(v))));
   const update = async () => {
     setBusy(true);
     const got = await run(() => api.ipFilterUpdate());
@@ -192,38 +246,20 @@ function IpFilter({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => 
       toast('success', t('settings.torrent.ipFilterUpdated', { count: got.rules }));
     }
   };
-  const pick = async () => {
-    const f = await open({ title: t('settings.torrent.ipFilterPick'), filters: [{ name: 'IP filter', extensions: ['p2p', 'dat', 'txt', 'gz', 'cidr'] }] }).catch(() => null);
-    if (typeof f === 'string') set((x) => (x.engine.btIpFilterList = f));
-  };
   return (
     <div className="set-group">
       <Row label={t('settings.torrent.ipFilter')} hint={t('settings.torrent.ipFilterHint')}>
         <Switch label={t('settings.torrent.ipFilter')} checked={e.btIpFilter} onChange={(v) => set((x) => (x.engine.btIpFilter = v))} />
       </Row>
-      <div className="set-row col">
-        <div className="lab">
-          <span>{t('settings.torrent.ipFilterList')}</span>
-          <small>{t('settings.torrent.ipFilterListHint')}</small>
-        </div>
-        <div className="ctl">
-          <div className="inline">
-            <input
-              className="inp mono grow"
-              aria-label={t('settings.torrent.ipFilterList')}
-              placeholder="https://… / C:\…\ipfilter.dat"
-              spellCheck={false}
-              disabled={!e.btIpFilter}
-              value={list.value}
-              onChange={(ev) => list.onChange(ev.target.value)}
-              onBlur={list.onBlur}
-            />
-            <button type="button" className="btn outline" disabled={!e.btIpFilter || !isTauri()} onClick={() => void pick()}>
-              {t('settings.torrent.ipFilterBrowse')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <Sources
+        label={t('settings.torrent.ipFilterList')}
+        hint={t('settings.torrent.ipFilterListHint')}
+        placeholder={'https://…/level1.gz\nC:\\…\\ipfilter.dat'}
+        value={e.btIpFilterLists}
+        disabled={!e.btIpFilter}
+        filter={{ name: 'IP filter', extensions: ['p2p', 'dat', 'txt', 'gz', 'cidr'] }}
+        onSave={(v) => set((x) => (x.engine.btIpFilterLists = v))}
+      />
       <div className="set-row col">
         <div className="lab">
           <span>{t('settings.torrent.ipBanned')}</span>
@@ -249,6 +285,86 @@ function IpFilter({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => 
       >
         <span className="muted num">{t('settings.torrent.ipFilterCount', { count: status?.rules ?? 0 })}</span>
         <button type="button" className="btn outline" disabled={!e.btIpFilter || busy || !isTauri()} onClick={() => void update()}>
+          {busy ? t('settings.torrent.ipFilterUpdating') : t('settings.torrent.ipFilterUpdate')}
+        </button>
+      </Row>
+    </div>
+  );
+}
+
+/** Extra trackers: on/off, the user's list, subscribed lists (web addresses or files, fetched
+ *  daily), and how many are added. Tasks that start after a change use them. */
+function Trackers({ s }: { s: Settings }) {
+  const { t } = useTranslation();
+  const run = useApp((st) => st.run);
+  const toast = useApp((st) => st.toast);
+  const save = useApp((st) => st.saveSettings);
+  const e = s.engine;
+  const [status, setStatus] = useState<TrackersStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const refresh = () => {
+    if (isTauri()) void api.trackersStatus().then(setStatus, () => undefined);
+  };
+  useEffect(refresh, []);
+  /** Saves, then reads the count again (it follows the saved settings). */
+  const change = (f: (x: Settings) => void) => void save(f).then(refresh);
+  const list = useDraft(e.btTrackers.join('\n'), (v) => change((x) => (x.engine.btTrackers = lines(v))));
+  const update = async () => {
+    setBusy(true);
+    const got = await run(() => api.trackersUpdate());
+    setBusy(false);
+    if (got) {
+      setStatus(got);
+      toast('success', t('settings.torrent.trackersUpdated', { count: got.fetched }));
+    } else refresh(); // Lists that could be fetched were updated all the same.
+  };
+  const off = !e.btExtraTrackers;
+  return (
+    <div className="set-group">
+      <Row label={t('settings.torrent.trackers')} hint={t('settings.torrent.trackersHint')}>
+        <Switch label={t('settings.torrent.trackers')} checked={e.btExtraTrackers} onChange={(v) => change((x) => (x.engine.btExtraTrackers = v))} />
+      </Row>
+      <div className="set-row col">
+        <div className="lab">
+          <span>{t('settings.torrent.trackersList')}</span>
+          <small>{t('settings.torrent.trackersListHint')}</small>
+        </div>
+        <div className="ctl">
+          <textarea
+            className="inp mono set-lines"
+            rows={4}
+            aria-label={t('settings.torrent.trackersList')}
+            placeholder={'udp://tracker.example.org:1337/announce\nhttps://tracker.example.net/announce'}
+            spellCheck={false}
+            wrap="off"
+            disabled={off}
+            value={list.value}
+            onChange={(ev) => list.onChange(ev.target.value)}
+            onBlur={list.onBlur}
+          />
+        </div>
+      </div>
+      <Sources
+        label={t('settings.torrent.trackersUrl')}
+        hint={t('settings.torrent.trackersUrlHint')}
+        placeholder={'https://…/trackers_best.txt\nhttps://…/trackers_all_udp.txt'}
+        value={e.btTrackersUrls}
+        disabled={off}
+        filter={{ name: 'Trackers', extensions: ['txt', 'list'] }}
+        onSave={(v) => change((x) => (x.engine.btTrackersUrls = v))}
+      />
+      <Row
+        label={t('settings.torrent.trackersInUse')}
+        hint={
+          !e.btTrackersUrls.length
+            ? undefined
+            : status?.updatedAt
+              ? t('settings.torrent.trackersInUseHint', { when: fmt.when(status.updatedAt), ready: status.ready, sources: status.sources, fetched: status.fetched })
+              : t('settings.torrent.trackersNever')
+        }
+      >
+        <span className="muted num">{t('settings.torrent.trackersCount', { count: off ? 0 : (status?.count ?? 0) })}</span>
+        <button type="button" className="btn outline" disabled={off || busy || !e.btTrackersUrls.length || !isTauri()} onClick={() => void update()}>
           {busy ? t('settings.torrent.ipFilterUpdating') : t('settings.torrent.ipFilterUpdate')}
         </button>
       </Row>

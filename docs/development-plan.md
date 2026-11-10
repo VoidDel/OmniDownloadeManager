@@ -434,7 +434,7 @@ ManagedTorrentHandle → 定时 (500 ms) 读取 handle.stats() 映射到 Task �
 | 限速 | 会话级 `ratelimits`，任务级通过 `LimitsConfig` | UI 全局 + 单任务 |
 | DHT / PEX | 内置 | 设置页开关 |
 | UPnP | `enable_upnp_port_forwarding` | 设置页开关，显示映射状态 |
-| 公共 Tracker | 添加时合并用户配置列表 | 内置可编辑默认列表（可自动从 URL 更新） |
+| 公共 Tracker | 按任务 `AddTorrentOptions::trackers`（不用会话级 `trackers`，见 Phase 6） | 用户列表 + 多个订阅（网址或文件，每天自动更新），私有种子不附加 |
 | 顺序下载 / 流式 | librqbit 支持 HTTP 流 | v2：边下边播（调用系统播放器） |
 | IP 过滤 | 需适配 | v2 |
 
@@ -1116,7 +1116,8 @@ OmniDownloadManager/
 - [x] FTP 目录下载：以 `/` 结尾的 FTP 链接为文件夹，探测时递归列出文件（MLSD，不支持时 LIST；跳过符号链接，深度 16、最多 5000 个），新建下载按种子的方式勾选；添加时每个文件一个任务，保存到 文件夹名/子文件夹 下。
 - [x] HLS（m3u8）下载：HTTP 引擎识别 `.m3u8` 或播放列表 Content-Type；主播放列表取最高带宽；分段按序并发下载（最多 8 个），AES-128-CBC 解密，支持 BYTERANGE 与 fMP4（EXT-X-MAP）；合并为 .ts / .mp4；分段表记录已写分段以续传；直播流拒绝。
 - [x] 媒体嗅探：扩展用 webRequest（只读响应头）按 Content-Type / 扩展名识别视频、音频、HLS 播放列表，排除分段（.ts / .m4s / DASH）与小于 512 KB 的文件；按标签页存于 storage.session（换页、关页清除），工具栏角标显示数量，弹出面板列出并可交给应用（HLS 以页面标题命名）。
-- [x] IP 过滤：omnidl-bt 的 ipfilter 把 P2P、eMule DAT（级别 < 128 屏蔽）、CIDR、范围与单个 IP（IPv4/IPv6，可 gzip）转成 librqbit 的 P2P 列表；设置 › BT 选择列表（网址或文件）与手动屏蔽，“更新”时合并写入，BT 会话启动时读取（重启生效）。
+- [x] IP 过滤：omnidl-bt 的 ipfilter 把 P2P、eMule DAT（级别 < 128 屏蔽）、CIDR、范围与单个 IP（IPv4/IPv6，可 gzip）转成 librqbit 的 P2P 列表；设置 › BT 填写多个列表（网址或文件，每行一个）与手动屏蔽，“更新”时全部获取后合并写入（任何一个失败则不更新，保留原列表），BT 会话启动时读取（重启生效）。旧设置中的单个 `btIpFilterList` 读作一项。
+- [x] 附加 Tracker：设置 › BT 的 Tracker 列表与多个订阅（网址或文件，每行一个，每天自动更新一次；存于 `torrents/trackers.txt`，每个订阅一段、以 `# <地址>` 开头，删掉的订阅不再使用；某个订阅获取失败时保留它上次的结果，其余照常更新），合并后附加到非私有种子（下载时按任务传入，之后开始的任务生效，无需重启）；磁力链接取元数据时以 `tr=` 参数附加（此时还不知是否私有，与 qBittorrent 相同）。不用 librqbit 会话级 `trackers`：9.1.0 只在私有种子自带多于一个 Tracker 时才排除它们，单 Tracker 的私有种子会泄露到公共 Tracker。集成测试用本机假 Tracker 覆盖种子、磁力与私有种子三种情况。
 
 
 

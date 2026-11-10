@@ -127,6 +127,7 @@ pub async fn save_settings(app: &AppHandle, settings: Settings) -> Result<Settin
         .set_upload_limit(settings.engine.upload_limit)
         .await;
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
+    crate::trackers::changed(app);
     let a = (&settings.appearance, &before.appearance);
     if a.0.material != a.1.material || a.0.material_kind != a.1.material_kind {
         crate::material::apply(app, &settings);

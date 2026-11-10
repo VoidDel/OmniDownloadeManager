@@ -222,9 +222,8 @@
       "ipFilter": "IP フィルター",
       "ipFilterHint": "リストにある IP とは接続せず、接続も拒否します。変更は次にアプリを起動したときに反映されます",
       "ipFilterList": "フィルターリスト",
-      "ipFilterListHint": "URL またはローカルファイル。P2P、eMule ipfilter.dat、CIDR 形式に対応（gzip 圧縮も可）",
+      "ipFilterListHint": "1 行に 1 つ、URL またはローカルファイル。P2P、eMule ipfilter.dat、CIDR 形式に対応（gzip 圧縮も可）。どれか 1 つでも取得できないときは更新しません",
       "ipFilterBrowse": "ファイルを選択…",
-      "ipFilterPick": "IP フィルターリストを選択",
       "ipBanned": "手動でブロックする IP",
       "ipBannedHint": "1 行に 1 つ：IP、CIDR（198.51.100.0/24 など）、範囲（a-b）",
       "ipFilterRules": "現在のルール",
@@ -233,7 +232,18 @@
       "ipFilterCount": "{count} 件",
       "ipFilterUpdate": "更新",
       "ipFilterUpdating": "更新中…",
-      "ipFilterUpdated": "IP フィルターを更新しました：{count} 件のルール（次の起動時に反映）"
+      "ipFilterUpdated": "IP フィルターを更新しました：{count} 件のルール（次の起動時に反映）",
+      "trackers": "トラッカーを追加",
+      "trackersHint": "公開トレントとマグネットリンクに下のトラッカーを追加し、より多くのピアを探します。プライベートトレントには追加しません。以降に開始するタスクに反映",
+      "trackersList": "トラッカーリスト",
+      "trackersListHint": "1 行に 1 つ：http、https、udp に対応",
+      "trackersUrl": "購読リスト",
+      "trackersUrlHint": "1 行に 1 つ、URL またはローカルファイル。1 日 1 回自動更新し、上のリストと結合します",
+      "trackersInUse": "追加するトラッカー",
+      "trackersInUseHint": "購読は {when} に更新：{sources} 個中 {ready} 個のリストを取得、トラッカー {fetched} 個",
+      "trackersNever": "購読リストを入力したら「更新」を押すか、自動更新を待ってください",
+      "trackersCount": "{count} 個",
+      "trackersUpdated": "トラッカーの購読を更新しました：{count} 個"
     },
     "browser": {
       "state": {

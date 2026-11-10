@@ -11,6 +11,7 @@
 pub mod ipfilter;
 mod meta;
 mod run;
+pub mod trackers;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -56,6 +57,9 @@ pub struct BtConfig {
     /// A block list in the P2P format (`ipfilter::write`): peers in it are not connected to.
     /// Read when the session starts.
     pub blocklist: Option<PathBuf>,
+    /// Trackers announced to for every torrent that is not private, besides its own
+    /// (`trackers::parse` addresses); [`BtEngine::set_extra_trackers`] changes them.
+    pub extra_trackers: Vec<String>,
 }
 
 impl BtConfig {
@@ -69,6 +73,7 @@ impl BtConfig {
             local_discovery: true,
             extra_peers: Vec::new(),
             blocklist: None,
+            extra_trackers: Vec::new(),
         }
     }
 }
@@ -90,11 +95,15 @@ pub struct BtEngine {
     probed: Mutex<HashMap<String, Fetched>>,
     /// Bytes per second for all torrents together.
     upload_limit: Mutex<Option<u64>>,
+    /// Added to each torrent that is not private (not the session's `trackers`: librqbit
+    /// gives those to private torrents with a single tracker too).
+    extra_trackers: Mutex<Vec<String>>,
 }
 
 impl BtEngine {
     pub fn new(config: BtConfig) -> Self {
         Self {
+            extra_trackers: Mutex::new(trackers::merge([config.extra_trackers.as_slice()])),
             config,
             session: tokio::sync::Mutex::new(None),
             running: Mutex::new(HashMap::new()),
@@ -109,6 +118,21 @@ impl BtEngine {
         *self.upload_limit.lock() = limit;
         if let Some(s) = &*self.session.lock().await {
             s.ratelimits.set_upload_bps(bps(limit));
+        }
+    }
+
+    /// The trackers added to torrents that are not private; tasks that start from now on use
+    /// them (running ones keep theirs).
+    pub fn set_extra_trackers(&self, list: &[String]) {
+        *self.extra_trackers.lock() = trackers::merge([list]);
+    }
+
+    /// The trackers added to torrents that are not private (none when trackers are off).
+    fn extra_trackers(&self) -> Vec<String> {
+        if self.config.trackers {
+            self.extra_trackers.lock().clone()
+        } else {
+            Vec::new()
         }
     }
 
@@ -231,9 +255,11 @@ impl BtEngine {
                 if let Some(f) = self.probed.lock().get(info_hash).cloned() {
                     return Ok(f);
                 }
-                url
+                // librqbit takes no extra trackers for a magnet link but those in it. Whether
+                // the torrent is private is not known yet (qBittorrent adds them too).
+                with_trackers(url, &self.extra_trackers())
             }
-            Source::Url(url) => url,
+            Source::Url(url) => url.clone(),
         };
         let options = AddTorrentOptions {
             list_only: true,
@@ -359,6 +385,14 @@ impl DownloadEngine for BtEngine {
                 }
             }
         }
+        // Those of the settings are added when the task starts, except to private torrents.
+        if !meta.private {
+            for t in self.extra_trackers() {
+                if !d.trackers.contains(&t) {
+                    d.trackers.push(t);
+                }
+            }
+        }
         Some(d)
     }
 
@@ -440,4 +474,54 @@ fn bps(limit: Option<u64>) -> Option<NonZeroU32> {
 /// A `librqbit` error.
 fn failure(e: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Network, format!("{e:#}"))
+}
+
+/// `magnet` with `trackers` added as `tr` parameters (those it does not name already).
+fn with_trackers(magnet: &str, trackers: &[String]) -> String {
+    let have = Magnet::parse(magnet)
+        .map(|m| m.trackers)
+        .unwrap_or_default();
+    let mut out = magnet.trim().to_owned();
+    for t in trackers {
+        if have
+            .iter()
+            .any(|h| url::Url::parse(h).is_ok_and(|h| h.as_str() == t))
+        {
+            continue;
+        }
+        out.push(if out.contains('?') { '&' } else { '?' });
+        out.push_str("tr=");
+        out.extend(url::form_urlencoded::byte_serialize(t.as_bytes()));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_trackers;
+
+    #[test]
+    fn adds_trackers_to_magnet_links() {
+        let m = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&tr=udp%3A%2F%2Fa.example%3A1%2Fannounce";
+        let got = with_trackers(
+            m,
+            &[
+                "udp://a.example:1/announce".into(),
+                "http://b.example/announce?k=1".into(),
+            ],
+        );
+        assert_eq!(
+            got,
+            format!("{m}&tr=http%3A%2F%2Fb.example%2Fannounce%3Fk%3D1")
+        );
+        let parsed = librqbit::Magnet::parse(&got).unwrap();
+        assert_eq!(
+            parsed.trackers,
+            [
+                "udp://a.example:1/announce",
+                "http://b.example/announce?k=1"
+            ]
+        );
+        assert_eq!(with_trackers(m, &[]), m);
+    }
 }
