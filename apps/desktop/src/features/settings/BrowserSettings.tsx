@@ -26,15 +26,21 @@ function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNod
 }
 
 /** A browser's state for people: [class, text]. Also in the first-run guide. */
-export function browserState(b: BrowserState, seen?: number): [string, string] {
-  if (b.ours) return ['ok', seen ? i18n.t('settings.browser.state.connected', { when: fmt.when(seen) }) : i18n.t('settings.browser.state.ready')];
-  if (b.registered) return ['warn', i18n.t('settings.browser.state.otherInstall')];
-  if (b.detected) return ['warn', i18n.t('settings.browser.state.unregistered')];
-  return ['off', i18n.t('settings.browser.state.notInstalled')];
+/** A browser's row: whether it is installed, registered for this installation, and whether its
+ *  extension has been in touch (`seen` in this run, `before` in any). The app registers every
+ *  browser, installed or not, so that one installed later works at once: registration alone
+ *  says nothing about the browser or the extension. */
+export function browserState(b: BrowserState, seen?: number, before?: number): [string, string] {
+  if (b.ours && seen) return ['ok', i18n.t('settings.browser.state.connected', { when: fmt.when(seen) })];
+  if (!b.detected && !before) return ['off', i18n.t('settings.browser.state.notInstalled')];
+  if (b.registered && !b.ours) return ['warn', i18n.t('settings.browser.state.otherInstall')];
+  if (!b.registered) return ['warn', i18n.t('settings.browser.state.unregistered')];
+  if (before) return ['ok', i18n.t('settings.browser.state.lastConnected', { when: fmt.when(before) })];
+  return ['off', i18n.t('settings.browser.state.waiting')];
 }
 
-function BrowserRow({ b, seen }: { b: BrowserState; seen?: number }) {
-  const state = browserState(b, seen);
+function BrowserRow({ b, seen, before }: { b: BrowserState; seen?: number; before?: number }) {
+  const state = browserState(b, seen, before);
   return (
     <Row label={b.name}>
       <span className={`bstate ${state[0]}`}>
@@ -62,6 +68,7 @@ export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings
   }, []);
 
   const seen = new Map(info?.seen ?? []);
+  const before = new Map(info?.seenBefore ?? []);
   const b = s.browser;
   return (
     <>
@@ -76,7 +83,7 @@ export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings
             {t('settings.browser.repair')}
           </button>
         </Row>
-        {info?.browsers.map((br) => <BrowserRow key={br.id} b={br} seen={seen.get(br.id)} />)}
+        {info?.browsers.map((br) => <BrowserRow key={br.id} b={br} seen={seen.get(br.id)} before={before.get(br.id)} />)}
         {info && !info.bridgeOk && (
           <Row label={t('settings.browser.bridge')} hint={t('settings.browser.bridgeBusy')}>
             <span className="bstate warn">

@@ -131,6 +131,9 @@
   "checkNoHost": {
     "message": "Omni Download のブラウザー通信プログラムが見つかりません。Omni Download をインストールして一度起動してください。"
   },
+  "checkForbidden": {
+    "message": "Omni Download がこの拡張機能を受け付けません。ID が許可リストにありません。ブラウザーの拡張機能ストアからインストールするか、Omni Download を最新版に更新してください。"
+  },
   "checkNotRunning": {
     "message": "Omni Download は起動していません。"
   },
@@ -196,6 +199,12 @@
   },
   "downNoHostHint": {
     "message": "Omni Download をインストールして一度起動してください。インストール済みの場合は、「設定 › ブラウザー」で「通信設定を書き込み直す」を選んでください。"
+  },
+  "downForbidden": {
+    "message": "Omni Download がこの拡張機能を受け付けません"
+  },
+  "downForbiddenHint": {
+    "message": "この拡張機能の ID が Omni Download の許可リストにありません。ブラウザーの拡張機能ストアからインストールするか、Omni Download を最新版に更新してください。"
   },
   "downUnpaired": {
     "message": "代替チャネルがペアリングされていません"

@@ -102,6 +102,8 @@ pub struct Integration {
     browsers: Vec<integration::BrowserState>,
     /// Extensions heard from since the app started: browser and Unix milliseconds.
     seen: Vec<(String, i64)>,
+    /// The same, remembered across runs.
+    seen_before: Vec<(String, i64)>,
     http_running: bool,
     pairing_code: Option<String>,
     settings: Settings,
@@ -121,6 +123,7 @@ fn integration_of(state: &AppState) -> Integration {
         bridge_ok: state.bridge_ok.load(std::sync::atomic::Ordering::SeqCst),
         browsers: integration::status(host.as_deref(), &state.nm_dir),
         seen: state.seen_browsers(),
+        seen_before: state.seen_before(),
         http_running: http_port.is_some(),
         pairing_code: http_port.map(|p| http::pairing_code(p, &settings.browser.http_token)),
         settings,

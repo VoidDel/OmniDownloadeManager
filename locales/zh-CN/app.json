@@ -203,7 +203,8 @@
     "browser": {
       "state": {
         "connected": "已连接 · {when}",
-        "ready": "已就绪",
+        "lastConnected": "上次连接 · {when}",
+        "waiting": "等待扩展连接",
         "otherInstall": "指向另一个安装",
         "unregistered": "未注册",
         "notInstalled": "未安装"

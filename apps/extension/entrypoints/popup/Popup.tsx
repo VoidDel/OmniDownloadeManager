@@ -17,6 +17,7 @@ type State = { kind: 'loading' } | { kind: 'ok'; status: Status } | { kind: 'dow
 const DOWN: Record<Unreachable, string> = {
   not_running: 'downNotRunning',
   no_host: 'downNoHost',
+  forbidden: 'downForbidden',
   unpaired: 'downUnpaired',
   error: 'downError',
 };

@@ -14,6 +14,7 @@ import { Icon, Logo, type IconName } from '../../components/Icon';
 import { ContextMenu, ProgressBar, type MenuItem } from '../../components/ui';
 import i18n from '../../i18n';
 import { api } from '../../lib/api';
+import { CATEGORY_ICON } from '../../lib/category';
 import * as fmt from '../../lib/format';
 import { hasLink } from '../../lib/links';
 import { isDark } from '../../lib/theme';
@@ -34,16 +35,6 @@ export const FILTERS: readonly { id: Filter; icon: IconName }[] = [
 /** Categories always listed; the others appear once something is in them. */
 const MAIN_CATEGORIES: Category[] = ['video', 'audio', 'document', 'archive', 'program', 'disk_image'];
 const MORE_CATEGORIES: Category[] = ['image', 'other'];
-const CATEGORY_ICON: Record<Category, IconName> = {
-  video: 'fileVideo',
-  audio: 'fileAudio',
-  document: 'fileText',
-  archive: 'archive',
-  program: 'package',
-  disk_image: 'disc',
-  image: 'fileImage',
-  other: 'file',
-};
 
 /** The settings sections: id, translation key of the label, icon. For labels use
  *  `settingsTabs()` or `settingsTabLabel(id)`. */

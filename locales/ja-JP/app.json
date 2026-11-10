@@ -203,7 +203,8 @@
     "browser": {
       "state": {
         "connected": "接続済み · {when}",
-        "ready": "準備完了",
+        "lastConnected": "前回の接続 · {when}",
+        "waiting": "拡張機能の接続待ち",
         "otherInstall": "別のインストールを指しています",
         "unregistered": "未登録",
         "notInstalled": "未インストール"

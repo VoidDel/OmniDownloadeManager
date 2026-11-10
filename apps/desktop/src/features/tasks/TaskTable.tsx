@@ -111,7 +111,7 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
       style={{ transform: `translateY(${start}px)`, gridTemplateColumns: cols }}
     >
       <span className="nm" role="gridcell">
-        <FileIcon name={t.fileName} isDir={false} />
+        <FileIcon category={t.category} />
         <span className="nm-txt">
           {/* Cut short, the name keeps its extension: `ubuntu-24.04….iso`. */}
           <span className="nm-line" title={t.fileName}>

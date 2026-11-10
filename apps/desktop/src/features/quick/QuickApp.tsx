@@ -145,7 +145,7 @@ export function QuickApp() {
       <div className="q-body">
         <label htmlFor="qa-name">{t('quick.fileName')}</label>
         <div className="q-name">
-          <FileIcon name={name || 'file'} isDir={false} />
+          <FileIcon name={name} />
           <input
             id="qa-name"
             className="inp"

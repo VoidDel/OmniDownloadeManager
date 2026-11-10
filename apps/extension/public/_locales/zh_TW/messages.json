@@ -131,6 +131,9 @@
   "checkNoHost": {
     "message": "找不到 Omni Download 的瀏覽器通訊程式。請安裝並執行一次 Omni Download。"
   },
+  "checkForbidden": {
+    "message": "Omni Download 不接受這個擴充功能：它的 ID 不在許可清單裡。請從瀏覽器的擴充功能商店安裝，或把 Omni Download 更新到最新版本。"
+  },
   "checkNotRunning": {
     "message": "Omni Download 沒有執行。"
   },
@@ -196,6 +199,12 @@
   },
   "downNoHostHint": {
     "message": "請安裝並執行一次 Omni Download；已安裝時，在它的「設定 › 瀏覽器」中點「重新寫入通訊設定」。"
+  },
+  "downForbidden": {
+    "message": "Omni Download 不接受這個擴充功能"
+  },
+  "downForbiddenHint": {
+    "message": "這個擴充功能的 ID 不在 Omni Download 的許可清單裡。請從瀏覽器的擴充功能商店安裝，或把 Omni Download 更新到最新版本。"
   },
   "downUnpaired": {
     "message": "備用通道未配對"

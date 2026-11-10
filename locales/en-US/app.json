@@ -203,7 +203,8 @@
     "browser": {
       "state": {
         "connected": "Connected · {when}",
-        "ready": "Ready",
+        "lastConnected": "Last connected · {when}",
+        "waiting": "Waiting for the extension",
         "otherInstall": "Points to another installation",
         "unregistered": "Not registered",
         "notInstalled": "Not installed"

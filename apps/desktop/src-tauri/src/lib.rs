@@ -144,6 +144,8 @@ pub fn run() {
                 quick: Default::default(),
                 quick_seq: Default::default(),
                 seen: Default::default(),
+                seen_before: Mutex::new(AppState::load_seen(&data_dir.join("browsers-seen.json"))),
+                seen_path: data_dir.join("browsers-seen.json"),
                 page_ready: Default::default(),
                 links: Mutex::new(opened),
                 prefill: Default::default(),

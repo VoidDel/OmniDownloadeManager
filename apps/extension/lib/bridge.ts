@@ -6,7 +6,9 @@ import { HOST_NAME, type Request, type RequestBody, type Response } from './prot
 import { load } from './settings';
 
 /** Why the app could not be reached. */
-export type Unreachable = 'no_host' | 'not_running' | 'unpaired' | 'error';
+/** `forbidden`: the app is installed, but its registration does not list this extension's ID
+ *  (an extension loaded from a folder gets an ID of its own; see docs/extension-publishing.md). */
+export type Unreachable = 'no_host' | 'forbidden' | 'not_running' | 'unpaired' | 'error';
 
 export class BridgeError extends Error {
   constructor(
@@ -78,6 +80,7 @@ export async function send<T = unknown>(body: RequestBody): Promise<Response<T>>
       throw new BridgeError('not_running', `${nativeError ? `${nativeError}; ` : ''}HTTP: ${String((e as Error)?.message ?? e)}`);
     }
   }
-  const noHost = /not found|not exist|no such native application|access to the specified native messaging host is forbidden/i.test(nativeError);
-  throw new BridgeError(noHost ? 'no_host' : transport === 'http' ? 'unpaired' : 'error', nativeError || 'not paired');
+  const forbidden = /forbidden/i.test(nativeError);
+  const noHost = /not found|not exist|no such native application/i.test(nativeError);
+  throw new BridgeError(forbidden ? 'forbidden' : noHost ? 'no_host' : transport === 'http' ? 'unpaired' : 'error', nativeError || 'not paired');
 }

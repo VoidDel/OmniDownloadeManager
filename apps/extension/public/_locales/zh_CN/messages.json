@@ -131,6 +131,9 @@
   "checkNoHost": {
     "message": "没有找到 Omni Download 的浏览器通信程序。请安装并运行一次 Omni Download。"
   },
+  "checkForbidden": {
+    "message": "Omni Download 不接受这个扩展：它的 ID 不在许可列表里。请从浏览器的扩展商店安装扩展，或把 Omni Download 更新到最新版本。"
+  },
   "checkNotRunning": {
     "message": "Omni Download 没有运行。"
   },
@@ -196,6 +199,12 @@
   },
   "downNoHostHint": {
     "message": "请安装并运行一次 Omni Download；已安装时，在它的“设置 › 浏览器”中点“重新写入通信配置”。"
+  },
+  "downForbidden": {
+    "message": "Omni Download 不接受这个扩展"
+  },
+  "downForbiddenHint": {
+    "message": "这个扩展的 ID 不在 Omni Download 的许可列表里。请从浏览器的扩展商店安装扩展，或把 Omni Download 更新到最新版本。"
   },
   "downUnpaired": {
     "message": "备用通道未配对"

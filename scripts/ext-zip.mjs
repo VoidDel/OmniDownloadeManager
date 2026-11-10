@@ -6,10 +6,12 @@
 //   apps/extension/.output/omni-download-<version>-sources.zip   the sources Mozilla asks for
 //
 // Store packages have no `key` in the manifest (the stores sign with their own, see
-// apps/extension/wxt.config.ts). Each package is checked before it is listed.
+// apps/extension/wxt.config.ts). Each package is checked before it is listed. Afterwards the
+// unpacked folders (`chrome-mv3`, `firefox-mv3`) are the development builds again: those are the
+// ones to load with "Load unpacked", never a store package unzipped.
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +40,12 @@ if (problems.length) {
   console.error(problems.join('\n'));
   process.exit(1);
 }
+
+// The unpacked folders now hold the store builds, whose ID the app does not know until a store
+// assigns one. Build the development ones back (fixed ID, `key`), so that a folder loaded with
+// "Load unpacked" connects; the Edge folder is the store build only and goes.
+execSync('pnpm run build', { cwd: ext, stdio: 'ignore', env: { ...process.env, OMNIDL_STORE: '' } });
+rmSync(join(ext, '.output', 'edge-mv3'), { recursive: true, force: true });
 
 console.log('\nPackages for the stores:');
 for (const name of ['chrome', 'edge', 'firefox', 'sources']) {

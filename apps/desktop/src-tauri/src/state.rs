@@ -40,8 +40,12 @@ pub struct AppState {
     /// Quick-download windows waiting for an answer, by window label.
     pub quick: Mutex<HashMap<String, quick::Pending>>,
     pub quick_seq: AtomicU32,
-    /// Browsers whose extension has been in touch: name → Unix milliseconds.
+    /// Browsers whose extension has been in touch in this run: name → Unix milliseconds.
     pub seen: Mutex<BTreeMap<String, i64>>,
+    /// The same across runs (`browsers-seen.json`): when each browser's extension was first
+    /// heard from in the latest run it was.
+    pub seen_before: Mutex<BTreeMap<String, i64>>,
+    pub seen_path: PathBuf,
     /// The main window's page has loaded (asked for its first data).
     pub page_ready: AtomicBool,
     /// Magnet links and `.torrent` files that arrived before it had.
@@ -86,17 +90,53 @@ impl AppState {
         }
     }
 
-    /// Notes contact from `browser`'s extension; `true` the first time.
+    /// Notes contact from `browser`'s extension; `true` the first time in this run (and then
+    /// it is remembered for later runs too).
     pub fn saw_browser(&self, browser: &str) -> bool {
         let name = browser.trim().to_ascii_lowercase();
-        if name.is_empty() || name.len() > 32 {
+        if name.is_empty() || name.len() > 32 || !name.bytes().all(|b| b.is_ascii_lowercase()) {
             return false;
         }
-        self.seen
+        let now = omnidl_core::now_ms();
+        let first = self
+            .seen
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(name, omnidl_core::now_ms())
-            .is_none()
+            .insert(name.clone(), now)
+            .is_none();
+        if first {
+            let all = {
+                let mut before = self.seen_before.lock().unwrap_or_else(|e| e.into_inner());
+                before.insert(name, now);
+                before.clone()
+            };
+            if let Err(e) = serde_json::to_vec(&all)
+                .map_err(std::io::Error::other)
+                .and_then(|bytes| std::fs::write(&self.seen_path, bytes))
+            {
+                tracing::warn!("{}: {e}", self.seen_path.display());
+            }
+        }
+        first
+    }
+
+    /// Contacts remembered from earlier runs and this one.
+    pub fn seen_before(&self) -> Vec<(String, i64)> {
+        self.seen_before
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
+    }
+
+    /// Reads what [`saw_browser`](Self::saw_browser) remembered (nothing when the file is
+    /// missing or unreadable).
+    pub fn load_seen(path: &std::path::Path) -> BTreeMap<String, i64> {
+        std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
     }
 
     pub fn seen_browsers(&self) -> Vec<(String, i64)> {

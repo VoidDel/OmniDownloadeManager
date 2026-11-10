@@ -108,7 +108,7 @@ export function FileTree({ files, selected, onChange }: { files: readonly TreeFi
         <label key={f.index} className="ft-row" data-off={!on} style={{ '--depth': depth } as CSSProperties}>
           <Check state={on ? 'on' : 'off'} label={name} disabled={!onChange} onChange={(v) => set([f.index], v)} />
           <span className="ft-file">
-            <FileIcon name={name} isDir={false} />
+            <FileIcon name={name} />
             <span className="ft-name" title={f.path}>
               {name}
             </span>

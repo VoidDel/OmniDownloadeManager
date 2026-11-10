@@ -304,6 +304,8 @@ export interface Integration {
   bridgeOk: boolean;
   browsers: BrowserState[];
   seen: [string, number][];
+  /** Extensions heard from in this run or an earlier one. */
+  seenBefore: [string, number][];
   httpRunning: boolean;
   pairingCode: string | null;
   settings: Settings;

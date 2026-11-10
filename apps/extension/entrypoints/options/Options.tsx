@@ -78,6 +78,7 @@ export function Options() {
       setCheck(
         {
           no_host: t('checkNoHost'),
+          forbidden: t('checkForbidden'),
           not_running: t('checkNotRunning'),
           unpaired: t('checkUnpaired'),
           error: t('checkError', String((e as Error)?.message ?? e)),

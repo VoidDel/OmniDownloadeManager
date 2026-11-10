@@ -131,6 +131,9 @@
   "checkNoHost": {
     "message": "Omni Download’s browser helper was not found. Install Omni Download and start it once."
   },
+  "checkForbidden": {
+    "message": "Omni Download does not accept this extension: its ID is not on the list. Install the extension from your browser’s store, or update Omni Download to the latest version."
+  },
   "checkNotRunning": {
     "message": "Omni Download is not running."
   },
@@ -196,6 +199,12 @@
   },
   "downNoHostHint": {
     "message": "Install Omni Download and start it once. If it is installed, choose Rewrite messaging configuration under its Settings › Browser."
+  },
+  "downForbidden": {
+    "message": "Omni Download does not accept this extension"
+  },
+  "downForbiddenHint": {
+    "message": "This extension’s ID is not on Omni Download’s list. Install the extension from your browser’s store, or update Omni Download to the latest version."
   },
   "downUnpaired": {
     "message": "The fallback channel is not paired"

@@ -76,7 +76,7 @@ cargo test -p omnidl-http --release --test download -- --ignored large_file --no
 
 ```bash
 pnpm ext:build        # apps/extension/.output/chrome-mv3（Chrome、Edge、Brave）与 firefox-mv3
-pnpm ext:zip          # 上架用的包（Chrome、Edge、Firefox 及 AMO 源码包），见 docs/extension-publishing.md
+pnpm ext:zip          # 上架用的包（Chrome、Edge、Firefox 及 AMO 源码包），见 docs/extension-publishing.md；不要解压后加载，商店包没有固定 ID，应用不认
 pnpm --filter omnidl-extension dev   # 开发模式：启动带扩展的浏览器，改代码自动重载
 ```
 

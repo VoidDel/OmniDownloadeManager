@@ -38,7 +38,9 @@ export function Welcome() {
     if (typeof picked === 'string') void saveSettings((s) => (s.downloadDir = picked));
   };
   const seen = new Map(info?.seen ?? []);
-  const browsers = (info?.browsers ?? []).filter((b) => b.detected || b.registered);
+  const before = new Map(info?.seenBefore ?? []);
+  // The installed ones (every browser is registered, installed or not).
+  const browsers = (info?.browsers ?? []).filter((b) => b.detected || before.has(b.id));
 
   return (
     <Modal
@@ -102,7 +104,7 @@ export function Welcome() {
           ) : (
             <ul className="welcome-browsers">
               {browsers.map((b) => {
-                const [cls, text] = browserState(b, seen.get(b.id));
+                const [cls, text] = browserState(b, seen.get(b.id), before.get(b.id));
                 return (
                   <li key={b.id}>
                     <span className="nm">{b.name}</span>
