@@ -1056,7 +1056,7 @@ OmniDownloadManager/
 - [x] 三平台打包：NSIS、dmg（Apple Silicon）、deb / rpm / AppImage；sidecar 打包 host
 - [ ] 代码签名与 macOS 公证流水线
 - [x] i18n（zh-CN / zh-TW / en-US / ja-JP），首次启动向导
-- [ ] 扩展上架：Chrome Web Store、Edge Add-ons、AMO
+- [ ] 扩展上架：Chrome Web Store、Edge Add-ons、AMO（上架包、隐私政策与提交说明已就绪，见 [extension-publishing.md](extension-publishing.md)；待提交并把商店分配的 ID 加入应用）
 
 **验收**：三平台安装包一键安装可用，更新可从 0.9 升到 1.0，扩展商店审核通过。
 

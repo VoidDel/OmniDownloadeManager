@@ -14,6 +14,14 @@ const CHROMIUM_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmW2oiODM+1NUvk
 /** The Firefox add-on ID (the app's Firefox host manifest allows it). */
 const GECKO_ID = 'omni@omnidl.app';
 
+/**
+ * A package for the stores (`pnpm ext:zip` sets `OMNIDL_STORE=1`). The Chrome Web Store and Edge
+ * Add-ons sign the package with their own key, which gives it their own ID, and the Chrome Web
+ * Store refuses a manifest that carries `key`: store packages go without it. The IDs the stores
+ * assign are added to the app's host manifests (`CHROMIUM_EXTENSION_IDS`).
+ */
+const STORE = process.env.OMNIDL_STORE === '1';
+
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: ({ browser }) => {
@@ -43,8 +51,33 @@ export default defineConfig({
         },
       },
       ...(firefox
-        ? { browser_specific_settings: { gecko: { id: GECKO_ID, strict_min_version: '115.0' } } }
-        : { key: CHROMIUM_KEY, minimum_chrome_version: '116' }),
+        ? {
+            browser_specific_settings: {
+              gecko: {
+                id: GECKO_ID,
+                // Firefox 140 shows what an extension collects when it is installed
+                // (`data_collection_permissions`); earlier versions would need a consent page
+                // of the extension's own.
+                strict_min_version: '140.0',
+                // What goes to the Omni Download app on the same computer, and nowhere else:
+                // the download's address and the page it came from, that site's cookies (so
+                // the app can fetch a file that needs a login), and the fact of the download.
+                data_collection_permissions: { required: ['browsingActivity', 'websiteContent', 'websiteActivity'] },
+              },
+            },
+          }
+        : { ...(STORE ? {} : { key: CHROMIUM_KEY }), minimum_chrome_version: '116' }),
     };
+  },
+  zip: {
+    name: 'omni-download',
+    artifactTemplate: '{{name}}-{{version}}-{{browser}}.zip',
+    sourcesTemplate: '{{name}}-{{version}}-sources.zip',
+    // Mozilla builds the add-on from its sources to review it. The extension is one package of
+    // a pnpm workspace whose lock file is at the repository's root, so the sources start there
+    // and take what the build needs (SOURCE_CODE_REVIEW.md has the steps).
+    sourcesRoot: '../..',
+    includeSources: ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'LICENSE', 'apps/extension/**', 'apps/desktop/package.json'],
+    excludeSources: ['apps/extension/test-results/**', 'apps/extension/playwright-report/**', 'apps/extension/e2e/**', 'apps/extension/playwright.config.ts', 'apps/extension/store/**'],
   },
 });
