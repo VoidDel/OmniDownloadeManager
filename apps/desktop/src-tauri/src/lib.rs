@@ -12,6 +12,7 @@ mod events;
 mod float;
 mod i18n;
 mod intake;
+mod ipfilter;
 mod links;
 mod material;
 mod notify;
@@ -111,10 +112,12 @@ pub fn run() {
                 Some(key) => Arc::new(omnidl_core::AesSecrets::new(&key)),
                 None => Arc::new(omnidl_core::NoSecrets),
             };
+            let blocklist = ipfilter::path(&data_dir);
             let bt = Arc::new(BtEngine::new(BtConfig {
                 listen_port: engine_config.bt_port,
                 dht: engine_config.bt_dht,
                 upnp: engine_config.bt_upnp,
+                blocklist: engine_config.bt_ip_filter.then(|| blocklist.clone()),
                 ..BtConfig::new(data_dir.join("torrents"))
             }));
             let upload_limit = engine_config.upload_limit;
@@ -195,6 +198,7 @@ pub fn run() {
             browser::start(handle);
             float::sync(handle);
             schedule::start(handle.clone());
+            ipfilter::prepare(handle);
             clipboard::start(handle.clone());
             Ok(())
         })
@@ -242,6 +246,8 @@ pub fn run() {
             schedule::power_pending,
             schedule::power_cancel,
             schedule::power_now,
+            ipfilter::ip_filter_status,
+            ipfilter::ip_filter_update,
         ])
         .on_window_event(|window, event| {
             // Closed to the notification area: the window goes (and its WebView's memory with

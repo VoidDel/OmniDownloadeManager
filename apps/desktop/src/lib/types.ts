@@ -213,6 +213,10 @@ export interface EngineConfig {
   btPort: number;
   btDht: boolean;
   btUpnp: boolean;
+  /** IP filtering: a block list (web address or file) and addresses blocked by hand. */
+  btIpFilter: boolean;
+  btIpFilterList: string;
+  btBanned: string[];
   ftpConnections: number;
   ftpActive: boolean;
 }

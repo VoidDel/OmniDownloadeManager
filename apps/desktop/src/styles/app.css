@@ -386,6 +386,7 @@ html.float-root, html.float-root body, html.float-root #root { background: trans
 
 /* ---------------------------------------------------------------- scheduled downloads */
 .set-time { width: 148px; font-variant-numeric: tabular-nums; }
+.ip-banned { width: 100%; resize: vertical; min-height: 64px; box-sizing: border-box; }
 .set-days { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .set-days .day {
   min-width: 34px; height: 28px; padding: 0 8px; border-radius: var(--radius-md); font-size: .82rem;

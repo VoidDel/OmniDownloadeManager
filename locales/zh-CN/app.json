@@ -218,7 +218,22 @@
       "magnetReregister": "重新关联",
       "magnetRegister": "设为默认程序",
       "openTorrents": "下载完成的种子文件自动打开",
-      "openTorrentsHint": "下载的 .torrent 文件完成后，打开“新建下载”，选择要下载的内容"
+      "openTorrentsHint": "下载的 .torrent 文件完成后，打开“新建下载”，选择要下载的内容",
+      "ipFilter": "IP 过滤",
+      "ipFilterHint": "不与列表中的 IP 连接，也拒绝它们连入。改动在下次启动应用后生效",
+      "ipFilterList": "过滤列表",
+      "ipFilterListHint": "网址或本地文件；支持 P2P、eMule ipfilter.dat、CIDR 格式，可以是 gzip 压缩",
+      "ipFilterBrowse": "选择文件…",
+      "ipFilterPick": "选择 IP 过滤列表",
+      "ipBanned": "手动屏蔽的 IP",
+      "ipBannedHint": "每行一个：单个 IP、CIDR（如 198.51.100.0/24）或范围（如 a-b）",
+      "ipFilterRules": "当前规则",
+      "ipFilterRulesHint": "更新于 {when}；下次启动应用后生效",
+      "ipFilterRestart": "改好列表或手动屏蔽后点“更新”，下次启动应用后生效",
+      "ipFilterCount": "{count} 条",
+      "ipFilterUpdate": "更新",
+      "ipFilterUpdating": "正在更新…",
+      "ipFilterUpdated": "IP 过滤已更新：{count} 条规则，下次启动应用后生效"
     },
     "browser": {
       "state": {

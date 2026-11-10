@@ -4214,6 +4214,7 @@ version = "0.1.2"
 dependencies = [
  "async-trait",
  "bytes",
+ "flate2",
  "librqbit",
  "omnidl-core",
  "omnidl-storage",
@@ -4221,6 +4222,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "uuid",
 ]
 
@@ -4260,6 +4262,7 @@ dependencies = [
  "omnidl-http",
  "omnidl-ipc",
  "omnidl-storage",
+ "reqwest",
  "serde",
  "serde_json",
  "sys-locale",

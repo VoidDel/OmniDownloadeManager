@@ -1,7 +1,8 @@
 // Settings › BT (docs/development-plan.md §4.4, §6.3): seeding policy, upload limit, the
-// network the BitTorrent engine uses, and whether this app opens magnet links.
+// network the BitTorrent engine uses, IP filtering, and whether this app opens magnet links.
 
 import { isTauri } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -139,9 +140,118 @@ export function TorrentSettings({ s, set }: { s: Settings; set: (f: (s: Settings
           <Switch label={t('settings.torrent.upnp')} checked={e.btUpnp} onChange={(v) => set((x) => (x.engine.btUpnp = v))} />
         </Row>
       </div>
+      <IpFilter s={s} set={set} />
       <div className="set-group">
         <MagnetRow />
       </div>
     </>
+  );
+}
+
+/** A text saved when it loses the focus. */
+function useDraft(value: string, save: (v: string) => void) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return {
+    value: draft ?? value,
+    onChange: (v: string) => setDraft(v),
+    onBlur: () => {
+      if (draft != null && draft !== value) save(draft);
+      setDraft(null);
+    },
+  };
+}
+
+/** IP filtering: on/off, the list (web address or file), the addresses blocked by hand, and how
+ *  many ranges the list in use has. Read when BitTorrent starts (the next start of the app). */
+function IpFilter({ s, set }: { s: Settings; set: (f: (s: Settings) => void) => void }) {
+  const { t } = useTranslation();
+  const run = useApp((st) => st.run);
+  const toast = useApp((st) => st.toast);
+  const e = s.engine;
+  const [status, setStatus] = useState<{ rules: number; updatedAt: number | null } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (isTauri()) void api.ipFilterStatus().then(setStatus);
+  }, []);
+  const list = useDraft(e.btIpFilterList, (v) => set((x) => (x.engine.btIpFilterList = v.trim())));
+  const banned = useDraft(e.btBanned.join('\n'), (v) =>
+    set(
+      (x) =>
+        (x.engine.btBanned = v
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean)),
+    ),
+  );
+  const update = async () => {
+    setBusy(true);
+    const got = await run(() => api.ipFilterUpdate());
+    setBusy(false);
+    if (got) {
+      setStatus(got);
+      toast('success', t('settings.torrent.ipFilterUpdated', { count: got.rules }));
+    }
+  };
+  const pick = async () => {
+    const f = await open({ title: t('settings.torrent.ipFilterPick'), filters: [{ name: 'IP filter', extensions: ['p2p', 'dat', 'txt', 'gz', 'cidr'] }] }).catch(() => null);
+    if (typeof f === 'string') set((x) => (x.engine.btIpFilterList = f));
+  };
+  return (
+    <div className="set-group">
+      <Row label={t('settings.torrent.ipFilter')} hint={t('settings.torrent.ipFilterHint')}>
+        <Switch label={t('settings.torrent.ipFilter')} checked={e.btIpFilter} onChange={(v) => set((x) => (x.engine.btIpFilter = v))} />
+      </Row>
+      <div className="set-row col">
+        <div className="lab">
+          <span>{t('settings.torrent.ipFilterList')}</span>
+          <small>{t('settings.torrent.ipFilterListHint')}</small>
+        </div>
+        <div className="ctl">
+          <div className="inline">
+            <input
+              className="inp mono grow"
+              aria-label={t('settings.torrent.ipFilterList')}
+              placeholder="https://… / C:\…\ipfilter.dat"
+              spellCheck={false}
+              disabled={!e.btIpFilter}
+              value={list.value}
+              onChange={(ev) => list.onChange(ev.target.value)}
+              onBlur={list.onBlur}
+            />
+            <button type="button" className="btn outline" disabled={!e.btIpFilter || !isTauri()} onClick={() => void pick()}>
+              {t('settings.torrent.ipFilterBrowse')}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="set-row col">
+        <div className="lab">
+          <span>{t('settings.torrent.ipBanned')}</span>
+          <small>{t('settings.torrent.ipBannedHint')}</small>
+        </div>
+        <div className="ctl">
+          <textarea
+            className="inp mono ip-banned"
+            rows={3}
+            aria-label={t('settings.torrent.ipBanned')}
+            placeholder={'203.0.113.7\n198.51.100.0/24\n192.0.2.10-192.0.2.20'}
+            spellCheck={false}
+            disabled={!e.btIpFilter}
+            value={banned.value}
+            onChange={(ev) => banned.onChange(ev.target.value)}
+            onBlur={banned.onBlur}
+          />
+        </div>
+      </div>
+      <Row
+        label={t('settings.torrent.ipFilterRules')}
+        hint={status?.updatedAt ? t('settings.torrent.ipFilterRulesHint', { when: fmt.when(status.updatedAt) }) : t('settings.torrent.ipFilterRestart')}
+      >
+        <span className="muted num">{t('settings.torrent.ipFilterCount', { count: status?.rules ?? 0 })}</span>
+        <button type="button" className="btn outline" disabled={!e.btIpFilter || busy || !isTauri()} onClick={() => void update()}>
+          {busy ? t('settings.torrent.ipFilterUpdating') : t('settings.torrent.ipFilterUpdate')}
+        </button>
+      </Row>
+    </div>
   );
 }

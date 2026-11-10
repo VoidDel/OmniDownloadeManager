@@ -376,3 +376,45 @@ async fn resumes_after_a_restart() {
     m.shutdown().await;
     bt.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_away_from_blocked_addresses() {
+    let d = dirs();
+    let file = d.seed.join("blocked.bin");
+    write(&file, &content(2 * MIB, 3));
+    let seeder = Seeder::start(&file, None).await;
+    let torrent = d.downloads.join("blocked.torrent");
+    write(&torrent, &seeder.torrent);
+
+    // The only peer is on 127.0.0.1, which the list blocks (CIDR, as users write it).
+    let list = d.state.join("ipfilter.p2p");
+    let n = omnidl_bt::ipfilter::write(None, &["127.0.0.0/8".into(), "::1".into()], &list).unwrap();
+    assert_eq!(n, 2);
+    let mut c = BtConfig::new(&d.state);
+    c.listen_port = 0;
+    c.dht = false;
+    c.upnp = false;
+    c.trackers = false;
+    c.local_discovery = false;
+    c.extra_peers = vec![seeder.addr()];
+    c.blocklist = Some(list);
+    let bt = Arc::new(BtEngine::new(c));
+    let m = manager(Db::memory().await.unwrap(), bt.clone(), no_seeding()).await;
+    let source = torrent.to_string_lossy().into_owned();
+    let id = m
+        .add(vec![new_task(
+            &source,
+            &d.downloads,
+            TaskOptions::default(),
+        )])
+        .await
+        .unwrap()[0]
+        .id;
+    // The session starts with the list, and nothing comes from the blocked peer.
+    wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let t = m.get(id).unwrap();
+    assert_eq!(t.downloaded_bytes, 0, "nothing from a blocked address");
+    m.shutdown().await;
+    bt.stop().await;
+}

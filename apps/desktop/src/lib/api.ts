@@ -62,6 +62,9 @@ export const api = {
   quickRequest: () => invoke<QuickRequest | null>('quick_request'),
   quickResolve: (decision: QuickDecision) => invoke<void>('quick_resolve', { decision }),
 
+  ipFilterStatus: () => invoke<{ rules: number; updatedAt: number | null }>('ip_filter_status'),
+  /** Makes the block list again from the settings (downloads it when it is a web address). */
+  ipFilterUpdate: () => invoke<{ rules: number; updatedAt: number | null }>('ip_filter_update'),
   powerPending: () => invoke<PowerPending | null>('power_pending'),
   powerCancel: () => invoke<void>('power_cancel'),
   powerNow: () => invoke<void>('power_now'),

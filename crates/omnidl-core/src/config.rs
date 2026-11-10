@@ -52,6 +52,11 @@ pub struct EngineConfig {
     pub bt_dht: bool,
     /// Ask the router to forward `bt_port` (UPnP).
     pub bt_upnp: bool,
+    /// IP filtering: peers in the block list (`bt_ip_filter_list`, an address or a file, and
+    /// the addresses in `bt_banned`) are not connected to. Read when BitTorrent starts.
+    pub bt_ip_filter: bool,
+    pub bt_ip_filter_list: String,
+    pub bt_banned: Vec<String>,
     /// FTP sessions per download unless the task says otherwise (servers often limit them).
     pub ftp_connections: u32,
     /// FTP active mode by default.
@@ -79,6 +84,9 @@ impl Default for EngineConfig {
             bt_port: 6881,
             bt_dht: true,
             bt_upnp: true,
+            bt_ip_filter: false,
+            bt_ip_filter_list: String::new(),
+            bt_banned: Vec::new(),
             ftp_connections: 2,
             ftp_active: false,
         }

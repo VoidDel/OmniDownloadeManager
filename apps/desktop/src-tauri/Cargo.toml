@@ -23,6 +23,8 @@ tauri-build.workspace = true
 omnidl-core.workspace = true
 omnidl-storage.workspace = true
 omnidl-http.workspace = true
+# Fetching an IP block list from the web (the client the HTTP engine uses).
+reqwest.workspace = true
 omnidl-bt.workspace = true
 omnidl-ftp.workspace = true
 # The browser bridge.

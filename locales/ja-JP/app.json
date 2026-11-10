@@ -218,7 +218,22 @@
       "magnetReregister": "再度関連付け",
       "magnetRegister": "既定のアプリに設定",
       "openTorrents": "ダウンロードしたトレントファイルを自動で開く",
-      "openTorrentsHint": ".torrent ファイルのダウンロードが完了したら「新規ダウンロード」を開き、ダウンロードする内容を選べるようにします"
+      "openTorrentsHint": ".torrent ファイルのダウンロードが完了したら「新規ダウンロード」を開き、ダウンロードする内容を選べるようにします",
+      "ipFilter": "IP フィルター",
+      "ipFilterHint": "リストにある IP とは接続せず、接続も拒否します。変更は次にアプリを起動したときに反映されます",
+      "ipFilterList": "フィルターリスト",
+      "ipFilterListHint": "URL またはローカルファイル。P2P、eMule ipfilter.dat、CIDR 形式に対応（gzip 圧縮も可）",
+      "ipFilterBrowse": "ファイルを選択…",
+      "ipFilterPick": "IP フィルターリストを選択",
+      "ipBanned": "手動でブロックする IP",
+      "ipBannedHint": "1 行に 1 つ：IP、CIDR（198.51.100.0/24 など）、範囲（a-b）",
+      "ipFilterRules": "現在のルール",
+      "ipFilterRulesHint": "{when} に更新。次にアプリを起動したときに反映",
+      "ipFilterRestart": "リストや手動ブロックを変更したら「更新」を押してください。次の起動時に反映されます",
+      "ipFilterCount": "{count} 件",
+      "ipFilterUpdate": "更新",
+      "ipFilterUpdating": "更新中…",
+      "ipFilterUpdated": "IP フィルターを更新しました：{count} 件のルール（次の起動時に反映）"
     },
     "browser": {
       "state": {

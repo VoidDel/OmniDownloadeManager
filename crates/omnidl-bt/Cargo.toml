@@ -16,6 +16,9 @@ librqbit.workspace = true
 parking_lot.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 tracing.workspace = true
+url.workspace = true
+# Block lists are often gzip-compressed (the version already in the tree).
+flate2 = "1"
 
 [dev-dependencies]
 omnidl-storage.workspace = true

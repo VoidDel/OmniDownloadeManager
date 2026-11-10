@@ -8,6 +8,7 @@
 //! complete, and stops by the seeding policy (ratio or time) of [`JobOptions`]. The rest of the
 //! app never sees `librqbit` types.
 
+pub mod ipfilter;
 mod meta;
 mod run;
 
@@ -52,6 +53,9 @@ pub struct BtConfig {
     pub local_discovery: bool,
     /// Peers tried for every torrent besides those found (tests).
     pub extra_peers: Vec<SocketAddr>,
+    /// A block list in the P2P format (`ipfilter::write`): peers in it are not connected to.
+    /// Read when the session starts.
+    pub blocklist: Option<PathBuf>,
 }
 
 impl BtConfig {
@@ -64,6 +68,7 @@ impl BtConfig {
             trackers: true,
             local_discovery: true,
             extra_peers: Vec::new(),
+            blocklist: None,
         }
     }
 }
@@ -160,6 +165,13 @@ impl BtEngine {
                 download_bps: None,
             },
             client_name_and_version: Some(format!("OmniDownload/{}", env!("CARGO_PKG_VERSION"))),
+            // An empty list would stop the session from starting: only one with ranges.
+            blocklist_url: c
+                .blocklist
+                .as_deref()
+                .filter(|p| ipfilter::count(p) > 0)
+                .and_then(|p| url::Url::from_file_path(p).ok())
+                .map(String::from),
             ..Default::default()
         };
         let folder = c.state_dir.join("default");

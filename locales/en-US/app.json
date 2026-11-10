@@ -218,7 +218,22 @@
       "magnetReregister": "Associate again",
       "magnetRegister": "Set as default",
       "openTorrents": "Open downloaded torrent files",
-      "openTorrentsHint": "When a .torrent file finishes downloading, opens New download to choose what to download"
+      "openTorrentsHint": "When a .torrent file finishes downloading, opens New download to choose what to download",
+      "ipFilter": "IP filtering",
+      "ipFilterHint": "Peers in the list are not connected to, and their connections are refused. Changes apply the next time the app starts",
+      "ipFilterList": "Block list",
+      "ipFilterListHint": "A web address or a file in the P2P, eMule ipfilter.dat or CIDR format, gzip-compressed or not",
+      "ipFilterBrowse": "Choose file…",
+      "ipFilterPick": "Choose an IP block list",
+      "ipBanned": "Blocked by hand",
+      "ipBannedHint": "One per line: an address, a CIDR block (198.51.100.0/24) or a range (a-b)",
+      "ipFilterRules": "Rules in use",
+      "ipFilterRulesHint": "Updated {when}; applies the next time the app starts",
+      "ipFilterRestart": "Choose Update after changing the list or the addresses; it applies the next time the app starts",
+      "ipFilterCount": "{count} ranges",
+      "ipFilterUpdate": "Update",
+      "ipFilterUpdating": "Updating…",
+      "ipFilterUpdated": "IP filter updated: {count} ranges, from the next start of the app"
     },
     "browser": {
       "state": {

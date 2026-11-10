@@ -1116,6 +1116,8 @@ OmniDownloadManager/
 - [x] FTP 目录下载：以 `/` 结尾的 FTP 链接为文件夹，探测时递归列出文件（MLSD，不支持时 LIST；跳过符号链接，深度 16、最多 5000 个），新建下载按种子的方式勾选；添加时每个文件一个任务，保存到 文件夹名/子文件夹 下。
 - [x] HLS（m3u8）下载：HTTP 引擎识别 `.m3u8` 或播放列表 Content-Type；主播放列表取最高带宽；分段按序并发下载（最多 8 个），AES-128-CBC 解密，支持 BYTERANGE 与 fMP4（EXT-X-MAP）；合并为 .ts / .mp4；分段表记录已写分段以续传；直播流拒绝。
 - [x] 媒体嗅探：扩展用 webRequest（只读响应头）按 Content-Type / 扩展名识别视频、音频、HLS 播放列表，排除分段（.ts / .m4s / DASH）与小于 512 KB 的文件；按标签页存于 storage.session（换页、关页清除），工具栏角标显示数量，弹出面板列出并可交给应用（HLS 以页面标题命名）。
+- [x] IP 过滤：omnidl-bt 的 ipfilter 把 P2P、eMule DAT（级别 < 128 屏蔽）、CIDR、范围与单个 IP（IPv4/IPv6，可 gzip）转成 librqbit 的 P2P 列表；设置 › BT 选择列表（网址或文件）与手动屏蔽，“更新”时合并写入，BT 会话启动时读取（重启生效）。
+
 
 
 
