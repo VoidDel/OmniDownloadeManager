@@ -128,7 +128,14 @@
       "help": "Help and feedback",
       "helpHint": "Attach the logs when you report a problem; they make the cause easier to find",
       "guide": "User guide",
-      "feedback": "Report a problem"
+      "feedback": "Report a problem",
+      "soundDone": "Play a sound when a download finishes",
+      "soundDoneHint": "Also while the window is in front; several finishing together make one sound",
+      "sound": "Sound",
+      "soundBuiltIn": "Built-in sound",
+      "soundTest": "Play",
+      "soundPick": "Choose a WAV file…",
+      "soundReset": "Use the built-in sound"
     },
     "download": {
       "folder": "Default download folder",
@@ -146,7 +153,11 @@
       "resumeOnStartup": "Resume unfinished downloads at startup",
       "resumeOnStartupHint": "Tasks that were downloading when the app quit continue automatically the next time it starts",
       "syncWrites": "Save progress to disk every second",
-      "syncWritesHint": "Downloads resume from the exact position even after a power loss or system crash; turn off to reduce disk writes"
+      "syncWritesHint": "Downloads resume from the exact position even after a power loss or system crash; turn off to reduce disk writes",
+      "byCategory": "Folders by file type",
+      "byCategoryHint": "Downloads are sorted by their extension into these folders; an empty one means the default download folder above",
+      "byCategoryPick": "Choose a folder for {category}",
+      "byCategoryClear": "Use the default download folder"
     },
     "network": {
       "proxy": "Proxy",
@@ -436,7 +447,9 @@
       "openFile": "Open file",
       "restore": "Restore"
     },
-    "fileMissing": "The file is no longer there — it may have been deleted or moved. You can download it again."
+    "fileMissing": "The file is no longer there — it may have been deleted or moved. You can download it again.",
+    "showMore": "Show all",
+    "showLess": "Show less"
   },
   "table": {
     "label": "Downloads",
@@ -522,7 +535,8 @@
       "notResumable": "Cannot resume",
       "connections": "Will use {count, plural, one {# connection} other {# connections}}",
       "sessions": "Will use {count, plural, one {# session} other {# sessions}}"
-    }
+    },
+    "dirByCategory": "Saved by file type"
   },
   "dialogs": {
     "close": "Close",

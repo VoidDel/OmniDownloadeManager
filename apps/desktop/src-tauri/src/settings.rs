@@ -1,7 +1,7 @@
 //! User settings, kept as TOML in the app's config folder. The engine part is handed to the task
 //! manager as is; appearance is applied by the window.
 
-use std::{io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 use omnidl_core::EngineConfig;
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,9 @@ pub struct Settings {
     pub appearance: Appearance,
     /// Where new downloads go; empty: the system's Downloads folder.
     pub download_dir: String,
+    /// A folder of its own for a category (`video`, `disk_image`… as the tasks name them);
+    /// one not listed goes to `download_dir`.
+    pub category_dirs: BTreeMap<String, String>,
     pub engine: EngineConfig,
     pub browser: BrowserSettings,
 }
@@ -26,6 +29,7 @@ impl Default for Settings {
             general: General::default(),
             appearance: Appearance::default(),
             download_dir: String::new(),
+            category_dirs: BTreeMap::new(),
             engine: EngineConfig::default(),
             browser: BrowserSettings::default(),
         }
@@ -43,6 +47,10 @@ pub struct General {
     /// A notification when a download finishes, and when one fails.
     pub notify_done: bool,
     pub notify_failed: bool,
+    /// A sound when a download finishes: the built-in chime, or `sound_file` (a WAV file) when
+    /// it is set and still there.
+    pub sound_done: bool,
+    pub sound_file: String,
     /// Global shortcuts as accelerators (`CommandOrControl+Alt+D`); empty: none. Showing (or
     /// hiding) the main window, and a new download.
     pub shortcut_show: String,
@@ -59,6 +67,8 @@ impl Default for General {
             close_to_tray: true,
             notify_done: true,
             notify_failed: true,
+            sound_done: true,
+            sound_file: String::new(),
             shortcut_show: String::new(),
             shortcut_new: String::new(),
             check_updates: true,

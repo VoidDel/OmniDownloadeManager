@@ -80,6 +80,20 @@ impl AppState {
         s
     }
 
+    /// The folder a new download of `file_name` goes to: its category's, if it has one, else the
+    /// download folder.
+    pub fn dir_for(&self, file_name: &str) -> String {
+        let category = omnidl_core::filename::category(file_name);
+        let key = serde_json::to_value(category)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        match self.settings().category_dirs.get(&key) {
+            Some(dir) if !dir.trim().is_empty() => dir.trim().to_owned(),
+            _ => self.download_dir(),
+        }
+    }
+
     /// The folder new downloads go to.
     pub fn download_dir(&self) -> String {
         let s = self.settings();

@@ -1,13 +1,13 @@
 //! Relays the task manager's events to the window (docs/development-plan.md §6.4). Progress is
 //! already batched by the manager (4 per second, every running task in one event). Changes also
-//! drive notifications, progress the notification-area icon.
+//! drive notifications, progress the notification-area icon and the taskbar button.
 
 use omnidl_core::{ProgressItem, Stats, TaskEvent, TaskManager};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::notify;
+use crate::{notify, taskbar::Taskbar};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,25 +18,37 @@ struct ProgressBatch {
 
 pub fn spawn(app: AppHandle, manager: &TaskManager) {
     let mut rx = manager.subscribe();
-    let mut watch = notify::Watch::new(&manager.list());
+    let tasks = manager.list();
+    let mut watch = notify::Watch::new(&tasks);
+    let mut taskbar = Taskbar::new(&tasks);
     tauri::async_runtime::spawn(async move {
         loop {
             let sent = match rx.recv().await {
                 Ok(TaskEvent::Added { task }) => {
                     watch.seen(&task);
+                    taskbar.status(task.id, Some(task.status));
+                    taskbar.apply(&app);
                     app.emit("task:added", task)
                 }
                 Ok(TaskEvent::Changed { task }) => {
                     let before = watch.seen(&task);
                     notify::changed(&app, before, &task);
+                    taskbar.status(task.id, Some(task.status));
+                    taskbar.apply(&app);
                     app.emit("task:changed", task)
                 }
                 Ok(TaskEvent::Deleted { ids }) => {
                     watch.forget(&ids);
+                    for id in &ids {
+                        taskbar.status(*id, None);
+                    }
+                    taskbar.apply(&app);
                     app.emit("task:deleted", ids)
                 }
                 Ok(TaskEvent::Progress { items, stats }) => {
                     crate::tray::activity(&app, &stats);
+                    taskbar.progress(&items);
+                    taskbar.apply(&app);
                     app.emit("task:progress", ProgressBatch { items, stats })
                 }
                 // The page missed events: it reloads the list.

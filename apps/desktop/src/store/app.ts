@@ -9,6 +9,7 @@ import { create } from 'zustand';
 
 import { api, asError, listenApp, listenTasks } from '../lib/api';
 import i18n, { initI18n, resolveLang, setLanguage } from '../i18n';
+import { categoryOf } from '../lib/category';
 import { applyTheme, setSystemLook } from '../lib/theme';
 import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus, UpdateInfo, UpdateProgress } from '../lib/types';
 import { errorText } from '../lib/words';
@@ -33,9 +34,10 @@ export type Dialog =
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
-  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true },
+  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '' },
   appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
+  categoryDirs: {},
   engine: {
     maxConcurrent: 3,
     connections: 8,
@@ -135,6 +137,8 @@ interface State {
   saveSettings: (change: (s: Settings) => void) => Promise<void>;
   /** The folder new downloads go to. */
   downloadDir: () => string;
+  /** The folder a new download of `fileName` goes to: its category's, else the download folder. */
+  dirFor: (fileName: string) => string;
 }
 
 /** Download speeds of each running task, 4 samples a second for the last two minutes. */
@@ -427,6 +431,7 @@ export const useApp = create<State>((set, get) => ({
   },
 
   downloadDir: () => get().settings.downloadDir || get().defaultDir,
+  dirFor: (fileName) => get().settings.categoryDirs?.[categoryOf(fileName)]?.trim() || get().downloadDir(),
 }));
 
 const ACTIVE: TaskStatus[] = ['queued', 'probing', 'downloading', 'paused'];

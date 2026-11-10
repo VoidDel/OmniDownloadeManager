@@ -58,6 +58,11 @@ pub fn changed(app: &AppHandle, before: Option<TaskStatus>, task: &Task) {
     let Some(news) = news(before, task.status) else {
         return;
     };
+    // The sound plays whether or not the window is in front (it says the download is done, which
+    // the list does not unless one looks).
+    if news == News::Done {
+        crate::sound::done(app);
+    }
     let general = app.state::<AppState>().settings().general;
     let wanted = match news {
         News::Done => general.notify_done,

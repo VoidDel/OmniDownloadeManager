@@ -305,6 +305,12 @@ pub fn extension_open(app: AppHandle, browser: String) -> Result<()> {
         .map_err(Error::internal)
 }
 
+/// Plays the completion sound as it would sound (`file`: a WAV file, empty: the built-in one).
+#[tauri::command]
+pub fn sound_test(app: AppHandle, file: String) {
+    crate::sound::play(&app, &file);
+}
+
 /// Opens the user guide or the page for reporting a problem, in the browser.
 #[tauri::command]
 pub fn help_open(app: AppHandle, page: String) -> Result<()> {

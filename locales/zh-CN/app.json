@@ -128,7 +128,14 @@
       "help": "帮助与反馈",
       "helpHint": "反馈问题时附上日志，更容易找到原因",
       "guide": "使用手册",
-      "feedback": "反馈问题"
+      "feedback": "反馈问题",
+      "soundDone": "下载完成时播放提示音",
+      "soundDoneHint": "窗口在前台时也会播放；几个下载同时完成只响一次",
+      "sound": "提示音",
+      "soundBuiltIn": "内置提示音",
+      "soundTest": "试听",
+      "soundPick": "选择 WAV 文件…",
+      "soundReset": "恢复内置提示音"
     },
     "download": {
       "folder": "默认下载文件夹",
@@ -146,7 +153,11 @@
       "resumeOnStartup": "启动时继续未完成的下载",
       "resumeOnStartupHint": "退出时正在下载的任务，下次启动后自动继续",
       "syncWrites": "每秒把进度写入磁盘",
-      "syncWritesHint": "断电或系统崩溃后也能从准确的位置继续；关闭可以减少磁盘写入"
+      "syncWritesHint": "断电或系统崩溃后也能从准确的位置继续；关闭可以减少磁盘写入",
+      "byCategory": "按类型保存到不同文件夹",
+      "byCategoryHint": "下载的文件按扩展名归类，放到各自的文件夹；留空的类型存到上面的默认下载文件夹",
+      "byCategoryPick": "选择存放{category}的文件夹",
+      "byCategoryClear": "改用默认下载文件夹"
     },
     "network": {
       "proxy": "代理",
@@ -436,7 +447,9 @@
       "openFile": "打开文件",
       "restore": "还原"
     },
-    "fileMissing": "文件已不存在，可能被删除或移出了保存位置。可以重新下载。"
+    "fileMissing": "文件已不存在，可能被删除或移出了保存位置。可以重新下载。",
+    "showMore": "展开",
+    "showLess": "收起"
   },
   "table": {
     "label": "下载任务",
@@ -522,7 +535,8 @@
       "notResumable": "不支持断点续传",
       "connections": "将使用 {count} 个连接",
       "sessions": "将使用 {count} 个会话"
-    }
+    },
+    "dirByCategory": "按类型分别保存"
   },
   "dialogs": {
     "close": "关闭",

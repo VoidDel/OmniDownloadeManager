@@ -228,6 +228,9 @@ export interface Settings {
     checkUpdates: boolean;
     /** The first-run guide has been through. */
     onboarded: boolean;
+    /** A sound when a download finishes: the built-in one, or `soundFile` (WAV) when set. */
+    soundDone: boolean;
+    soundFile: string;
   };
   appearance: {
     mode: ThemeMode;
@@ -242,6 +245,8 @@ export interface Settings {
     accent: string;
   };
   downloadDir: string;
+  /** A folder of its own for a category; one not listed (or empty) goes to `downloadDir`. */
+  categoryDirs: Partial<Record<Category, string>>;
   engine: EngineConfig;
   browser: BrowserSettings;
 }

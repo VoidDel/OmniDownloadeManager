@@ -15,7 +15,9 @@ mod notify;
 mod secrets;
 mod settings;
 mod shortcuts;
+mod sound;
 mod state;
+mod taskbar;
 mod tray;
 mod update;
 #[cfg(windows)]
@@ -23,7 +25,10 @@ mod win_icon;
 
 use std::{
     path::Path,
-    sync::{Arc, Mutex, OnceLock, atomic::Ordering},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use omnidl_bt::{BtConfig, BtEngine};
@@ -194,6 +199,7 @@ pub fn run() {
             commands::autostart_set,
             commands::extension_open,
             commands::help_open,
+            commands::sound_test,
             update::update_check,
             update::update_install,
             commands::task_probe,
@@ -341,14 +347,25 @@ pub(crate) fn focus_main(app: &AppHandle) {
         let _ = w.set_focus();
         return;
     }
-    // Windows are made on the main thread; this may be the bridge's or a shortcut's.
+    // Built from another thread, which hands the build to the event loop. Not on the main thread
+    // directly: a second launch calls this from the single-instance plugin's window procedure,
+    // outside the event handler, so tao does not hold events back. Tauri runs the plugins'
+    // window-created hooks under its plugin lock, window-state moves the window to where it was,
+    // the move is delivered at once to the event handler, which takes the same lock: the app
+    // hung (v0.1.2, whenever the saved position was not the centred one). One at a time: a
+    // second request while the window is being made only shows it when it is there.
+    static OPENING: AtomicBool = AtomicBool::new(false);
+    if OPENING.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
+    std::thread::spawn(move || {
         if handle.get_webview_window("main").is_none()
             && let Err(e) = main_window(&handle)
         {
             tracing::error!("opening the main window: {e}");
         }
+        OPENING.store(false, Ordering::SeqCst);
     });
 }
 

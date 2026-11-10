@@ -74,6 +74,10 @@
 .task-table:focus-visible { outline: 0; }
 .task-table.kbd:focus .task-row.cursor { outline: 2px solid var(--border-focus); outline-offset: -2px; }
 .tbody { position: relative; margin: 4px 10px 12px; }
+/* The empty space under the last row belongs to the list too: a drag can start there. */
+.tscroll > .tbody { min-height: calc(100% - 16px); }
+/* The drag selection band. */
+.sel-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); border-radius: 2px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .task-row { top: 0; cursor: default; user-select: none; }
 .task-row .nm .fi { width: 20px; height: 20px; }
 .task-row .nm-txt { flex: 0 1 auto; }
@@ -137,6 +141,16 @@
 .det-dl dd { margin: 0; min-width: 0; }
 .det-dl .num { font-variant-numeric: tabular-nums; }
 .det-dl .path { font-size: .8rem; word-break: break-all; }
+/* A long link: three lines until it is asked for in full. */
+.det-dl .path.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.det-dl .lnk.more { display: block; margin-top: 2px; padding: 0; font-size: .8rem; color: var(--accent-text, var(--accent)); background: none; border: 0; cursor: pointer; }
+.det-dl .lnk.more:hover { text-decoration: underline; }
+/* Takes the room left in the overview, so the segment map and the speed chart sit at the bottom. */
+.det-bottom { flex: 1 0 0; margin-top: -16px; }
+/* A category's folder: the field takes the row's room (the label is one short word). */
+.set-row:has(> .ctl > .cat-dir) .ctl { flex: 1; max-width: 78%; }
+.cat-dir { flex: 1; min-width: 0; flex-wrap: nowrap; }
+.cat-dir .inp { flex: 1; min-width: 0; width: auto; }
 .det-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: .8rem; font-weight: 500; }
 .det-head .muted, .det-head .num { font-weight: 400; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 .det-note { margin: 0; font-size: .86rem; }

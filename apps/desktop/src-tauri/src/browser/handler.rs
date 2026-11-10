@@ -171,10 +171,17 @@ async fn add_download(
     let state = app.state::<AppState>();
     let settings = state.settings();
     let site = site_of(&d);
+    let options = options_of(&d);
+    // The folder of the file's category: by the browser's name for it, or the link's.
+    let named = options
+        .file_name
+        .clone()
+        .or_else(|| filename::from_url(&url))
+        .unwrap_or_default();
     let mut task = NewTask {
         source: url.clone(),
-        save_dir: state.download_dir(),
-        options: options_of(&d),
+        save_dir: state.dir_for(&named),
+        options,
         start: true,
         probe: None,
     };

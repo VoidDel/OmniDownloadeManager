@@ -12,7 +12,7 @@ import { FileIcon, Icon } from '../../components/Icon';
 import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import * as fmt from '../../lib/format';
-import { parseLinks, type Link } from '../../lib/links';
+import { nameFromUrl, parseLinks, type Link } from '../../lib/links';
 import type { AppError, NewTask, Prefill, ProbeInfo, ProxyConfig, TaskOptions } from '../../lib/types';
 import { errorText } from '../../lib/words';
 import { useApp } from '../../store/app';
@@ -98,7 +98,9 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [text, setText] = useState(initial.text);
   const links = useMemo(() => parseLinks(text), [text]);
   const [probes, setProbes] = useState<Record<string, Probe>>({});
-  const [dir, setDir] = useState(defaultDir);
+  // Until a folder is typed or picked, each download goes to its category's.
+  const [dir, setDir] = useState<string | null>(null);
+  const dirFor = useApp((s) => s.dirFor);
   const [name, setName] = useState<string | null>(null);
   // Empty: the setting (HTTP and FTP have their own).
   const [connections, setConnections] = useState('');
@@ -192,9 +194,18 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   };
 
   const browse = async () => {
-    const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('newTask.pickDir') }).catch(() => null);
+    const picked = await open({ directory: true, defaultPath: shownDir || defaultDir || undefined, title: t('newTask.pickDir') }).catch(() => null);
     if (typeof picked === 'string') setDir(picked);
   };
+  /** A link's file name as far as it is known: the server's, the one typed, or the link's. */
+  const nameOf = (l: Link) => {
+    const p = probes[keyOf(l)];
+    if (l === single && single?.kind === 'http' && name?.trim()) return name.trim();
+    return p?.state === 'ok' ? p.info.fileName : (nameFromUrl(l.url) ?? '');
+  };
+  const dirs = [...new Set(addable.map((l) => dirFor(nameOf(l))))];
+  // One folder for all: shown; several (by category): the field says so.
+  const shownDir = dir ?? (dirs.length === 1 ? dirs[0] : '');
 
   const submit = async () => {
     if (!addable.length || invalid || busy) return;
@@ -204,7 +215,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       const p = probes[keyOf(l)];
       return {
         source: l.url,
-        saveDir: dir.trim() || defaultDir,
+        saveDir: dir?.trim() || dirFor(nameOf(l)),
         options: {
           ...opts,
           fileName: single?.kind === 'http' && name?.trim() ? name.trim() : null,
@@ -293,7 +304,13 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
         )}
         <label htmlFor="nt-dir">{t('newTask.saveTo')}</label>
         <div className="inline">
-          <input id="nt-dir" className="inp mono" value={dir} onChange={(e) => setDir(e.target.value)} />
+          <input
+            id="nt-dir"
+            className="inp mono"
+            value={shownDir}
+            placeholder={dirs.length > 1 ? t('newTask.dirByCategory') : defaultDir}
+            onChange={(e) => setDir(e.target.value)}
+          />
           <button type="button" className="btn outline" onClick={() => void browse()}>
             {t('newTask.browse')}
           </button>

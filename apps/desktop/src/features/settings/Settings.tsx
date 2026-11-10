@@ -13,7 +13,8 @@ import { Icon } from '../../components/Icon';
 import { ShortcutInput } from '../../components/ShortcutInput';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { Density, MaterialKind, Settings as S, ThemeMode } from '../../lib/types';
+import type { Category, Density, MaterialKind, Settings as S, ThemeMode } from '../../lib/types';
+import { categoryLabel } from '../../lib/words';
 import { useApp } from '../../store/app';
 import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
 import { SETTINGS_TABS } from '../shell/Chrome';
@@ -224,6 +225,13 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
     if (v && v === other) toast('error', t('settings.general.shortcutDuplicate'));
     else set((x) => (x.general[which] = v));
   };
+  const pickSound = async () => {
+    const picked = await open({ title: t('settings.general.soundPick'), filters: [{ name: 'WAV', extensions: ['wav'] }], defaultPath: g.soundFile || undefined }).catch(() => null);
+    if (typeof picked === 'string') {
+      set((x) => (x.general.soundFile = picked));
+      void run(() => api.soundTest(picked));
+    }
+  };
   const check = async () => {
     setChecking(true);
     await checkUpdate(true);
@@ -243,6 +251,25 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         </Row>
         <Row label={t('settings.general.notifyFailed')} hint={t('settings.general.notifyHint')}>
           <Switch label={t('settings.general.notifyFailed')} checked={g.notifyFailed} onChange={(v) => set((x) => (x.general.notifyFailed = v))} />
+        </Row>
+      </div>
+      <div className="set-group">
+        <Row label={t('settings.general.soundDone')} hint={t('settings.general.soundDoneHint')}>
+          <Switch label={t('settings.general.soundDone')} checked={g.soundDone} onChange={(v) => set((x) => (x.general.soundDone = v))} />
+        </Row>
+        <Row label={t('settings.general.sound')} hint={g.soundFile ? <span className="mono">{g.soundFile}</span> : t('settings.general.soundBuiltIn')}>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void run(() => api.soundTest(g.soundFile))}>
+            <Icon name="play" />
+            {t('settings.general.soundTest')}
+          </button>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void pickSound()}>
+            {t('settings.general.soundPick')}
+          </button>
+          {g.soundFile && (
+            <button type="button" className="btn outline" onClick={() => set((x) => (x.general.soundFile = ''))}>
+              {t('settings.general.soundReset')}
+            </button>
+          )}
         </Row>
       </div>
       <div className="set-group">
@@ -285,6 +312,39 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   );
 }
 
+/** The categories that can have a folder of their own ("other" always goes to the download folder). */
+const CATEGORY_FOLDERS: Category[] = ['video', 'audio', 'document', 'archive', 'program', 'disk_image', 'image'];
+
+/** A category's folder: empty means the download folder (shown greyed). */
+function CategoryFolder({ category, value, fallback, set }: { category: Category; value: string; fallback: string; set: (f: (s: S) => void) => void }) {
+  const { t } = useTranslation();
+  const save = (v: string) =>
+    set((x) => {
+      const dirs = { ...(x.categoryDirs ?? {}) };
+      if (v.trim()) dirs[category] = v.trim();
+      else delete dirs[category];
+      x.categoryDirs = dirs;
+    });
+  const browse = async () => {
+    const picked = await open({ directory: true, defaultPath: value || fallback || undefined, title: t('settings.download.byCategoryPick', { category: categoryLabel(category) }) }).catch(() => null);
+    if (typeof picked === 'string') save(picked);
+  };
+  return (
+    <Row label={categoryLabel(category)}>
+      <div className="inline cat-dir">
+        <TextSetting mono label={categoryLabel(category)} value={value} placeholder={fallback} onSave={save} />
+        <button type="button" className="btn outline" onClick={() => void browse()}>
+          {t('settings.download.browse')}
+        </button>
+        {/* Hidden rather than gone, so the fields line up. */}
+        <button type="button" className="iconbtn" title={t('settings.download.byCategoryClear')} aria-label={t('settings.download.byCategoryClear')} style={value ? undefined : { visibility: 'hidden' }} onClick={() => save('')}>
+          <Icon name="x" />
+        </button>
+      </div>
+    </Row>
+  );
+}
+
 function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const defaultDir = useApp((st) => st.defaultDir);
   const run = useApp((st) => st.run);
@@ -309,6 +369,14 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             </button>
           </div>
         </Row>
+      </div>
+      <div className="set-group">
+        <Row col label={t('settings.download.byCategory')} hint={t('settings.download.byCategoryHint')} />
+        {CATEGORY_FOLDERS.map((c) => (
+          <CategoryFolder key={c} category={c} value={s.categoryDirs?.[c] ?? ''} fallback={dir} set={set} />
+        ))}
+      </div>
+      <div className="set-group">
         <Row label={t('settings.download.maxConcurrent')} hint={t('settings.download.maxConcurrentHint')}>
           <NumberSelect label={t('settings.download.maxConcurrent')} value={e.maxConcurrent} options={[1, 2, 3, 4, 5, 6, 8, 10]} onChange={(v) => set((x) => (x.engine.maxConcurrent = v))} />
         </Row>

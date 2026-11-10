@@ -70,6 +70,8 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
     },
     { separator: true },
     { label: i18n.t('table.menu.delete'), icon: 'trash', kbd: 'Del', run: () => void useApp.getState().removeTasks(ids) },
+    // Past the recycle bin; the dialog asks whether the downloaded files go too.
+    { label: i18n.t('table.menu.purge'), icon: 'trash', danger: true, kbd: 'Shift+Del', run: () => openDialog({ kind: 'purge', ids }) },
   );
   return items;
 }
@@ -186,13 +188,81 @@ export function TaskTable() {
 
   const rowAt = (e: MouseEvent) => (e.target as HTMLElement).closest<HTMLElement>('.task-row')?.dataset.id ?? null;
 
+  // Drag selection: a press that moves draws a band; the rows it crosses are selected (with Ctrl,
+  // added to the selection there was). Positions are in the list's own coordinates (`.tbody`),
+  // so the band stays on its rows while the list scrolls.
+  const [band, setBand] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const startDrag = (e: MouseEvent) => {
+    const el = scroller.current;
+    const body = el?.querySelector<HTMLElement>('.tbody');
+    if (!el || !body) return;
+    const at = (cx: number, cy: number) => {
+      const r = body.getBoundingClientRect();
+      return { x: cx - r.left, y: cy - r.top };
+    };
+    const start = at(e.clientX, e.clientY);
+    const base = e.ctrlKey || e.metaKey ? useApp.getState().selection : [];
+    let pointer = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    let lastKey = '';
+    const update = () => {
+      const now = at(pointer.x, pointer.y);
+      const width = body.clientWidth;
+      const x0 = Math.max(0, Math.min(start.x, now.x));
+      const x1 = Math.min(width, Math.max(start.x, now.x));
+      const y0 = Math.max(0, Math.min(start.y, now.y));
+      const y1 = Math.min(ids.length * rowH, Math.max(start.y, now.y));
+      setBand({ x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) });
+      // The rows whose band of height `rowH` the selection band overlaps.
+      const first = Math.floor(y0 / rowH);
+      const last = Math.min(ids.length - 1, Math.ceil(y1 / rowH) - 1);
+      const crossed = y1 > y0 && first <= last ? ids.slice(first, last + 1) : [];
+      const key = `${first}:${last}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      const next = base.length ? [...new Set([...base, ...crossed])] : crossed;
+      useApp.getState().select(next, crossed[0] ?? null);
+      if (crossed.length) setFocus(start.y <= now.y ? crossed[crossed.length - 1] : crossed[0]);
+    };
+    // Near the top or the bottom (or past them) the list scrolls on its own.
+    const scroll = setInterval(() => {
+      if (!moved) return;
+      const r = el.getBoundingClientRect();
+      const edge = 28;
+      const dy = pointer.y < r.top + edge ? -Math.min(40, r.top + edge - pointer.y) : pointer.y > r.bottom - edge ? Math.min(40, pointer.y - (r.bottom - edge)) : 0;
+      if (dy) {
+        el.scrollTop += dy;
+        update();
+      }
+    }, 30);
+    const move = (m: globalThis.MouseEvent) => {
+      pointer = { x: m.clientX, y: m.clientY };
+      if (!moved && Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) < 5) return;
+      moved = true;
+      update();
+    };
+    const up = () => {
+      clearInterval(scroll);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      setBand(null);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
   const onMouseDown = (e: MouseEvent) => {
     setByKeyboard(false);
     if (e.button !== 0 && e.button !== 2) return;
     const id = rowAt(e);
     const { selection, anchor, select } = useApp.getState();
+    // A left press (not Shift's range) may become a drag selection.
+    if (e.button === 0 && !e.shiftKey && (e.target as HTMLElement).closest('.tscroll')) {
+      table.current?.focus({ preventScroll: true });
+      startDrag(e);
+    }
     if (!id) {
-      if (e.button === 0) select([], null);
+      if (e.button === 0 && !(e.ctrlKey || e.metaKey)) select([], null);
       return;
     }
     table.current?.focus({ preventScroll: true });
@@ -355,6 +425,7 @@ export function TaskTable() {
           {items.map((vi) => (
             <Row key={ids[vi.index]} id={ids[vi.index]} start={vi.start} cols={cols} cursor={focus === ids[vi.index]} />
           ))}
+          {band && band.h + band.w > 0 && <div className="sel-band" style={{ left: band.x, top: band.y, width: band.w, height: band.h }} aria-hidden="true" />}
         </div>
       </div>
       {menu && (

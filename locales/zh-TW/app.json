@@ -128,7 +128,14 @@
       "help": "說明與意見回饋",
       "helpHint": "回報問題時附上記錄檔，更容易找到原因",
       "guide": "使用手冊",
-      "feedback": "回報問題"
+      "feedback": "回報問題",
+      "soundDone": "下載完成時播放提示音",
+      "soundDoneHint": "視窗在前景時也會播放；幾個下載同時完成只響一次",
+      "sound": "提示音",
+      "soundBuiltIn": "內建提示音",
+      "soundTest": "試聽",
+      "soundPick": "選擇 WAV 檔案…",
+      "soundReset": "恢復內建提示音"
     },
     "download": {
       "folder": "預設下載資料夾",
@@ -146,7 +153,11 @@
       "resumeOnStartup": "啟動時繼續未完成的下載",
       "resumeOnStartupHint": "結束時正在下載的任務，下次啟動後自動繼續",
       "syncWrites": "每秒將進度寫入磁碟",
-      "syncWritesHint": "斷電或系統當機後也能從準確的位置繼續；關閉可以減少磁碟寫入"
+      "syncWritesHint": "斷電或系統當機後也能從準確的位置繼續；關閉可以減少磁碟寫入",
+      "byCategory": "依類型儲存到不同資料夾",
+      "byCategoryHint": "下載的檔案依副檔名歸類，放到各自的資料夾；留空的類型存到上面的預設下載資料夾",
+      "byCategoryPick": "選擇存放{category}的資料夾",
+      "byCategoryClear": "改用預設下載資料夾"
     },
     "network": {
       "proxy": "代理伺服器",
@@ -436,7 +447,9 @@
       "openFile": "開啟檔案",
       "restore": "還原"
     },
-    "fileMissing": "檔案已不存在，可能已被刪除或移出儲存位置。可以重新下載。"
+    "fileMissing": "檔案已不存在，可能已被刪除或移出儲存位置。可以重新下載。",
+    "showMore": "展開",
+    "showLess": "收合"
   },
   "table": {
     "label": "下載任務",
@@ -522,7 +535,8 @@
       "notResumable": "不支援斷點續傳",
       "connections": "將使用 {count} 個連線",
       "sessions": "將使用 {count} 個工作階段"
-    }
+    },
+    "dirByCategory": "依類型分別儲存"
   },
   "dialogs": {
     "close": "關閉",

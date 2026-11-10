@@ -2,7 +2,7 @@
 // and the speed of the last two minutes; a torrent shows its files (to choose from), peers and
 // trackers instead of segments. Actions at the bottom follow its state.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../../components/Icon';
@@ -177,7 +177,9 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
         <dt>{tr('detail.overview.saveTo')}</dt>
         <dd className="mono path">{t.saveDir}</dd>
         <dt>{tr('detail.overview.link')}</dt>
-        <dd className="mono path">{t.source}</dd>
+        <dd>
+          <LongText text={t.source} />
+        </dd>
       </dl>
       {gone && (
         <div className="det-err warn" role="status">
@@ -198,6 +200,8 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
           </div>
         </div>
       )}
+      {/* Pushed to the bottom of the panel; the facts above stay at the top. */}
+      <div className="det-bottom" aria-hidden="true" />
       {!bt && t.totalBytes != null && t.totalBytes > 0 && (
         <div>
           <div className="det-head">
@@ -212,6 +216,35 @@ function Overview({ t, segments, torrent }: { t: Task; segments: SegmentView[]; 
         </div>
       )}
       {running && <SpeedChart id={t.id} speed={t.speedBps} />}
+    </>
+  );
+}
+
+/** A long text (a link with a long query, say) cut to three lines, with a button to show it all. */
+function LongText({ text }: { text: string }) {
+  const { t: tr } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setLong(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const sizes = new ResizeObserver(check);
+    sizes.observe(el);
+    return () => sizes.disconnect();
+  }, [text]);
+  return (
+    <>
+      <span ref={ref} className={`mono path${open ? '' : ' clamp'}`} title={open ? undefined : text}>
+        {text}
+      </span>
+      {(long || open) && (
+        <button type="button" className="lnk more" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {tr(open ? 'detail.showLess' : 'detail.showMore')}
+        </button>
+      )}
     </>
   );
 }

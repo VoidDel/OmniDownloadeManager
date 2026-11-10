@@ -15,6 +15,7 @@ import { nextFrame } from '../../lib/frame';
 import { nameFromUrl } from '../../lib/links';
 import type { AppError, ProbeInfo, QuickDecision, QuickRequest } from '../../lib/types';
 import { errorText } from '../../lib/words';
+import { useApp } from '../../store/app';
 
 const BROWSER: Record<string, string> = { chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave', chromium: 'Chromium' };
 
@@ -30,6 +31,8 @@ export function QuickApp() {
   const [probeError, setProbeError] = useState<AppError | null>(null);
   const busy = useRef(false);
   const nameEdited = useRef(false);
+  const dirEdited = useRef(false);
+  const dirFor = useApp((s) => s.dirFor);
 
   // What to ask about; then show the window.
   useEffect(() => {
@@ -60,7 +63,10 @@ export function QuickApp() {
       (p) => {
         if (!live) return;
         setProbe(p);
-        if (!nameEdited.current && !req.fileName) setName(p.fileName);
+        if (!nameEdited.current && !req.fileName) {
+          setName(p.fileName);
+          if (!dirEdited.current) setDir(useApp.getState().dirFor(p.fileName));
+        }
       },
       (e) => live && setProbeError(asError(e)),
     );
@@ -110,7 +116,10 @@ export function QuickApp() {
 
   const browse = async () => {
     const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('quick.pickDir') }).catch(() => null);
-    if (typeof picked === 'string') setDir(picked);
+    if (typeof picked === 'string') {
+      dirEdited.current = true;
+      setDir(picked);
+    }
   };
 
   if (!req) return <div className="quick" />;
@@ -154,6 +163,7 @@ export function QuickApp() {
             onChange={(e) => {
               nameEdited.current = true;
               setName(e.target.value);
+              if (!dirEdited.current && e.target.value.trim()) setDir(dirFor(e.target.value));
             }}
           />
         </div>
@@ -186,7 +196,15 @@ export function QuickApp() {
         </div>
         <label htmlFor="qa-dir">{t('quick.saveTo')}</label>
         <div className="inline">
-          <input id="qa-dir" className="inp mono" value={dir} onChange={(e) => setDir(e.target.value)} />
+          <input
+            id="qa-dir"
+            className="inp mono"
+            value={dir}
+            onChange={(e) => {
+              dirEdited.current = true;
+              setDir(e.target.value);
+            }}
+          />
           <button type="button" className="btn outline" onClick={() => void browse()}>
             {t('quick.browse')}
           </button>

@@ -128,7 +128,14 @@
       "help": "ヘルプとフィードバック",
       "helpHint": "問題を報告するときはログを添えると、原因を見つけやすくなります",
       "guide": "ユーザーガイド",
-      "feedback": "問題を報告"
+      "feedback": "問題を報告",
+      "soundDone": "ダウンロード完了時に通知音を鳴らす",
+      "soundDoneHint": "ウィンドウが前面にあるときも鳴ります。同時に複数完了しても 1 回だけ鳴ります",
+      "sound": "通知音",
+      "soundBuiltIn": "内蔵の通知音",
+      "soundTest": "試聴",
+      "soundPick": "WAV ファイルを選択…",
+      "soundReset": "内蔵の通知音に戻す"
     },
     "download": {
       "folder": "既定のダウンロードフォルダー",
@@ -146,7 +153,11 @@
       "resumeOnStartup": "起動時に未完了のダウンロードを再開",
       "resumeOnStartupHint": "終了時にダウンロード中だったタスクを、次回の起動後に自動で再開します",
       "syncWrites": "進捗を毎秒ディスクに書き込む",
-      "syncWritesHint": "停電やシステムのクラッシュ後も正確な位置から再開できます。オフにするとディスクへの書き込みを減らせます"
+      "syncWritesHint": "停電やシステムのクラッシュ後も正確な位置から再開できます。オフにするとディスクへの書き込みを減らせます",
+      "byCategory": "種類ごとの保存先",
+      "byCategoryHint": "ダウンロードしたファイルを拡張子で分類し、それぞれのフォルダーに保存します。空欄の種類は上の既定のダウンロードフォルダーに保存します",
+      "byCategoryPick": "{category}の保存先を選択",
+      "byCategoryClear": "既定のダウンロードフォルダーを使う"
     },
     "network": {
       "proxy": "プロキシ",
@@ -436,7 +447,9 @@
       "openFile": "ファイルを開く",
       "restore": "元に戻す"
     },
-    "fileMissing": "ファイルが見つかりません。削除または移動された可能性があります。もう一度ダウンロードできます。"
+    "fileMissing": "ファイルが見つかりません。削除または移動された可能性があります。もう一度ダウンロードできます。",
+    "showMore": "すべて表示",
+    "showLess": "折りたたむ"
   },
   "table": {
     "label": "ダウンロードタスク",
@@ -522,7 +535,8 @@
       "notResumable": "レジューム非対応",
       "connections": "{count} 接続を使用",
       "sessions": "{count} セッションを使用"
-    }
+    },
+    "dirByCategory": "種類ごとに保存"
   },
   "dialogs": {
     "close": "閉じる",
