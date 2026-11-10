@@ -312,7 +312,9 @@
       "extensionConnected": "ブラウザー拡張機能に接続済み",
       "browsersConnected": "{names} に接続済み",
       "listSeparator": "、"
-    }
+    },
+    "removed": "{count} 件のタスクをごみ箱に移動しました",
+    "undo": "元に戻す"
   },
   "empty": {
     "all": {

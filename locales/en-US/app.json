@@ -122,7 +122,7 @@
       "shortcutNone": "None",
       "shortcutClear": "Clear the shortcut",
       "shortcutTaken": "{keys} is already taken by another app",
-      "checkUpdates": "Check for updates",
+      "checkUpdates": "Check for updates automatically",
       "checkUpdatesHint": "Once after starting; you choose when to install",
       "shortcutDuplicate": "Those keys are already set for the other action",
       "help": "Help and feedback",
@@ -312,7 +312,9 @@
       "extensionConnected": "Browser extension connected",
       "browsersConnected": "{names} connected",
       "listSeparator": ", "
-    }
+    },
+    "removed": "{count, plural, one {# task moved to the trash} other {# tasks moved to the trash}}",
+    "undo": "Undo"
   },
   "empty": {
     "all": {

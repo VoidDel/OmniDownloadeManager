@@ -11,7 +11,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { hostOf } from '../../lib/links';
 import type { TaskDetail as Detail, SegmentView, Task, TorrentDetail } from '../../lib/types';
-import { STATUS_COLOR, errorHint, errorText, statusText, textColor } from '../../lib/words';
+import { STATUS_COLOR, errorHint, errorText, nameParts, statusText, textColor } from '../../lib/words';
 import { speedHistory, useApp } from '../../store/app';
 import { FileTree } from './FileTree';
 
@@ -420,7 +420,10 @@ export function TaskDetail({ id }: { id: string }) {
   return (
     <aside className="detail" aria-label={tr('detail.label')}>
       <div className="det-top">
-        <h2 title={t.fileName}>{t.fileName}</h2>
+        <h2 title={t.fileName}>
+          <span className="nm-base">{nameParts(t.fileName)[0]}</span>
+          <span className="nm-ext">{nameParts(t.fileName)[1]}</span>
+        </h2>
         <button type="button" className="iconbtn" title={tr('detail.close')} aria-label={tr('detail.close')} onClick={closeDetail}>
           <Icon name="x" />
         </button>

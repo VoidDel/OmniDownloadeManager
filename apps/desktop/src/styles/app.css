@@ -6,7 +6,9 @@
 /* ---------------------------------------------------------------- title bar, sidebar */
 /* The paste box is wider than a search box: links are long. */
 .titlebar .omnibox { width: min(440px, 40vw); }
-.titlebar .ttl span { font-variant-numeric: tabular-nums; }
+/* Short of room, the count gives way before the view's name does. */
+.titlebar .ttl b { flex: none; }
+.titlebar .ttl span { font-variant-numeric: tabular-nums; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .nav-item .cnt { margin-left: auto; font-size: .78rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .nav-item[aria-current="true"] .cnt { color: inherit; opacity: .8; }
@@ -15,6 +17,8 @@
    (omni-ui keeps this list at full height, so the sections were the ones cut off). */
 .sb-nav { flex: 0 1000 auto; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
 .sb-nav > * { flex: none; }
+/* More below than fits: the last rows fade out instead of being cut through. */
+.sb-nav[data-more="true"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
 .task-sum .sum-pct { font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- command bar */
@@ -25,7 +29,7 @@
 .btn.danger .ic { color: var(--danger); }
 
 /* ---------------------------------------------------------------- work area */
-.workarea { flex: 1; min-height: 0; display: flex; }
+.workarea { flex: 1; min-height: 0; display: flex; position: relative; container: workarea / inline-size; }
 .listcol { flex: 1; min-width: 0; display: flex; flex-direction: column; container: listcol / inline-size; }
 /* With the details panel open the command bar is narrower: actions other than "new download"
    and the sort order show their icon only (their name is the tooltip). */
@@ -43,15 +47,20 @@
   display: flex; flex-direction: column; height: 100%; min-height: 0;
 }
 @container (max-width: 860px) {
-  .task-table { --task-cols: minmax(140px, 1fr) 110px 72px 84px 76px; }
+  .task-table { --task-cols: minmax(140px, 1fr) 100px 72px 84px 96px; }
   .task-table .c-eta { display: none; }
 }
+/* Beside the details panel the name needs the room more than the protocol does (the panel
+   shows it). */
+@container (max-width: 700px) {
+  .task-row .badge { display: none; }
+}
 @container (max-width: 590px) {
-  .task-table { --task-cols: minmax(130px, 1fr) 100px 84px 76px; }
+  .task-table { --task-cols: minmax(130px, 1fr) 92px 84px 96px; }
   .task-table .c-eta, .task-table .c-size { display: none; }
 }
 @container (max-width: 470px) {
-  .task-table { --task-cols: minmax(120px, 1fr) 90px 76px; }
+  .task-table { --task-cols: minmax(120px, 1fr) 84px 96px; }
   .task-table .c-eta, .task-table .c-size, .task-table .c-speed { display: none; }
 }
 .task-table .thead { flex: none; }
@@ -59,14 +68,19 @@
 /* The sort button sits inside its header cell (omni-ui styles it as the cell itself). */
 .thead .num > button { justify-content: flex-end; }
 .thead [aria-sort="ascending"] .ic, .thead [aria-sort="descending"] .ic { opacity: 1; }
-.tscroll { flex: 1; min-height: 0; overflow: auto; outline: 0; }
-/* The list takes keyboard focus as a whole (arrows move through the rows): the ring is on the row the cursor is at. */
+.tscroll { flex: 1; min-height: 0; overflow: hidden auto; outline: 0; }
+/* The list takes keyboard focus as a whole (arrows move through the rows): the ring is on the row
+   the cursor is at, while the keyboard is what is being used (`.kbd`). */
 .task-table:focus-visible { outline: 0; }
-.task-table:focus-visible .task-row.cursor { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.task-table.kbd:focus .task-row.cursor { outline: 2px solid var(--border-focus); outline-offset: -2px; }
 .tbody { position: relative; margin: 4px 10px 12px; }
 .task-row { top: 0; cursor: default; user-select: none; }
 .task-row .nm .fi { width: 20px; height: 20px; }
 .task-row .nm-txt { flex: 0 1 auto; }
+/* The name in two parts: the base gives way, the extension stays. */
+.task-row .nm-line { display: flex; min-width: 0; }
+.task-row .nm-base { flex: 0 1 auto; min-width: 0; white-space: pre; }
+.task-row .nm-ext { flex: none; overflow: visible; }
 .task-row .badge { flex: none; }
 
 .prog { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -104,10 +118,16 @@
    13 px padding from the window's edge (the command bar's padding), 8 px from the top (the
    command bar centres 32 px in 48 px). */
 .det-top { display: flex; align-items: center; gap: 8px; padding: 8px 13px 6px 16px; flex: none; }
+/* In a small window the list has no room to share: the panel lies over it instead. */
+@container workarea (max-width: 820px) {
+  .detail { position: absolute; top: 0; right: 8px; bottom: 8px; width: min(340px, calc(100% - 32px)); margin: 0; z-index: 5; box-shadow: var(--shadow-2); }
+}
 /* Its bottom line drawn inside, not as a border, for the same reason: the switch is then centred
    in exactly 48 px, as the panel's is. */
 .listcol > .cmdbar { padding-right: 21px; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--border-subtle); }
-.det-top h2 { margin: 0; font-size: 1rem; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.det-top h2 { margin: 0; font-size: 1rem; font-weight: 600; flex: 1; min-width: 0; display: flex; white-space: nowrap; }
+.det-top h2 .nm-base { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.det-top h2 .nm-ext { flex: none; }
 .det-meta { display: flex; align-items: center; gap: 8px; padding: 0 16px 6px; font-size: .8rem; color: var(--fg-secondary); min-width: 0; }
 .det-meta .st { font-size: .8rem; }
 .detail .tabs { padding: 0 8px; flex: none; }
@@ -293,3 +313,11 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .update p { margin: 0; }
 .update-notes { max-height: 220px; overflow: auto; white-space: pre-wrap; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-subtle); font-size: .88rem; line-height: 1.5; }
 .update-progress { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------------------------------------------------------------- polish */
+/* A menu is focused as a whole when it opens (its items take the keys): no ring around it. */
+.ctx:focus, .ctx:focus-visible { outline: 0; }
+/* The same place for every settings page, whether it scrolls or not. */
+.set-body { scrollbar-gutter: stable both-edges; }
+/* The links box grows with what is pasted into it, up to eight lines. */
+.nt-urls { field-sizing: content; min-height: calc(3lh + 18px); max-height: calc(8lh + 18px); }

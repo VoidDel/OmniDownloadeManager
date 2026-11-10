@@ -27,7 +27,8 @@ function PurgeDialog({ ids }: { ids: string[] }) {
       closeLabel={t('dialogs.close')}
       footer={
         <>
-          <button type="button" className="btn outline" onClick={closeDialog}>
+          {/* It cannot be undone: Enter is "cancel". */}
+          <button type="button" className="btn outline" data-autofocus onClick={closeDialog}>
             {t('dialogs.cancel')}
           </button>
           <button type="button" className="btn primary danger-fill" onClick={() => void confirm()}>

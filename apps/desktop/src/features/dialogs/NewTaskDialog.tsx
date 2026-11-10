@@ -223,6 +223,8 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       added.map((task) => task.id),
       added[0]?.id ?? null,
     );
+    // Where new tasks land depends on the sort order: bring the first one into view.
+    if (added[0]) useApp.getState().revealTask(added[0].id);
     toast('success', added.length > 1 ? t('newTask.addedMany', { count: added.length }) : t('newTask.addedOne', { name: added[0].fileName }));
   };
 

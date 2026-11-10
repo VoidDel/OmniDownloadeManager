@@ -312,7 +312,9 @@
       "extensionConnected": "瀏覽器擴充功能已連線",
       "browsersConnected": "{names} 已連線",
       "listSeparator": "、"
-    }
+    },
+    "removed": "已移到回收筒：{count} 個任務",
+    "undo": "復原"
   },
   "empty": {
     "all": {

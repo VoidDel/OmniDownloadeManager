@@ -14,7 +14,7 @@ import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
 import { ROW_HEIGHT } from '../../lib/theme';
 import type { Task } from '../../lib/types';
-import { STATUS_COLOR, errorText, statusText, textColor } from '../../lib/words';
+import { STATUS_COLOR, errorText, nameParts, statusText, textColor } from '../../lib/words';
 import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
@@ -69,12 +69,20 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
           .then(() => useApp.getState().toast('success', list.length > 1 ? i18n.t('table.menu.copiedMany', { count: list.length }) : i18n.t('table.menu.copied'))),
     },
     { separator: true },
-    { label: i18n.t('table.menu.delete'), icon: 'trash', kbd: 'Del', run: () => void run(() => api.remove(ids)) },
+    { label: i18n.t('table.menu.delete'), icon: 'trash', kbd: 'Del', run: () => void useApp.getState().removeTasks(ids) },
   );
   return items;
 }
 
 /** One task. `start` is its offset in the list. */
+/** What the user last used, as `:focus-visible` would know it: focus that arrives from script
+ *  (a click on a row, a dialog closing) shows the list's ring only after a key press. */
+let lastInput: 'keyboard' | 'mouse' = 'mouse';
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => !['Control', 'Shift', 'Alt', 'Meta'].includes(e.key) && (lastInput = 'keyboard'), true);
+  window.addEventListener('mousedown', () => (lastInput = 'mouse'), true);
+}
+
 const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: number; cols: string; cursor: boolean }) {
   const t = useApp((s) => s.tasks[id]);
   const selected = useApp((s) => s.selection.includes(id));
@@ -92,6 +100,7 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
   // Finished: the average speed over the whole download.
   const avg = t.status === 'completed' && !fileGone ? fmt.averageSpeed(t) : null;
   const title = t.error ? `${errorText(t.error)}\n${t.error.message}` : fileGone ? i18n.t('detail.fileMissing') : undefined;
+  const [base, ext] = nameParts(t.fileName);
   return (
     <div
       role="row"
@@ -104,7 +113,11 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
       <span className="nm" role="gridcell">
         <FileIcon name={t.fileName} isDir={false} />
         <span className="nm-txt">
-          <span title={t.fileName}>{t.fileName}</span>
+          {/* Cut short, the name keeps its extension: `ubuntu-24.04….iso`. */}
+          <span className="nm-line" title={t.fileName}>
+            <span className="nm-base">{base}</span>
+            {ext && <span className="nm-ext">{ext}</span>}
+          </span>
         </span>
         <span className={`badge proto-${t.kind}`}>{PROTO[t.kind]}</span>
       </span>
@@ -145,13 +158,28 @@ export function TaskTable() {
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   // The keyboard cursor; the selection follows it unless Ctrl is held.
   const [focus, setFocus] = useState<string | null>(null);
+  // Its ring is drawn while the list is used with the keyboard, not after a click: the list is
+  // focused from script on a click, which `:focus-visible` counts as keyboard focus.
+  const [byKeyboard, setByKeyboard] = useState(false);
   const { t: tr } = useTranslation();
 
   // The React Compiler cannot memoize around the virtualizer's functions and skips this
   // component; that is expected (rows are memoized themselves).
+  // The scroll padding is the list's own margin (`.tbody`): a row scrolled to is shown whole.
   // eslint-disable-next-line react-hooks/incompatible-library
-  const v = useVirtualizer({ count: ids.length, getScrollElement: () => scroller.current, estimateSize: () => rowH, overscan: 12 });
+  const v = useVirtualizer({ count: ids.length, getScrollElement: () => scroller.current, estimateSize: () => rowH, overscan: 12, scrollPaddingStart: 4, scrollPaddingEnd: 16 });
   useEffect(() => v.measure(), [rowH, v]);
+
+  // A task just added: into view, with the cursor on it.
+  const reveal = useApp((s) => s.reveal);
+  useEffect(() => {
+    const i = reveal ? ids.indexOf(reveal.id) : -1;
+    if (i < 0) return;
+    v.scrollToIndex(i, { align: 'auto' });
+    setFocus(reveal!.id);
+    // Only when asked: not again when the list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal]);
 
   // The columns follow the pane's width (container queries in app.css).
   const cols = 'var(--task-cols)';
@@ -159,6 +187,7 @@ export function TaskTable() {
   const rowAt = (e: MouseEvent) => (e.target as HTMLElement).closest<HTMLElement>('.task-row')?.dataset.id ?? null;
 
   const onMouseDown = (e: MouseEvent) => {
+    setByKeyboard(false);
     if (e.button !== 0 && e.button !== 2) return;
     const id = rowAt(e);
     const { selection, anchor, select } = useApp.getState();
@@ -202,6 +231,7 @@ export function TaskTable() {
   const onKeyDown = (e: KeyboardEvent) => {
     // Keys pressed on a column header's button are that button's.
     if (e.target !== e.currentTarget) return;
+    setByKeyboard(true);
     const { selection, select, run, openDialog, tasks } = useApp.getState();
     const move = (to: number) => {
       const i = Math.max(0, Math.min(ids.length - 1, to));
@@ -244,7 +274,7 @@ export function TaskTable() {
         if (!selection.length) break;
         e.preventDefault();
         if (filter === 'trash' || e.shiftKey) openDialog({ kind: 'purge', ids: selection });
-        else void run(() => api.remove(selection));
+        else void useApp.getState().removeTasks(selection);
         break;
       case ' ': {
         if (!selection.length) break;
@@ -281,7 +311,7 @@ export function TaskTable() {
   const items = v.getVirtualItems();
   return (
     <div
-      className="task-table"
+      className={`task-table${byKeyboard ? ' kbd' : ''}`}
       role="grid"
       ref={table}
       tabIndex={0}
@@ -291,8 +321,11 @@ export function TaskTable() {
       aria-activedescendant={focus && items.some((vi) => ids[vi.index] === focus) ? `task-${focus}` : undefined}
       onKeyDown={onKeyDown}
       onFocus={(e) => {
-        // Tabbed into: the cursor starts at the selection, or at the first row.
-        if (e.target === e.currentTarget && (!focus || !ids.includes(focus))) setFocus(useApp.getState().selection.find((id) => ids.includes(id)) ?? ids[0] ?? null);
+        if (e.target !== e.currentTarget) return;
+        // Reached with the keyboard (Tab, or a dialog closed with it): the ring shows, and the
+        // cursor starts at the selection or at the first row.
+        setByKeyboard(lastInput === 'keyboard');
+        if (!focus || !ids.includes(focus)) setFocus(useApp.getState().selection.find((id) => ids.includes(id)) ?? ids[0] ?? null);
       }}
     >
       <div className="thead" role="row" style={{ gridTemplateColumns: cols }}>

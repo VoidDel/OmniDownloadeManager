@@ -77,6 +77,8 @@ interface State {
   selection: string[];
   /** Where a shift-click range starts. */
   anchor: string | null;
+  /** The task the list should scroll to; `n` makes each request a new one. */
+  reveal: { id: string; n: number } | null;
   /** The details panel opens for every selected task (the switch in its header). */
   detailPinned: boolean;
   /** The task the panel was opened for once (command bar, menu); selecting anything else (or
@@ -107,6 +109,10 @@ interface State {
   setFilter: (f: Filter) => void;
   setSort: (key: SortKey) => void;
   select: (ids: string[], anchor?: string | null) => void;
+  /** Moves tasks to the recycle bin and says so, with a way back. */
+  removeTasks: (ids: string[]) => Promise<void>;
+  /** Scrolls the list to a task (one just added). */
+  revealTask: (id: string) => void;
   /** Shows the panel for task `id` this once. */
   openDetail: (id: string) => void;
   /** Hides the panel; pinned, it also stops opening for every task (or it would come straight back). */
@@ -183,6 +189,7 @@ export const useApp = create<State>((set, get) => ({
   sort: { key: 'added', desc: false },
   selection: [],
   anchor: null,
+  reveal: null,
   detailPinned: readPinned(),
   detailFor: null,
   dialog: null,
@@ -303,6 +310,17 @@ export const useApp = create<State>((set, get) => ({
       anchor: anchor === undefined ? s.anchor : anchor,
       detailFor: selection.length === 1 && selection[0] === s.detailFor ? s.detailFor : null,
     })),
+  removeTasks: async (ids) => {
+    if (!ids.length) return;
+    await get().run(async () => {
+      await api.remove(ids);
+      get().toast('info', i18n.t('shell.removed', { count: ids.length }), {
+        label: i18n.t('shell.undo'),
+        run: () => void get().run(() => api.restore(ids)),
+      });
+    });
+  },
+  revealTask: (id) => set((s) => ({ reveal: { id, n: (s.reveal?.n ?? 0) + 1 } })),
   openDetail: (detailFor) => set({ detailFor }),
   closeDetail: () => {
     savePinned(false);

@@ -32,6 +32,14 @@ export function textColor(color: string): string {
   return color.replace(/^var\(--(accent|success|warning|danger|info|bt)\)$/, 'var(--$1-text, var(--$1))');
 }
 
+/** A file name as base and extension, so a name cut short keeps its extension on screen
+ *  (`ubuntu-24.04….iso`). Only a short last part counts as one. */
+export function nameParts(fileName: string): [string, string] {
+  const dot = fileName.lastIndexOf('.');
+  const at = dot > 0 && fileName.length - dot <= 8 ? dot : fileName.length;
+  return [fileName.slice(0, at), fileName.slice(at)];
+}
+
 export function categoryLabel(c: Category): string {
   return i18n.t(`category.${c}`);
 }

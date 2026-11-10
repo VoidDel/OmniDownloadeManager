@@ -6,7 +6,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Platform } from 'omni-ui';
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -291,8 +291,29 @@ function TaskSummary() {
   );
 }
 
+/** Whether a scrolling element has more below what it shows (its last rows then fade out). */
+function useMoreBelow<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+    check();
+    const sizes = new ResizeObserver(check);
+    sizes.observe(el);
+    el.addEventListener('scroll', check, { passive: true });
+    return () => {
+      sizes.disconnect();
+      el.removeEventListener('scroll', check);
+    };
+  }, []);
+  return [ref, more] as const;
+}
+
 export function Sidebar({ platform }: { platform: Platform }) {
   const { t } = useTranslation();
+  const [nav, more] = useMoreBelow<HTMLElement>();
   const view = useApp((s) => s.view);
   const filter = useApp((s) => s.filter);
   const settingsTab = useApp((s) => s.settingsTab);
@@ -329,7 +350,7 @@ export function Sidebar({ platform }: { platform: Platform }) {
           <Brand version={version} />
         </div>
       )}
-      <nav className="sb-nav" aria-label={t('shell.sidebar.filters')}>
+      <nav className="sb-nav" ref={nav} data-more={more} aria-label={t('shell.sidebar.filters')}>
         {FILTERS.map((f) => item(f.id, filterLabel(f.id), f.icon))}
         <div className="sb-label lbl">{t('shell.sidebar.categories')}</div>
         {categories.map((c) => item(`cat:${c}`, categoryLabel(c), CATEGORY_ICON[c]))}
@@ -487,7 +508,7 @@ export function CommandBar() {
               <span className="lbl">{t('shell.cmd.redownload')}</span>
             </button>
           )}
-          <button type="button" title={t('shell.cmd.delete')} className="btn" onClick={() => void run(() => api.remove(selection))}>
+          <button type="button" title={t('shell.cmd.delete')} className="btn" onClick={() => void useApp.getState().removeTasks(selection)}>
             <Icon name="trash" />
             <span className="lbl">{t('shell.cmd.delete')}</span>
           </button>
@@ -534,7 +555,8 @@ export function StatusBar() {
   const { t } = useTranslation();
   const speed = useApp((s) => s.stats.downloadSpeed);
   const upload = useApp((s) => s.stats.uploadSpeed);
-  const selected = useApp((s) => s.selection.length);
+  // The selection is the list's: not shown over the settings.
+  const selected = useApp((s) => (s.view === 'tasks' ? s.selection.length : 0));
   const { all, running, waiting, seeding } = useApp(
     useShallow((s) => {
       let all = 0;

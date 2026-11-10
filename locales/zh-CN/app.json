@@ -312,7 +312,9 @@
       "extensionConnected": "浏览器扩展已连接",
       "browsersConnected": "{names} 已连接",
       "listSeparator": "、"
-    }
+    },
+    "removed": "已移到回收站：{count} 个任务",
+    "undo": "撤销"
   },
   "empty": {
     "all": {
