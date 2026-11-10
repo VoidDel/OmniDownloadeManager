@@ -87,7 +87,11 @@ pub fn clipboard_links(app: &AppHandle, text: &str) -> Vec<String> {
 pub fn offer(app: &AppHandle, links: Vec<String>, origin: Origin) {
     match links.as_slice() {
         [] => {}
-        [one] if matches!(TaskKind::detect(one), Some(TaskKind::Http | TaskKind::Ftp)) => {
+        // An FTP folder: its files are chosen in the new-download dialog.
+        [one]
+            if matches!(TaskKind::detect(one), Some(TaskKind::Http | TaskKind::Ftp))
+                && !omnidl_ftp::is_folder(one) =>
+        {
             let app = app.clone();
             let url = one.clone();
             tauri::async_runtime::spawn(async move { ask(&app, url, origin).await });

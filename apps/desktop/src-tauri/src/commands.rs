@@ -178,7 +178,54 @@ pub async fn task_probe(
 
 #[tauri::command]
 pub async fn task_add(state: State<'_, AppState>, items: Vec<NewTask>) -> Result<Vec<Task>> {
-    state.manager.add(items).await
+    let mut expanded = Vec::new();
+    for item in items {
+        if omnidl_ftp::is_folder(&item.source) {
+            expanded.extend(ftp_folder(&state, item).await?);
+        } else {
+            expanded.push(item);
+        }
+    }
+    if expanded.is_empty() {
+        return Err(Error::invalid("the folder has no files"));
+    }
+    state.manager.add(expanded).await
+}
+
+/// An FTP folder: a task per file (those chosen, `only_files` counting in the listing's order, as
+/// the dialog showed it), in a folder of the folder's name with its subfolders.
+async fn ftp_folder(state: &AppState, item: NewTask) -> Result<Vec<NewTask>> {
+    let o = omnidl_core::JobOptions::resolve(&item.options, &state.manager.config());
+    let files = omnidl_ftp::list_folder(&item.source, &o).await?;
+    let root = Path::new(&item.save_dir).join(omnidl_ftp::folder_name(&item.source));
+    let chosen = item.options.only_files.clone();
+    let options = TaskOptions {
+        only_files: None,
+        file_name: None,
+        checksum: None,
+        mirrors: Vec::new(),
+        ..item.options
+    };
+    Ok(files
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| chosen.as_ref().is_none_or(|c| c.contains(i)))
+        .map(|(_, f)| {
+            let mut dir = root.clone();
+            if let Some((parent, _)) = f.path.rsplit_once('/') {
+                for part in parent.split('/') {
+                    dir.push(omnidl_core::filename::sanitize(part));
+                }
+            }
+            NewTask {
+                source: f.url,
+                save_dir: dir.to_string_lossy().into_owned(),
+                options: options.clone(),
+                start: item.start,
+                probe: None,
+            }
+        })
+        .collect())
 }
 
 #[tauri::command]

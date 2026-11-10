@@ -43,6 +43,8 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
   const { t } = useTranslation();
   const supported = SUPPORTED.has(link.kind);
   const torrent = link.kind === 'magnet' || link.kind === 'torrent';
+  // An FTP folder: its files, a task each.
+  const folder = link.kind === 'ftp' && link.url.endsWith('/');
   const name = probe?.state === 'ok' ? probe.info.fileName : link.url;
   let sub: ReactNode;
   if (!supported) sub = <span className="warn-text">{t('newTask.row.unsupported')}</span>;
@@ -60,10 +62,10 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
         {t('newTask.row.probeFailed', { error: errorText(probe.error) })}
       </span>
     );
-  else if (torrent) {
+  else if (torrent || folder) {
     const i = probe.info;
     const files = i.files?.length ?? 1;
-    sub = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), files > 1 ? t('newTask.row.files', { count: files }) : t('newTask.row.singleFile')].join(' · ');
+    sub = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), files > 1 || folder ? t('newTask.row.files', { count: files }) : t('newTask.row.singleFile')].join(' · ');
   } else {
     const i = probe.info;
     const parts = [i.total != null ? fmt.bytes(i.total) : t('newTask.row.sizeUnknown'), i.resumable ? t('newTask.row.resumable') : t('newTask.row.notResumable')];
@@ -74,7 +76,7 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
     }
     sub = parts.join(' · ');
   }
-  const many = probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1;
+  const many = folder || (probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1);
   return (
     <div className="nt-row" data-off={!supported}>
       {probe?.state === 'ok' ? <FileIcon name={name} isDir={many} /> : <Icon name={torrent ? 'magnet' : 'link'} className="fi" />}
@@ -199,6 +201,13 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
     .filter(Boolean);
   const mirrorsApply = addable.length === 1 && addable[0].kind === 'http';
   const mirrorsInvalid = mirrors.length > 0 && (!mirrorsApply || mirrors.some((m) => kindOf(m) !== 'http'));
+  // An FTP folder adds a task per file (the chosen ones when it is the only link).
+  const taskCount = addable.reduce((n, l) => {
+    if (l.kind !== 'ftp' || !l.url.endsWith('/')) return n + 1;
+    if (l === single) return n + (torrentFiles.length ? chosen.size : 0);
+    const p = probes[keyOf(l)];
+    return n + (p?.state === 'ok' ? (p.info.files?.length ?? 0) : 1);
+  }, 0);
   const invalid = speed === undefined || (proxyMode === 'custom' && !proxyUrl.trim()) || sumInvalid || mirrorsInvalid;
 
   const addTorrentFiles = async () => {
@@ -260,7 +269,7 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <span className="grow nt-sum">
         {addable.length > 0 && (
           <>
-            <b>{t('newTask.summary', { count: addable.length })}</b>
+            <b>{t('newTask.summary', { count: taskCount })}</b>
             {totalKnown > 0 && ` · ${fmt.bytes(totalKnown)}`}
           </>
         )}

@@ -4,16 +4,20 @@
 //! several sessions at once, each fetching its part with `REST` + `RETR`, sharing the segment
 //! table, writer and checkpoints of the HTTP engine's design (ADR-003). `ftps://` secures the
 //! control and data connections with `AUTH TLS` (port 990: implicit TLS). Resuming checks that
-//! the size and modification time are unchanged.
+//! the size and modification time are unchanged. A link ending with `/` is a folder: probing it
+//! lists its files (`folder`), and the app adds a task for each.
 
 mod download;
+mod folder;
 mod session;
+
+pub use folder::{FolderFile, MAX_FILES, folder_name, is_folder, list as list_folder};
 
 use std::time::Duration;
 
 use async_trait::async_trait;
 use omnidl_core::{
-    DownloadEngine, ErrorCode, Job, JobOptions, Outcome, ProbeInfo, Result, TaskKind,
+    DownloadEngine, ErrorCode, Job, JobOptions, Outcome, ProbeFile, ProbeInfo, Result, TaskKind,
 };
 
 use session::{Ftp, Target, timed};
@@ -46,6 +50,26 @@ impl DownloadEngine for FtpEngine {
     }
 
     async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo> {
+        // A folder: its files, to choose from (adding it makes a task per file).
+        if is_folder(source) {
+            let files = list_folder(source, options).await?;
+            return Ok(ProbeInfo {
+                final_url: source.trim().to_owned(),
+                file_name: folder_name(source),
+                total: Some(files.iter().map(|f| f.size).sum()),
+                resumable: true,
+                content_type: None,
+                etag: None,
+                last_modified: None,
+                files: files
+                    .into_iter()
+                    .map(|f| ProbeFile {
+                        path: f.path,
+                        size: f.size,
+                    })
+                    .collect(),
+            });
+        }
         let target = Target::parse(source, options)?;
         let mut ftp = session::open(&target, options).await?;
         let p = probe(&mut ftp, &target, options).await;

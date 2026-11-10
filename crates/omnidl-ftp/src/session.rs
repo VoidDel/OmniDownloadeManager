@@ -47,7 +47,17 @@ pub(crate) struct Target {
 }
 
 impl Target {
+    /// A link to a file.
     pub fn parse(source: &str, o: &JobOptions) -> Result<Self> {
+        Self::parse_as(source, o, false)
+    }
+
+    /// A link to a folder (ending with `/`; the server's root too).
+    pub fn parse_folder(source: &str, o: &JobOptions) -> Result<Self> {
+        Self::parse_as(source, o, true)
+    }
+
+    fn parse_as(source: &str, o: &JobOptions, folder: bool) -> Result<Self> {
         let invalid = |why: &str| Error::new(ErrorCode::InvalidUrl, format!("{source}: {why}"));
         let mut url = Url::parse(source.trim()).map_err(|e| invalid(&e.to_string()))?;
         let security = match url.scheme() {
@@ -65,9 +75,18 @@ impl Target {
             _ => 21,
         });
         let path = filename::percent_decode(url.path());
-        if path.is_empty() || path == "/" || path.ends_with('/') {
+        let is_folder = path.is_empty() || path.ends_with('/');
+        if is_folder && !folder {
             return Err(invalid("the link points at a folder, not a file"));
         }
+        if folder && !is_folder {
+            return Err(invalid("the link points at a file, not a folder"));
+        }
+        let path = if path.is_empty() {
+            "/".to_owned()
+        } else {
+            path
+        };
         let user = match url.username() {
             "" => o.username.clone(),
             u => Some(filename::percent_decode(u)),

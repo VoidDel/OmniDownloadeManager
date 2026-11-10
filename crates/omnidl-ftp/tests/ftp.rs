@@ -376,3 +376,41 @@ async fn downloads_over_ftps() {
     assert_eq!(std::fs::read(d.downloads.join("secret.tar")).unwrap(), data);
     m.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lists_a_folder_with_its_subfolders() {
+    let d = dirs();
+    std::fs::create_dir_all(d.served.join("pub/set/sub one")).unwrap();
+    std::fs::write(d.served.join("pub/set/a.bin"), content(1000, 1)).unwrap();
+    std::fs::write(d.served.join("pub/set/sub one/b c.bin"), content(2000, 2)).unwrap();
+    let s = serve(&d.served, false, None).await;
+    let m = manager().await;
+    let url = s.url("ftp", "pub/set/");
+
+    let probe = m.probe(&url, &TaskOptions::default()).await.unwrap();
+    assert_eq!(probe.file_name, "set");
+    assert_eq!(probe.total, Some(3000));
+    let paths: Vec<_> = probe.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["a.bin", "sub one/b c.bin"]);
+
+    let files = omnidl_ftp::list_folder(&url, &omnidl_core::JobOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(files[1].url, s.url("ftp", "pub/set/sub%20one/b%20c.bin"));
+    // Each file's link downloads it.
+    let id = m
+        .add(vec![new_task(
+            &files[1].url,
+            &d.downloads,
+            TaskOptions::default(),
+        )])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, id, |t| t.status == TaskStatus::Completed).await;
+    assert_eq!(
+        std::fs::read(d.downloads.join("b c.bin")).unwrap(),
+        content(2000, 2)
+    );
+    m.shutdown().await;
+}
