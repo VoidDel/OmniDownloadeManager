@@ -1,0 +1,236 @@
+{
+  "extDescription": {
+    "message": "把瀏覽器的下載交給 Omni Download：多連線加速、續傳，帶上 Cookie 與來源頁面。"
+  },
+  "cmdDownloadPage": {
+    "message": "用 Omni Download 下載目前頁面"
+  },
+  "menuLink": {
+    "message": "用 Omni Download 下載連結"
+  },
+  "menuMedia": {
+    "message": "用 Omni Download 下載"
+  },
+  "menuAll": {
+    "message": "用 Omni Download 下載本頁的檔案連結…"
+  },
+  "notifyUnreachable": {
+    "message": "無法連線到 Omni Download。請確認已安裝並執行，或在擴充功能選項中檢查連線。"
+  },
+  "notifyNoLinksRead": {
+    "message": "無法讀取這一頁的連結。"
+  },
+  "notifyNoFileLinks": {
+    "message": "這一頁沒有可下載的檔案連結。"
+  },
+  "notifyStarted": {
+    "message": "已交給 Omni Download：$1"
+  },
+  "notifyQueued": {
+    "message": "已加入 Omni Download（稍後下載）：$1"
+  },
+  "statusQueued": {
+    "message": "等候中"
+  },
+  "statusProbing": {
+    "message": "連線中"
+  },
+  "statusDownloading": {
+    "message": "下載中"
+  },
+  "statusPaused": {
+    "message": "已暫停"
+  },
+  "statusSeeding": {
+    "message": "做種中"
+  },
+  "statusCompleted": {
+    "message": "已完成"
+  },
+  "statusFailed": {
+    "message": "失敗"
+  },
+  "optionsTitle": {
+    "message": "Omni Download 擴充功能選項"
+  },
+  "optionsHeading": {
+    "message": "Omni Download 擴充功能"
+  },
+  "sitesNeeded": {
+    "message": "需要存取網站的權限"
+  },
+  "sitesNeededHint": {
+    "message": "讀取下載所在網站的 Cookie、在點選下載時接管，都需要這個權限。"
+  },
+  "sitesGrant": {
+    "message": "授予權限"
+  },
+  "sectionTakeover": {
+    "message": "接管下載"
+  },
+  "takeover": {
+    "message": "接管瀏覽器下載"
+  },
+  "takeoverHint": {
+    "message": "點選下載時交給 Omni Download。按住 Alt 點選連結時仍由瀏覽器下載。"
+  },
+  "minSize": {
+    "message": "最小檔案大小"
+  },
+  "minSizeHint": {
+    "message": "更小的檔案留在瀏覽器；大小未知的檔案會接管"
+  },
+  "minSizeLabel": {
+    "message": "最小檔案大小（MB）"
+  },
+  "onlyExt": {
+    "message": "只接管這些副檔名"
+  },
+  "onlyExtHint": {
+    "message": "留空表示所有檔案；用空格或逗號分隔，例如 zip 7z iso"
+  },
+  "skipExt": {
+    "message": "不接管這些副檔名"
+  },
+  "skipExtPlaceholder": {
+    "message": "例如 pdf jpg"
+  },
+  "skipSites": {
+    "message": "不接管的網站"
+  },
+  "skipSitesHint": {
+    "message": "每行一個，包括它的子網域"
+  },
+  "silent": {
+    "message": "直接開始"
+  },
+  "silentHint": {
+    "message": "不彈出 Omni Download 的確認視窗，按它的預設設定開始下載"
+  },
+  "sectionConnect": {
+    "message": "連線到 Omni Download"
+  },
+  "connState": {
+    "message": "連線狀態"
+  },
+  "connStateHint": {
+    "message": "檢查擴充功能能否連線到 Omni Download"
+  },
+  "connCheck": {
+    "message": "檢查連線"
+  },
+  "checking": {
+    "message": "正在連線…"
+  },
+  "checkOk": {
+    "message": "已連線到 Omni Download $1"
+  },
+  "checkAppError": {
+    "message": "Omni Download 回覆了錯誤：$1"
+  },
+  "checkNoHost": {
+    "message": "找不到 Omni Download 的瀏覽器通訊程式。請安裝並執行一次 Omni Download。"
+  },
+  "checkNotRunning": {
+    "message": "Omni Download 沒有執行。"
+  },
+  "checkUnpaired": {
+    "message": "配對碼無效或已重新產生，請重新填寫。"
+  },
+  "checkError": {
+    "message": "無法連線：$1"
+  },
+  "pairBadFormat": {
+    "message": "配對碼的格式不對，應為 omnidl:連接埠:權杖。"
+  },
+  "transport": {
+    "message": "連線方式"
+  },
+  "transportHint": {
+    "message": "自動：先用本機通訊，無法使用時改用備用通道"
+  },
+  "transportAuto": {
+    "message": "自動"
+  },
+  "transportNative": {
+    "message": "本機通訊"
+  },
+  "transportHttp": {
+    "message": "備用通道"
+  },
+  "pairCode": {
+    "message": "備用通道配對碼"
+  },
+  "paired": {
+    "message": "已配對：127.0.0.1:$1"
+  },
+  "pairHint": {
+    "message": "Snap、Flatpak 版瀏覽器無法使用本機通訊時，在 Omni Download「設定 › 瀏覽器」中開啟備用通道，把配對碼貼到這裡"
+  },
+  "pairLabel": {
+    "message": "配對碼"
+  },
+  "pairPlaceholder": {
+    "message": "omnidl:連接埠:權杖"
+  },
+  "pair": {
+    "message": "配對"
+  },
+  "unpair": {
+    "message": "取消配對"
+  },
+  "connected": {
+    "message": "已連線"
+  },
+  "notConnected": {
+    "message": "未連線"
+  },
+  "downNotRunning": {
+    "message": "Omni Download 未執行"
+  },
+  "downNotRunningHint": {
+    "message": "點「開啟 Omni Download」啟動它；下載時也會自動啟動。"
+  },
+  "downNoHost": {
+    "message": "找不到 Omni Download"
+  },
+  "downNoHostHint": {
+    "message": "請安裝並執行一次 Omni Download；已安裝時，在它的「設定 › 瀏覽器」中點「重新寫入通訊設定」。"
+  },
+  "downUnpaired": {
+    "message": "備用通道未配對"
+  },
+  "downUnpairedHint": {
+    "message": "在擴充功能選項中填寫 Omni Download「設定 › 瀏覽器」裡的配對碼。"
+  },
+  "downError": {
+    "message": "無法連線到 Omni Download"
+  },
+  "downErrorHint": {
+    "message": "請確認它已安裝並在執行。"
+  },
+  "runningOne": {
+    "message": "$1 個任務下載中"
+  },
+  "runningOther": {
+    "message": "$1 個任務下載中"
+  },
+  "idle": {
+    "message": "沒有正在下載的任務"
+  },
+  "takeoverOn": {
+    "message": "$1 MB 以上的檔案交給 Omni Download"
+  },
+  "takeoverOff": {
+    "message": "下載留在瀏覽器中"
+  },
+  "recent": {
+    "message": "最近的下載"
+  },
+  "openApp": {
+    "message": "開啟 Omni Download"
+  },
+  "options": {
+    "message": "選項"
+  }
+}

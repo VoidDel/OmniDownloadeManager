@@ -13,9 +13,16 @@ use std::path::{Path, PathBuf};
 use omnidl_ipc::HOST_NAME;
 use serde::Serialize;
 
-/// Chromium extension IDs allowed to use the host: the development key's
-/// (`apps/extension/wxt.config.ts`). Store IDs are added when the extension is published.
-pub const CHROMIUM_EXTENSION_IDS: &[&str] = &["nfifehjghnnmamofhbbiagiaodhfeipn"];
+/// Chromium extension IDs allowed to use the host. Each store signs the extension with its own
+/// key, so each gives it its own ID (docs/extension-publishing.md).
+pub const CHROMIUM_EXTENSION_IDS: &[&str] = &[
+    // The development key's (`apps/extension/wxt.config.ts`): unpacked builds and the tests.
+    "nfifehjghnnmamofhbbiagiaodhfeipn",
+    // Microsoft Edge Add-ons.
+    "opflkejfjljlncpianfbijacendmcgmo",
+    // Chrome Web Store.
+    "kjlikfchbfphdjcafhclmehpgnekedhg",
+];
 /// The Firefox extension ID (`browser_specific_settings.gecko.id`).
 pub const FIREFOX_EXTENSION_ID: &str = "omni@omnidl.app";
 
@@ -102,6 +109,20 @@ fn manifest_host(file: &Path) -> Option<PathBuf> {
     (v["name"] == HOST_NAME).then(|| PathBuf::from(v["path"].as_str().unwrap_or_default()))
 }
 
+/// Whether a manifest file allows the extensions this version knows. One written by an earlier
+/// version does not allow the IDs that came with the stores.
+fn allows_current(file: &Path, firefox: bool) -> bool {
+    let key = if firefox {
+        "allowed_extensions"
+    } else {
+        "allowed_origins"
+    };
+    std::fs::read(file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|v| v[key] == manifest(Path::new(""), firefox)[key])
+}
+
 fn same_file(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
@@ -141,9 +162,17 @@ pub fn status(host: Option<&Path>, manifest_dir: &Path) -> Vec<BrowserState> {
 /// `force`. Returns the new state.
 pub fn register(host: &Path, manifest_dir: &Path, force: bool) -> Vec<BrowserState> {
     for b in Browser::ALL {
-        let current = registered_host(b, manifest_dir);
+        let file = registered_file(b, manifest_dir);
+        let current = file.as_deref().and_then(manifest_host);
         let working = current.as_deref().is_some_and(Path::is_file);
-        if working && !force {
+        // This installation's own registration, written by an earlier version: written again,
+        // so that the extensions allowed since then can connect.
+        let stale = working
+            && current.as_deref().is_some_and(|c| same_file(c, host))
+            && file
+                .as_deref()
+                .is_some_and(|f| !allows_current(f, b.firefox()));
+        if working && !stale && !force {
             continue;
         }
         if let Err(e) = register_one(b, host, manifest_dir) {
@@ -176,14 +205,20 @@ fn manifest_file(b: Browser, manifest_dir: &Path) -> PathBuf {
     })
 }
 
+/// The manifest file the browser is pointed at.
 #[cfg(windows)]
-fn registered_host(b: Browser, _manifest_dir: &Path) -> Option<PathBuf> {
-    let file = windows_registry::CURRENT_USER
+fn registered_file(b: Browser, _manifest_dir: &Path) -> Option<PathBuf> {
+    windows_registry::CURRENT_USER
         .open(registry_key(b))
         .ok()?
         .get_string("")
-        .ok()?;
-    manifest_host(Path::new(&file))
+        .ok()
+        .map(PathBuf::from)
+}
+
+#[cfg(windows)]
+fn registered_host(b: Browser, manifest_dir: &Path) -> Option<PathBuf> {
+    manifest_host(&registered_file(b, manifest_dir)?)
 }
 
 #[cfg(windows)]
@@ -274,9 +309,15 @@ fn manifest_file(b: Browser) -> PathBuf {
         .join(format!("{HOST_NAME}.json"))
 }
 
+/// The manifest file the browser reads.
 #[cfg(unix)]
-fn registered_host(b: Browser, _manifest_dir: &Path) -> Option<PathBuf> {
-    manifest_host(&manifest_file(b))
+fn registered_file(b: Browser, _manifest_dir: &Path) -> Option<PathBuf> {
+    Some(manifest_file(b))
+}
+
+#[cfg(unix)]
+fn registered_host(b: Browser, manifest_dir: &Path) -> Option<PathBuf> {
+    manifest_host(&registered_file(b, manifest_dir)?)
 }
 
 #[cfg(unix)]
@@ -298,6 +339,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_manifest_from_an_earlier_version_is_not_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("chromium.json");
+        // As the first release wrote it: the development ID only.
+        std::fs::write(
+            &file,
+            format!(
+                r#"{{"name":"{HOST_NAME}","path":"x","type":"stdio","allowed_origins":["chrome-extension://nfifehjghnnmamofhbbiagiaodhfeipn/"]}}"#
+            ),
+        )
+        .unwrap();
+        assert!(!allows_current(&file, false));
+        write_manifest(&file, Path::new("/opt/omni/omnidl-nm-host"), false).unwrap();
+        assert!(allows_current(&file, false));
+        // Firefox's list has not changed, and a missing file is not current.
+        let firefox = dir.path().join("firefox.json");
+        assert!(!allows_current(&firefox, true));
+        write_manifest(&firefox, Path::new("/opt/omni/omnidl-nm-host"), true).unwrap();
+        assert!(allows_current(&firefox, true));
+    }
+
+    #[test]
     fn writes_manifests_for_each_family() {
         let chromium = manifest(Path::new("/opt/omni/omnidl-nm-host"), false);
         assert_eq!(chromium["name"], HOST_NAME);
@@ -306,6 +369,18 @@ mod tests {
             chromium["allowed_origins"][0],
             "chrome-extension://nfifehjghnnmamofhbbiagiaodhfeipn/"
         );
+        // The stores' IDs too.
+        for id in [
+            "opflkejfjljlncpianfbijacendmcgmo",
+            "kjlikfchbfphdjcafhclmehpgnekedhg",
+        ] {
+            assert!(
+                chromium["allowed_origins"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&format!("chrome-extension://{id}/").into())
+            );
+        }
         assert!(chromium.get("allowed_extensions").is_none());
         let firefox = manifest(Path::new("/opt/omni/omnidl-nm-host"), true);
         assert_eq!(firefox["allowed_extensions"][0], FIREFOX_EXTENSION_ID);

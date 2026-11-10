@@ -9,6 +9,7 @@
 
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, type Header } from '../lib/headers';
+import { t } from '../lib/i18n';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
 import { basename, handOver, notify, payloadFor, type Download } from '../lib/takeover';
@@ -37,9 +38,9 @@ const FILE_EXTENSIONS = new Set(
 
 function menus() {
   void browser.contextMenus.removeAll().then(() => {
-    browser.contextMenus.create({ id: 'omni-link', title: '用 Omni Download 下载链接', contexts: ['link'] });
-    browser.contextMenus.create({ id: 'omni-media', title: '用 Omni Download 下载', contexts: ['image', 'video', 'audio'] });
-    browser.contextMenus.create({ id: 'omni-all', title: '用 Omni Download 下载本页的文件链接…', contexts: ['page'] });
+    browser.contextMenus.create({ id: 'omni-link', title: t('menuLink'), contexts: ['link'] });
+    browser.contextMenus.create({ id: 'omni-media', title: t('menuMedia'), contexts: ['image', 'video', 'audio'] });
+    browser.contextMenus.create({ id: 'omni-all', title: t('menuAll'), contexts: ['page'] });
   });
 }
 
@@ -50,7 +51,7 @@ function hello() {
 
 async function explicit(d: Download) {
   const out = await handOver(d);
-  if (out.kind === 'unreachable') void notify('无法连接 Omni Download。请确认已安装并运行，或在扩展选项中检查连接。');
+  if (out.kind === 'unreachable') void notify(t('notifyUnreachable'));
 }
 
 async function downloadAllLinks(tabId: number, pageUrl?: string) {
@@ -62,19 +63,19 @@ async function downloadAllLinks(tabId: number, pageUrl?: string) {
     });
     links = (res?.result as string[] | undefined) ?? [];
   } catch {
-    void notify('无法读取这一页的链接。');
+    void notify(t('notifyNoLinksRead'));
     return;
   }
   const files = [...new Set(links)].filter((u) => /^https?:\/\//i.test(u) && FILE_EXTENSIONS.has(extensionOf({ url: u })));
   if (!files.length) {
-    void notify('这一页没有可下载的文件链接。');
+    void notify(t('notifyNoFileLinks'));
     return;
   }
   const items = await Promise.all(files.map((url) => payloadFor({ url, pageUrl }, false)));
   try {
     await send({ type: 'add_batch', payload: { items } });
   } catch {
-    void notify('无法连接 Omni Download。请确认已安装并运行，或在扩展选项中检查连接。');
+    void notify(t('notifyUnreachable'));
   }
 }
 

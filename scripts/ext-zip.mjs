@@ -9,7 +9,7 @@
 // apps/extension/wxt.config.ts). Each package is checked before it is listed.
 
 import { execSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +24,12 @@ for (const browser of ['chrome', 'edge']) {
   const m = manifest(browser);
   if (m.key) problems.push(`${browser}: the manifest has "key" (the store refuses it)`);
   if (m.version !== version) problems.push(`${browser}: manifest version ${m.version}, package.json ${version}`);
+}
+for (const browser of ['chrome', 'edge', 'firefox']) {
+  for (const lang of ['zh_CN', 'zh_TW', 'en', 'ja']) {
+    if (!existsSync(join(ext, '.output', `${browser}-mv3`, '_locales', lang, 'messages.json'))) problems.push(`${browser}: the ${lang} texts are missing`);
+  }
+  if (manifest(browser).default_locale !== 'en') problems.push(`${browser}: default_locale is not en`);
 }
 const gecko = manifest('firefox').browser_specific_settings?.gecko;
 if (!gecko?.id) problems.push('firefox: no add-on ID');

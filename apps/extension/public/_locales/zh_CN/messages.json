@@ -1,0 +1,236 @@
+{
+  "extDescription": {
+    "message": "把浏览器的下载交给 Omni Download：多连接加速、断点续传，带上 Cookie 与来源页面。"
+  },
+  "cmdDownloadPage": {
+    "message": "用 Omni Download 下载当前页面"
+  },
+  "menuLink": {
+    "message": "用 Omni Download 下载链接"
+  },
+  "menuMedia": {
+    "message": "用 Omni Download 下载"
+  },
+  "menuAll": {
+    "message": "用 Omni Download 下载本页的文件链接…"
+  },
+  "notifyUnreachable": {
+    "message": "无法连接 Omni Download。请确认已安装并运行，或在扩展选项中检查连接。"
+  },
+  "notifyNoLinksRead": {
+    "message": "无法读取这一页的链接。"
+  },
+  "notifyNoFileLinks": {
+    "message": "这一页没有可下载的文件链接。"
+  },
+  "notifyStarted": {
+    "message": "已交给 Omni Download：$1"
+  },
+  "notifyQueued": {
+    "message": "已加入 Omni Download（稍后下载）：$1"
+  },
+  "statusQueued": {
+    "message": "等待中"
+  },
+  "statusProbing": {
+    "message": "连接中"
+  },
+  "statusDownloading": {
+    "message": "下载中"
+  },
+  "statusPaused": {
+    "message": "已暂停"
+  },
+  "statusSeeding": {
+    "message": "做种中"
+  },
+  "statusCompleted": {
+    "message": "已完成"
+  },
+  "statusFailed": {
+    "message": "失败"
+  },
+  "optionsTitle": {
+    "message": "Omni Download 扩展选项"
+  },
+  "optionsHeading": {
+    "message": "Omni Download 扩展"
+  },
+  "sitesNeeded": {
+    "message": "需要访问网站的权限"
+  },
+  "sitesNeededHint": {
+    "message": "读取下载所在网站的 Cookie、在点击下载时接管，都需要这个权限。"
+  },
+  "sitesGrant": {
+    "message": "授予权限"
+  },
+  "sectionTakeover": {
+    "message": "接管下载"
+  },
+  "takeover": {
+    "message": "接管浏览器下载"
+  },
+  "takeoverHint": {
+    "message": "点击下载时交给 Omni Download。按住 Alt 点击链接时仍由浏览器下载。"
+  },
+  "minSize": {
+    "message": "最小文件大小"
+  },
+  "minSizeHint": {
+    "message": "更小的文件留在浏览器；大小未知的文件会接管"
+  },
+  "minSizeLabel": {
+    "message": "最小文件大小（MB）"
+  },
+  "onlyExt": {
+    "message": "只接管这些扩展名"
+  },
+  "onlyExtHint": {
+    "message": "留空表示所有文件；用空格或逗号分隔，例如 zip 7z iso"
+  },
+  "skipExt": {
+    "message": "不接管这些扩展名"
+  },
+  "skipExtPlaceholder": {
+    "message": "例如 pdf jpg"
+  },
+  "skipSites": {
+    "message": "不接管的网站"
+  },
+  "skipSitesHint": {
+    "message": "每行一个，包括它的子域名"
+  },
+  "silent": {
+    "message": "直接开始"
+  },
+  "silentHint": {
+    "message": "不弹出 Omni Download 的确认窗口，按它的默认设置开始下载"
+  },
+  "sectionConnect": {
+    "message": "连接 Omni Download"
+  },
+  "connState": {
+    "message": "连接状态"
+  },
+  "connStateHint": {
+    "message": "检查扩展能否连接到 Omni Download"
+  },
+  "connCheck": {
+    "message": "检查连接"
+  },
+  "checking": {
+    "message": "正在连接…"
+  },
+  "checkOk": {
+    "message": "已连接 Omni Download $1"
+  },
+  "checkAppError": {
+    "message": "Omni Download 回复了错误：$1"
+  },
+  "checkNoHost": {
+    "message": "没有找到 Omni Download 的浏览器通信程序。请安装并运行一次 Omni Download。"
+  },
+  "checkNotRunning": {
+    "message": "Omni Download 没有运行。"
+  },
+  "checkUnpaired": {
+    "message": "配对码无效或已重新生成，请重新填写。"
+  },
+  "checkError": {
+    "message": "无法连接：$1"
+  },
+  "pairBadFormat": {
+    "message": "配对码的格式不对，应为 omnidl:端口:令牌。"
+  },
+  "transport": {
+    "message": "连接方式"
+  },
+  "transportHint": {
+    "message": "自动：先用本机通信，不可用时用备用通道"
+  },
+  "transportAuto": {
+    "message": "自动"
+  },
+  "transportNative": {
+    "message": "本机通信"
+  },
+  "transportHttp": {
+    "message": "备用通道"
+  },
+  "pairCode": {
+    "message": "备用通道配对码"
+  },
+  "paired": {
+    "message": "已配对：127.0.0.1:$1"
+  },
+  "pairHint": {
+    "message": "Snap、Flatpak 版浏览器用不了本机通信时，在 Omni Download“设置 › 浏览器”中打开备用通道，把配对码粘贴到这里"
+  },
+  "pairLabel": {
+    "message": "配对码"
+  },
+  "pairPlaceholder": {
+    "message": "omnidl:端口:令牌"
+  },
+  "pair": {
+    "message": "配对"
+  },
+  "unpair": {
+    "message": "取消配对"
+  },
+  "connected": {
+    "message": "已连接"
+  },
+  "notConnected": {
+    "message": "未连接"
+  },
+  "downNotRunning": {
+    "message": "Omni Download 未运行"
+  },
+  "downNotRunningHint": {
+    "message": "点“打开 Omni Download”启动它；下载时也会自动启动。"
+  },
+  "downNoHost": {
+    "message": "没有找到 Omni Download"
+  },
+  "downNoHostHint": {
+    "message": "请安装并运行一次 Omni Download；已安装时，在它的“设置 › 浏览器”中点“重新写入通信配置”。"
+  },
+  "downUnpaired": {
+    "message": "备用通道未配对"
+  },
+  "downUnpairedHint": {
+    "message": "在扩展选项中填写 Omni Download“设置 › 浏览器”里的配对码。"
+  },
+  "downError": {
+    "message": "无法连接 Omni Download"
+  },
+  "downErrorHint": {
+    "message": "请确认它已安装并在运行。"
+  },
+  "runningOne": {
+    "message": "$1 个任务下载中"
+  },
+  "runningOther": {
+    "message": "$1 个任务下载中"
+  },
+  "idle": {
+    "message": "没有正在下载的任务"
+  },
+  "takeoverOn": {
+    "message": "$1 MB 以上的文件交给 Omni Download"
+  },
+  "takeoverOff": {
+    "message": "下载留在浏览器中"
+  },
+  "recent": {
+    "message": "最近的下载"
+  },
+  "openApp": {
+    "message": "打开 Omni Download"
+  },
+  "options": {
+    "message": "选项"
+  }
+}

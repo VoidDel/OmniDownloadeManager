@@ -22,7 +22,9 @@ pnpm ext:zip
 
 版本号取自 `apps/extension/package.json`，每次提交新版本前先改它。
 
-上架素材在 `apps/extension/store/`：`logo-300.png`（Edge 的商店徽标）、`screenshot-1-options.png` 和 `screenshot-2-popup.png`（1280×800）。128×128 的图标已在扩展包里。建议再补一两张桌面应用接管下载时的截图。
+上架素材在 `apps/extension/store/`：`logo-300.png`（Edge 的商店徽标），以及每种语言一个文件夹（`zh-CN`、`zh-TW`、`en`、`ja`），里面是该语言的两张截图 `screenshot-1-options.png` 和 `screenshot-2-popup.png`（1280×800）。128×128 的图标已在扩展包里。建议再补一两张桌面应用接管下载时的截图。
+
+扩展的界面有四种语言（简体中文、繁體中文、English、日本語），跟随浏览器语言，其他语言显示英文。文字在 `apps/extension/public/_locales/<语言>/messages.json`，`pnpm check:locales` 会检查四种语言的键是否一致。商店会按包里的语言列出扩展，每种语言各填一份说明（第 5 节）。
 
 ## 2. 顺序
 
@@ -49,7 +51,7 @@ ID 在哪里看：Chrome 开发者信息中心的条目地址和“商品 ID”�
 
 <https://chrome.google.com/webstore/devconsole> ›“新建商品”› 上传 `…-chrome.zip`。
 
-- **商品详情**：说明（第 5 节）、类别“工具”、语言“中文（简体）”、至少一张截图。
+- **商品详情**：右上角的语言下拉框里有包里的四种语言，逐个切换，各填一份说明（第 5 节）并上传该语言文件夹里的截图。类别“工具”。“全球通用的屏幕截图”也至少要一张，用英文的即可。
 - **隐私权规范**：
   - 单一用途、各项权限的理由：第 5 节（英文，审核员阅读）。
   - 远程代码：否。
@@ -64,7 +66,7 @@ ID 在哪里看：Chrome 开发者信息中心的条目地址和“商品 ID”�
 <https://partner.microsoft.com/dashboard/microsoftedge> ›“创建新扩展”› 上传 `…-edge.zip`。
 
 - **属性**：类别“效率”；隐私政策网址同上；网站 `https://github.com/VoidDel/OmniDownloadeManager`；支持联系方式填 Issues 地址。
-- **商店一览**（语言选中文）：说明、徽标 `logo-300.png`（必填，300×300）、截图、搜索词（如 `下载`、`下载管理器`、`断点续传`、`磁力`）。
+- **商店一览**：包里的四种语言各有一行，逐个填写说明、徽标 `logo-300.png`（必填，300×300）、该语言的截图和搜索词（第 5 节）。
 - **认证说明**：第 5 节的审核说明。
 
 ### addons.mozilla.org
@@ -73,7 +75,7 @@ ID 在哪里看：Chrome 开发者信息中心的条目地址和“商品 ID”�
 
 - 兼容性只勾 Firefox（桌面）。扩展用到本机通信，Android 上不可用。
 - 问到“是否使用了代码生成器、压缩工具或打包工具”时选“是”，上传 `…-sources.zip`。构建步骤在包里的 `apps/extension/SOURCE_CODE_REVIEW.md`，按它构建出的文件与提交的包逐字节相同。
-- **列表信息**：名称、摘要（250 字以内）、说明、类别“下载管理”、许可证 MIT、支持网站填仓库地址。
+- **列表信息**：名称、摘要（250 字以内）、说明、类别“下载管理”、许可证 MIT、支持网站填仓库地址。摘要和说明可以按语言分别填写（输入框旁的语言切换），默认语言用 English。
 - **隐私政策**：把 `docs/privacy.md` 的内容粘贴进去。
 - **给审核员的说明**：第 5 节的审核说明。
 
@@ -88,13 +90,22 @@ ID 在哪里看：Chrome 开发者信息中心的条目地址和“商品 ID”�
 
 ### 名称
 
-Omni Download
+Omni Download（各语言相同）
 
 ### 摘要（一句话）
 
-把浏览器的下载交给 Omni Download：多连接加速、断点续传，带上 Cookie 与来源页面。
+扩展包里已经有（清单的 `description`），Chrome 和 Edge 直接取用；AMO 需要手填：
+
+| 语言 | 摘要 |
+|---|---|
+| 简体中文 | 把浏览器的下载交给 Omni Download：多连接加速、断点续传，带上 Cookie 与来源页面。 |
+| 繁體中文 | 把瀏覽器的下載交給 Omni Download：多連線加速、續傳，帶上 Cookie 與來源頁面。 |
+| English | Hands your browser’s downloads to Omni Download: multiple connections, resume, with the site’s cookies and referrer. |
+| 日本語 | ブラウザーのダウンロードを Omni Download に渡します。複数接続での高速化、レジューム、Cookie と参照元の引き継ぎに対応。 |
 
 ### 说明
+
+简体中文：
 
 ```
 把浏览器里的下载交给 Omni Download 桌面应用。
@@ -111,6 +122,69 @@ https://github.com/VoidDel/OmniDownloadeManager/releases
 
 扩展只与本机的 Omni Download 应用通信，不向任何服务器发送数据。
 ```
+
+繁體中文：
+
+```
+把瀏覽器裡的下載交給 Omni Download 桌面應用程式。
+
+· 點選下載時自動接管，用多個連線同時下載，支援續傳
+· 帶上網站的登入資訊（Cookie）和來源頁面，需要登入才能下載的檔案也能下
+· 接管前可以確認檔名和儲存位置，也可以設為直接開始
+· 依檔案大小、副檔名、網站設定哪些下載交給應用程式，哪些留在瀏覽器
+· 右鍵選單：下載連結、圖片、影片，或下載本頁的所有檔案連結
+· 按住 Alt 點選連結，這一次仍由瀏覽器下載
+
+需要先安裝 Omni Download 桌面應用程式（Windows、macOS、Linux，免費、開源）：
+https://github.com/VoidDel/OmniDownloadeManager/releases
+
+擴充功能只與本機的 Omni Download 應用程式通訊，不向任何伺服器傳送資料。
+```
+
+English:
+
+```
+Hands downloads from your browser to the Omni Download desktop application.
+
+· Takes a download over when you click it, and fetches it with several connections at once, with resume
+· Brings the site's sign-in (cookies) and the referring page along, so files that need a login download too
+· Lets you confirm the file name and where to save before it starts, or starts right away if you prefer
+· You choose which downloads go to the application and which stay in the browser: by file size, file type or site
+· Context menu: download a link, an image or a video, or every file link on the page
+· Alt+click a link to let the browser download it this once
+
+Requires the Omni Download desktop application (Windows, macOS, Linux; free and open source):
+https://github.com/VoidDel/OmniDownloadeManager/releases
+
+The extension talks only to the Omni Download application on your own computer. It sends no data to any server.
+```
+
+日本語：
+
+```
+ブラウザーのダウンロードを Omni Download デスクトップアプリに渡します。
+
+· クリックしたダウンロードを自動で引き継ぎ、複数の接続で同時にダウンロード。レジュームにも対応
+· サイトのログイン情報（Cookie）と参照元ページを引き継ぐので、ログインが必要なファイルもダウンロードできます
+· 開始前にファイル名と保存先を確認できます。確認なしですぐ開始する設定も可能
+· ファイルサイズ、拡張子、サイトごとに、アプリに渡すかブラウザーに残すかを設定できます
+· コンテキストメニュー：リンク、画像、動画、またはページ内のすべてのファイルリンクをダウンロード
+· Alt を押しながらリンクをクリックすると、その回だけブラウザーでダウンロードします
+
+Omni Download デスクトップアプリ（Windows・macOS・Linux、無料・オープンソース）が必要です：
+https://github.com/VoidDel/OmniDownloadeManager/releases
+
+この拡張機能は、お使いのコンピューター上の Omni Download アプリとのみ通信します。サーバーへデータを送信することはありません。
+```
+
+### 搜索词（Edge）
+
+| 语言 | 搜索词 |
+|---|---|
+| 简体中文 | `下载`、`下载管理器`、`断点续传`、`多线程下载`、`磁力` |
+| 繁體中文 | `下載`、`下載管理員`、`續傳`、`多執行緒下載`、`磁力` |
+| English | `download manager`、`downloader`、`resume downloads`、`torrent`、`magnet` |
+| 日本語 | `ダウンロード`、`ダウンロードマネージャー`、`レジューム`、`高速ダウンロード`、`マグネット` |
 
 ### Single purpose (Chrome)
 
@@ -142,17 +216,17 @@ https://github.com/VoidDel/OmniDownloadeManager/releases
 
 To test:
 1. Install the desktop application (Windows, macOS or Linux) and start it once. It registers the Native Messaging host "app.omnidownload.host" for the installed browsers.
-2. Install the extension. Its popup shows "已连接" (connected) with the application's version.
-3. Download any file larger than 1 MB. The application opens a small confirmation window; "开始下载" starts the download in the application and the browser's own download is cancelled.
+2. Install the extension. Its popup shows a green dot with the application's version ("Connected").
+3. Download any file larger than 1 MB. The application opens a small confirmation window; "Start download" starts the download in the application and the browser's own download is cancelled.
 4. Alt+click a link to let the browser download it instead.
 
 Without the desktop application the extension does nothing and its popup says the application was not found.
 
 Data: the download's URL, referrer, the site's cookies and the user agent are passed to the application on the same computer through Native Messaging (or, if the user pairs it in the options, a 127.0.0.1 interface). Nothing is sent to any remote server. There is no analytics and no remote code.
 
-The interface is in Simplified Chinese. Source: https://github.com/VoidDel/OmniDownloadeManager/tree/main/apps/extension
+The extension and the application are available in English, Simplified Chinese, Traditional Chinese and Japanese, and follow the browser's and the system's language. Source: https://github.com/VoidDel/OmniDownloadeManager/tree/main/apps/extension
 ```
 
 ## 6. 之后的更新
 
-改 `apps/extension/package.json` 的版本号，`pnpm ext:zip`，把新包上传到各商店的同一条目。AMO 每次都要同时上传源码包。扩展界面目前只有简体中文；加入其他语言后，在各商店补充对应语言的列表文字。
+改 `apps/extension/package.json` 的版本号，`pnpm ext:zip`，把新包上传到各商店的同一条目。AMO 每次都要同时上传源码包。新增界面语言时，在 `public/_locales` 加一个文件夹，并在各商店补充对应语言的列表文字。

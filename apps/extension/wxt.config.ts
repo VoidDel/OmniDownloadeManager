@@ -28,7 +28,10 @@ export default defineConfig({
     const firefox = browser === 'firefox';
     return {
       name: 'Omni Download',
-      description: '把浏览器的下载交给 Omni Download：多连接加速、断点续传，带上 Cookie 与来源页面。',
+      // Texts are in public/_locales (简体中文, 繁體中文, English, 日本語); the stores list the
+      // extension in those languages. English is what every other language gets.
+      default_locale: 'en',
+      description: '__MSG_extDescription__',
       permissions: [
         'downloads',
         'contextMenus',
@@ -47,7 +50,7 @@ export default defineConfig({
       commands: {
         'download-page': {
           suggested_key: { default: 'Alt+Shift+D' },
-          description: '用 Omni Download 下载当前页面',
+          description: '__MSG_cmdDownloadPage__',
         },
       },
       ...(firefox

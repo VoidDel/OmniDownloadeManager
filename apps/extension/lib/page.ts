@@ -3,6 +3,8 @@
 
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, builtinTheme, onSystemThemeChange, resolveTheme, systemPrefersDark, writeTheme, type Platform } from 'omni-ui';
 
+import { t } from './i18n';
+
 function platform(): Platform {
   const ua = navigator.userAgent;
   if (/Windows/.test(ua)) return 'win';
@@ -22,20 +24,29 @@ function apply() {
   });
 }
 
+/** Sets a page up: the theme, and the language (the font stacks follow it). */
 export function themePage(): void {
+  // As omni-ui's font stacks name the languages: `zh-TW` for traditional Chinese, `ja-JP`.
+  const ui = browser.i18n.getUILanguage();
+  document.documentElement.lang = /^zh-(TW|HK|MO|Hant)/i.test(ui) ? 'zh-TW' : /^ja/i.test(ui) ? 'ja-JP' : ui;
   apply();
   onSystemThemeChange(apply);
 }
 
-export const STATUS_LABEL: Record<string, string> = {
-  queued: '等待中',
-  probing: '连接中',
-  downloading: '下载中',
-  paused: '已暂停',
-  seeding: '做种中',
-  completed: '已完成',
-  failed: '失败',
+const STATUS_KEY: Record<string, string> = {
+  queued: 'statusQueued',
+  probing: 'statusProbing',
+  downloading: 'statusDownloading',
+  paused: 'statusPaused',
+  seeding: 'statusSeeding',
+  completed: 'statusCompleted',
+  failed: 'statusFailed',
 };
+
+/** A task state as the app names it; one this version does not know is shown as it is. */
+export function statusLabel(status: string): string {
+  return STATUS_KEY[status] ? t(STATUS_KEY[status]) : status;
+}
 
 export function speed(bps: number): string {
   const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];

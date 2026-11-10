@@ -2,6 +2,7 @@
 // the page as referer, the browser's user agent.
 
 import { BridgeError, send } from './bridge';
+import { t } from './i18n';
 import type { AddDownload, AddResult, Response } from './protocol';
 import { cookieHeader } from './rules';
 import { load } from './settings';
@@ -79,7 +80,7 @@ export async function handOver(d: Download, silent?: boolean): Promise<Outcome> 
   if (r.result.action === 'browser') return { kind: 'browser' };
   if (!r.result.asked && (r.result.action === 'started' || r.result.action === 'queued')) {
     const name = basename(d.filename) ?? basename(new URL(d.url).pathname) ?? d.url;
-    void notify(r.result.action === 'started' ? `已交给 Omni Download：${name}` : `已加入 Omni Download（稍后下载）：${name}`);
+    void notify(t(r.result.action === 'started' ? 'notifyStarted' : 'notifyQueued', name));
   }
   return { kind: 'taken', result: r.result };
 }

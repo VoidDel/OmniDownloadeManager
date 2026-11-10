@@ -1,0 +1,236 @@
+{
+  "extDescription": {
+    "message": "Hands your browser’s downloads to Omni Download: multiple connections, resume, with the site’s cookies and referrer."
+  },
+  "cmdDownloadPage": {
+    "message": "Download the current page with Omni Download"
+  },
+  "menuLink": {
+    "message": "Download link with Omni Download"
+  },
+  "menuMedia": {
+    "message": "Download with Omni Download"
+  },
+  "menuAll": {
+    "message": "Download this page’s file links with Omni Download…"
+  },
+  "notifyUnreachable": {
+    "message": "Can’t reach Omni Download. Make sure it is installed and running, or check the connection in the extension’s options."
+  },
+  "notifyNoLinksRead": {
+    "message": "Can’t read the links on this page."
+  },
+  "notifyNoFileLinks": {
+    "message": "This page has no links to files."
+  },
+  "notifyStarted": {
+    "message": "Sent to Omni Download: $1"
+  },
+  "notifyQueued": {
+    "message": "Added to Omni Download for later: $1"
+  },
+  "statusQueued": {
+    "message": "Queued"
+  },
+  "statusProbing": {
+    "message": "Connecting"
+  },
+  "statusDownloading": {
+    "message": "Downloading"
+  },
+  "statusPaused": {
+    "message": "Paused"
+  },
+  "statusSeeding": {
+    "message": "Seeding"
+  },
+  "statusCompleted": {
+    "message": "Completed"
+  },
+  "statusFailed": {
+    "message": "Failed"
+  },
+  "optionsTitle": {
+    "message": "Omni Download extension options"
+  },
+  "optionsHeading": {
+    "message": "Omni Download extension"
+  },
+  "sitesNeeded": {
+    "message": "Access to websites is needed"
+  },
+  "sitesNeededHint": {
+    "message": "Reading the cookies of the site a download comes from, and taking a download over when you click it, both need this."
+  },
+  "sitesGrant": {
+    "message": "Allow"
+  },
+  "sectionTakeover": {
+    "message": "Taking downloads over"
+  },
+  "takeover": {
+    "message": "Take over browser downloads"
+  },
+  "takeoverHint": {
+    "message": "Downloads you click go to Omni Download. Alt+click a link to let the browser download it."
+  },
+  "minSize": {
+    "message": "Minimum file size"
+  },
+  "minSizeHint": {
+    "message": "Smaller files stay with the browser; files of unknown size are taken over"
+  },
+  "minSizeLabel": {
+    "message": "Minimum file size (MB)"
+  },
+  "onlyExt": {
+    "message": "Only these file types"
+  },
+  "onlyExtHint": {
+    "message": "Empty means every file. Separate with spaces or commas, for example: zip 7z iso"
+  },
+  "skipExt": {
+    "message": "Never these file types"
+  },
+  "skipExtPlaceholder": {
+    "message": "For example: pdf jpg"
+  },
+  "skipSites": {
+    "message": "Sites left to the browser"
+  },
+  "skipSitesHint": {
+    "message": "One per line; subdomains are included"
+  },
+  "silent": {
+    "message": "Start without asking"
+  },
+  "silentHint": {
+    "message": "No confirmation window from Omni Download: downloads start with its default settings"
+  },
+  "sectionConnect": {
+    "message": "Connection to Omni Download"
+  },
+  "connState": {
+    "message": "Connection"
+  },
+  "connStateHint": {
+    "message": "Check that the extension can reach Omni Download"
+  },
+  "connCheck": {
+    "message": "Check connection"
+  },
+  "checking": {
+    "message": "Connecting…"
+  },
+  "checkOk": {
+    "message": "Connected to Omni Download $1"
+  },
+  "checkAppError": {
+    "message": "Omni Download answered with an error: $1"
+  },
+  "checkNoHost": {
+    "message": "Omni Download’s browser helper was not found. Install Omni Download and start it once."
+  },
+  "checkNotRunning": {
+    "message": "Omni Download is not running."
+  },
+  "checkUnpaired": {
+    "message": "The pairing code is no longer valid. Enter the current one."
+  },
+  "checkError": {
+    "message": "Can’t connect: $1"
+  },
+  "pairBadFormat": {
+    "message": "That is not a pairing code. It looks like omnidl:port:token."
+  },
+  "transport": {
+    "message": "Connect through"
+  },
+  "transportHint": {
+    "message": "Automatic: native messaging first, the fallback channel when it is unavailable"
+  },
+  "transportAuto": {
+    "message": "Automatic"
+  },
+  "transportNative": {
+    "message": "Native messaging"
+  },
+  "transportHttp": {
+    "message": "Fallback channel"
+  },
+  "pairCode": {
+    "message": "Fallback channel pairing code"
+  },
+  "paired": {
+    "message": "Paired: 127.0.0.1:$1"
+  },
+  "pairHint": {
+    "message": "For Snap and Flatpak browsers, which cannot use native messaging: turn on the fallback channel in Omni Download under Settings › Browser, and paste its pairing code here"
+  },
+  "pairLabel": {
+    "message": "Pairing code"
+  },
+  "pairPlaceholder": {
+    "message": "omnidl:port:token"
+  },
+  "pair": {
+    "message": "Pair"
+  },
+  "unpair": {
+    "message": "Unpair"
+  },
+  "connected": {
+    "message": "Connected"
+  },
+  "notConnected": {
+    "message": "Not connected"
+  },
+  "downNotRunning": {
+    "message": "Omni Download is not running"
+  },
+  "downNotRunningHint": {
+    "message": "Choose Open Omni Download to start it. A download starts it too."
+  },
+  "downNoHost": {
+    "message": "Omni Download was not found"
+  },
+  "downNoHostHint": {
+    "message": "Install Omni Download and start it once. If it is installed, choose Rewrite messaging configuration under its Settings › Browser."
+  },
+  "downUnpaired": {
+    "message": "The fallback channel is not paired"
+  },
+  "downUnpairedHint": {
+    "message": "Enter the pairing code from Omni Download’s Settings › Browser in the extension’s options."
+  },
+  "downError": {
+    "message": "Can’t reach Omni Download"
+  },
+  "downErrorHint": {
+    "message": "Make sure it is installed and running."
+  },
+  "runningOne": {
+    "message": "$1 task downloading"
+  },
+  "runningOther": {
+    "message": "$1 tasks downloading"
+  },
+  "idle": {
+    "message": "Nothing is downloading"
+  },
+  "takeoverOn": {
+    "message": "Files of $1 MB and more go to Omni Download"
+  },
+  "takeoverOff": {
+    "message": "Downloads stay in the browser"
+  },
+  "recent": {
+    "message": "Recent downloads"
+  },
+  "openApp": {
+    "message": "Open Omni Download"
+  },
+  "options": {
+    "message": "Options"
+  }
+}
