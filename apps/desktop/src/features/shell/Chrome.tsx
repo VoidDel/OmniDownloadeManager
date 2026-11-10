@@ -1,26 +1,25 @@
-// Window chrome (docs/development-plan.md §6.2): title bar with the paste box and window buttons,
+// Window chrome (docs/development-plan.md §6.2): title bar with the search box and window buttons,
 // sidebar with filters, categories and settings sections, the command bar and the status bar.
 // Same structure and classes as OmniZip's (omni-ui shell.css); labels come from locales/*/app.json
 // (`shell`).
 
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Platform } from 'omni-ui';
+import { builtinThemes, summarize, type Platform, type ThemeSummary } from 'omni-ui';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icon, Logo, type IconName } from '../../components/Icon';
 import { ContextMenu, ProgressBar, type MenuItem } from '../../components/ui';
-import i18n from '../../i18n';
+import i18n, { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
 import { api } from '../../lib/api';
 import { CATEGORY_ICON } from '../../lib/category';
 import * as fmt from '../../lib/format';
-import { hasLink } from '../../lib/links';
 import { isDark } from '../../lib/theme';
 import type { Category, ThemeMode } from '../../lib/types';
 import { categoryLabel } from '../../lib/words';
-import { countAll, detailTask, inFilter, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
+import { countAll, detailTask, inFilter, matches, useApp, visibleIds, type Filter, type SettingsTab, type SortKey } from '../../store/app';
 
 /** The fixed filters; their labels are `shell.filters.<id>` (see `filterLabel`). */
 export const FILTERS: readonly { id: Filter; icon: IconName }[] = [
@@ -147,61 +146,91 @@ function WindowControls() {
   );
 }
 
-/** Title-bar button for light / dark / system. */
-function ThemeMenu() {
-  const { t } = useTranslation();
-  const mode = useApp((s) => s.settings.appearance.mode);
-  const save = useApp((s) => s.saveSettings);
+/** A title-bar button with a menu (as OmniZip's): the items are made when it opens. */
+function MenuButton({ icon, label, items }: { icon: IconName; label: string; items: () => MenuItem[] }) {
   const menu = useMenu();
-  const pick = (m: ThemeMode) => () => void save((s) => (s.appearance.mode = m));
-  const items: MenuItem[] = [
-    { label: t('shell.theme.light'), icon: 'sun', checked: mode === 'light', run: pick('light') },
-    { label: t('shell.theme.dark'), icon: 'moon', checked: mode === 'dark', run: pick('dark') },
-    { label: t('shell.theme.system'), icon: 'monitor', checked: mode === 'system', run: pick('system') },
-  ];
   return (
     <>
-      <button type="button" className="iconbtn" title={t('shell.theme.title')} aria-label={t('shell.theme.title')} aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e)}>
-        <Icon name={isDark(mode) ? 'moon' : 'sun'} />
+      <button type="button" className="iconbtn" title={label} aria-label={label} aria-haspopup="menu" aria-expanded={menu.at !== null} onClick={(e) => menu.toggle(e, true)}>
+        <Icon name={icon} />
       </button>
-      {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items} anchor={menu.at.anchor} onClose={menu.close} />}
+      {menu.at && <ContextMenu x={menu.at.x} y={menu.at.y} items={items()} anchor={menu.at.anchor} onClose={menu.close} />}
     </>
   );
 }
 
-/** The paste box: a link pasted or typed here (Enter) opens the new-download dialog with it. */
-function PasteBox({ platform }: { platform: Platform }) {
-  const { t } = useTranslation();
-  const openDialog = useApp((s) => s.openDialog);
-  const [value, setValue] = useState('');
-  const submit = (text: string) => {
-    openDialog({ kind: 'new', text });
-    setValue('');
+const THEMES: ThemeSummary[] = builtinThemes.map((th) => summarize(th, true));
+
+/** Light / dark / system, then the themes of the appearance in effect (as in OmniZip and
+ *  Settings → Appearance), and the interface language. */
+function TitleMenus() {
+  const { t, i18n: { language } } = useTranslation();
+  const appearance = useApp((s) => s.settings.appearance);
+  const lang = useApp((s) => s.settings.language || 'auto');
+  const save = useApp((s) => s.saveSettings);
+  const dark = isDark(appearance.mode);
+  const themeItems = (): MenuItem[] => {
+    const mode = (m: ThemeMode) => () => void save((s) => (s.appearance.mode = m));
+    const key = dark ? 'darkTheme' : 'lightTheme';
+    return [
+      { label: t('shell.theme.light'), icon: 'sun', checked: appearance.mode === 'light', run: mode('light') },
+      { label: t('shell.theme.dark'), icon: 'moon', checked: appearance.mode === 'dark', run: mode('dark') },
+      { label: t('shell.theme.system'), icon: 'monitor', checked: appearance.mode === 'system', run: mode('system') },
+      { separator: true },
+      ...THEMES.filter((th) => th.appearance === (dark ? 'dark' : 'light')).map(
+        (th): MenuItem => ({
+          label: th.name[language] ?? th.name['en-US'],
+          checked: appearance[key] === th.id,
+          run: () => void save((s) => (s.appearance[key] = th.id)),
+        }),
+      ),
+    ];
+  };
+  const langItems = (): MenuItem[] => {
+    const pick = (l: string) => () => void save((s) => (s.language = l));
+    return [
+      { label: t('settings.language.auto', { lang: LANGUAGE_NAMES[systemLang()] }), checked: lang === 'auto', run: pick('auto') },
+      { separator: true },
+      ...SUPPORTED.map((l): MenuItem => ({ label: LANGUAGE_NAMES[l], checked: lang === l, run: pick(l) })),
+    ];
   };
   return (
-    <label className="searchbox omnibox">
-      <Icon name="link" />
+    <>
+      <MenuButton icon={dark ? 'moon' : 'sun'} label={t('shell.theme.title')} items={themeItems} />
+      <MenuButton icon="globe" label={t('shell.language')} items={langItems} />
+    </>
+  );
+}
+
+/** The search box: narrows the list (within the sidebar's filter) to tasks whose name, link or
+ *  folder has every word typed. Escape clears it; Enter or ↓ moves to the list. */
+function SearchBox({ platform }: { platform: Platform }) {
+  const { t } = useTranslation();
+  const query = useApp((s) => s.query);
+  const setQuery = useApp((s) => s.setQuery);
+  return (
+    <label className="searchbox">
+      <Icon name="search" />
       <input
-        id="pastebox"
-        type="text"
-        value={value}
-        placeholder={t('shell.paste')}
-        aria-label={t('shell.paste')}
+        id="search"
+        type="search"
+        value={query}
+        placeholder={t('shell.search.placeholder')}
+        aria-label={t('shell.search.label')}
         spellCheck={false}
-        onChange={(e) => setValue(e.target.value)}
-        onPaste={(e) => {
-          const text = e.clipboardData.getData('text');
-          if (hasLink(text)) {
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            if (query) setQuery('');
+            else e.currentTarget.blur();
+          }
+          if (e.key === 'Enter' || e.key === 'ArrowDown') {
             e.preventDefault();
-            submit(text);
+            document.querySelector<HTMLElement>('.task-table')?.focus();
           }
         }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') submit(value);
-          if (e.key === 'Escape') setValue('');
-        }}
       />
-      <kbd>{platform === 'mac' ? '⌘N' : 'Ctrl+N'}</kbd>
+      {!query && <kbd>{platform === 'mac' ? '⌘F' : 'Ctrl+F'}</kbd>}
     </label>
   );
 }
@@ -211,6 +240,7 @@ export function TitleBar({ platform }: { platform: Platform }) {
   const view = useApp((s) => s.view);
   const filter = useApp((s) => s.filter);
   const count = useApp((s) => Object.values(s.tasks).reduce((n, t) => n + (inFilter(t, s.filter) ? 1 : 0), 0));
+  const found = useApp((s) => (s.query.trim() ? Object.values(s.tasks).reduce((n, t) => n + (inFilter(t, s.filter) && matches(t, s.query) ? 1 : 0), 0) : null));
   return (
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-side" data-tauri-drag-region>
@@ -224,14 +254,14 @@ export function TitleBar({ platform }: { platform: Platform }) {
               <b role="heading" aria-level={1}>
                 {filterLabel(filter)}
               </b>
-              <span>{t('shell.taskCount', { count })}</span>
+              <span>{found == null ? t('shell.taskCount', { count }) : t('shell.search.found', { found, count })}</span>
             </>
           )}
         </div>
       </div>
-      <PasteBox platform={platform} />
+      {view === 'tasks' && <SearchBox platform={platform} />}
       <div className="tb-side end" data-tauri-drag-region>
-        <ThemeMenu />
+        <TitleMenus />
         {platform !== 'mac' && <WindowControls />}
       </div>
     </header>
@@ -574,6 +604,16 @@ export function StatusBar() {
   return (
     <footer className="statusbar">
       <div className="lft">
+        {names.length > 0 && (
+          <span className="seen" title={t('shell.status.extensionConnected')}>
+            <i aria-hidden="true" />
+            {t('shell.status.browsersConnected', { names: names.join(t('shell.status.listSeparator')) })}
+          </span>
+        )}
+      </div>
+      <div className="mid">{parts.join(' · ')}</div>
+      <div className="rgt">
+        {/* The speeds next to the limit that governs them. */}
         <span className="speed" title={t('shell.status.downloadSpeed')}>
           <Icon name="arrowDown" />
           {fmt.speed(speed)}
@@ -582,15 +622,6 @@ export function StatusBar() {
           <Icon name="arrowUp" />
           {fmt.speed(upload)}
         </span>
-      </div>
-      <div className="mid">{parts.join(' · ')}</div>
-      <div className="rgt">
-        {names.length > 0 && (
-          <span className="seen" title={t('shell.status.extensionConnected')}>
-            <i aria-hidden="true" />
-            {t('shell.status.browsersConnected', { names: names.join(t('shell.status.listSeparator')) })}
-          </span>
-        )}
         <SpeedLimitMenu />
       </div>
     </footer>

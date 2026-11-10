@@ -4,8 +4,6 @@
    the new-download dialog. */
 
 /* ---------------------------------------------------------------- title bar, sidebar */
-/* The paste box is wider than a search box: links are long. */
-.titlebar .omnibox { width: min(440px, 40vw); }
 /* Short of room, the count gives way before the view's name does. */
 .titlebar .ttl b { flex: none; }
 .titlebar .ttl span { font-variant-numeric: tabular-nums; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -224,6 +222,9 @@
 /* ---------------------------------------------------------------- status bar: browsers */
 .statusbar .lft, .statusbar .rgt { display: flex; align-items: center; gap: 12px; }
 .statusbar .speed { font-variant-numeric: tabular-nums; }
+/* Download and upload side by side, apart from the limit. */
+.statusbar .speed + .speed { margin-left: -4px; }
+.statusbar .speed:has(+ .sb-limit) { margin-right: 4px; }
 .statusbar .seen { display: inline-flex; align-items: center; gap: 5px; }
 /* The global download limit: a quiet button at the right end, the accent while a limit is on. */
 .sb-limit { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin-right: -6px; padding: 0 6px; border-radius: var(--radius-sm); color: inherit; font: inherit; }

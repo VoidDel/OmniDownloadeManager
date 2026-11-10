@@ -148,7 +148,7 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
 });
 
 export function TaskTable() {
-  const ids = useApp(useShallow((s) => visibleIds(s.tasks, s.filter, s.sort)));
+  const ids = useApp(useShallow((s) => visibleIds(s.tasks, s.filter, s.sort, s.query)));
   const sort = useApp((s) => s.sort);
   const setSort = useApp((s) => s.setSort);
   const density = useApp((s) => s.settings.appearance.density);

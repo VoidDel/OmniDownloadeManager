@@ -246,7 +246,12 @@
   "shell": {
     "settings": "設定",
     "taskCount": "{count} 件のタスク",
-    "paste": "ダウンロードリンクを貼り付け",
+    "search": {
+      "placeholder": "タスクを検索",
+      "label": "タスクを検索（名前、リンク、フォルダー）",
+      "found": "{count} 件中 {found} 件",
+      "clear": "検索をクリア"
+    },
     "filters": {
       "all": "すべてのタスク",
       "active": "進行中",
@@ -275,6 +280,7 @@
       "dark": "ダーク",
       "system": "システムに従う"
     },
+    "language": "言語",
     "summary": {
       "title": "進行中のタスクを表示",
       "running": "{count} 件をダウンロード中"
@@ -356,6 +362,10 @@
     "category": {
       "title": "このカテゴリにはまだタスクがありません",
       "hint": "ダウンロードしたファイルは拡張子によって自動で分類されます。"
+    },
+    "search": {
+      "title": "「{query}」に一致するタスクはありません",
+      "hint": "別のキーワードで試すか、他のカテゴリーを見てください。"
     }
   },
   "fileTree": {

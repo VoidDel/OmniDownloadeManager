@@ -246,7 +246,12 @@
   "shell": {
     "settings": "設定",
     "taskCount": "{count} 個任務",
-    "paste": "貼上下載連結",
+    "search": {
+      "placeholder": "搜尋任務",
+      "label": "搜尋任務（名稱、連結或資料夾）",
+      "found": "找到 {found} 個，共 {count} 個",
+      "clear": "清除搜尋"
+    },
     "filters": {
       "all": "全部任務",
       "active": "進行中",
@@ -275,6 +280,7 @@
       "dark": "深色",
       "system": "跟隨系統"
     },
+    "language": "語言",
     "summary": {
       "title": "檢視進行中的任務",
       "running": "{count} 個任務下載中"
@@ -356,6 +362,10 @@
     "category": {
       "title": "這個分類中還沒有任務",
       "hint": "下載的檔案會依副檔名自動分類。"
+    },
+    "search": {
+      "title": "找不到「{query}」",
+      "hint": "換個關鍵字試試，或看看其他分類。"
     }
   },
   "fileTree": {

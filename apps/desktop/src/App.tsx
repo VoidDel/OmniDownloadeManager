@@ -13,10 +13,11 @@ import { Settings } from './features/settings/Settings';
 import { CommandBar, ResizeEdges, Sidebar, StatusBar, TitleBar } from './features/shell/Chrome';
 import { TaskDetail } from './features/tasks/TaskDetail';
 import { TaskTable } from './features/tasks/TaskTable';
+import { hasLink } from './lib/links';
 import { applyTheme } from './lib/theme';
 import { detailTask, useApp } from './store/app';
 
-/** Window-wide shortcuts: Ctrl/⌘+N new download, Ctrl/⌘+, settings, Ctrl/⌘+L the paste box. */
+/** Window-wide shortcuts: Ctrl/⌘+N new download, Ctrl/⌘+, settings, Ctrl/⌘+F the search box. */
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -30,13 +31,35 @@ function useShortcuts() {
       } else if (key === ',') {
         e.preventDefault();
         s.setView(s.view === 'settings' ? 'tasks' : 'settings');
-      } else if (key === 'l') {
+      } else if (key === 'f') {
         e.preventDefault();
-        document.getElementById('pastebox')?.focus();
+        const box = document.getElementById('search') as HTMLInputElement | null;
+        box?.focus();
+        box?.select();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
+/** Links pasted anywhere but in a text field (Ctrl/⌘+V on the list) open the new-download
+ *  dialog with them. */
+function usePasteLinks() {
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return;
+      const s = useApp.getState();
+      if (s.dialog) return;
+      const text = e.clipboardData?.getData('text') ?? '';
+      if (!hasLink(text)) return;
+      e.preventDefault();
+      s.setView('tasks');
+      s.openDialog({ kind: 'new', text });
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
   }, []);
 }
 
@@ -74,6 +97,7 @@ export function App({ platform }: { platform: Platform }) {
   const toasts = useApp((s) => s.toasts);
   const dismiss = useApp((s) => s.dismiss);
   useShortcuts();
+  usePasteLinks();
   useTorrentDrop();
 
   // Files deleted or moved while the window was in the background.

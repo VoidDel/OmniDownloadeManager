@@ -238,12 +238,20 @@ fn detected(b: Browser) -> bool {
         Browser::Edge => "msedge.exe",
         Browser::Firefox => "firefox.exe",
         Browser::Brave => "brave.exe",
-        // Chromium has no installer entry; it writes BLBeacon on first run (registering the host
-        // creates `Software\Chromium` too, so that key alone proves nothing).
+        // Chromium has no App Paths entry. Its installer adds an uninstall entry and puts
+        // chrome.exe under Chromium\Application. Not `Software\Chromium`: registering the host
+        // creates it, and programs built on Chromium write `Software\Chromium\BLBeacon` too (one
+        // made Edge and Chromium look alike in the settings).
         Browser::Chromium => {
-            return windows_registry::CURRENT_USER
-                .open(r"Software\Chromium\BLBeacon")
-                .is_ok();
+            const UNINSTALL: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Chromium";
+            let dirs = ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"];
+            return windows_registry::CURRENT_USER.open(UNINSTALL).is_ok()
+                || windows_registry::LOCAL_MACHINE.open(UNINSTALL).is_ok()
+                || dirs.iter().filter_map(std::env::var_os).any(|d| {
+                    Path::new(&d)
+                        .join(r"Chromium\Application\chrome.exe")
+                        .is_file()
+                });
         }
     };
     let key = format!(r"Software\Microsoft\Windows\CurrentVersion\App Paths\{exe}");

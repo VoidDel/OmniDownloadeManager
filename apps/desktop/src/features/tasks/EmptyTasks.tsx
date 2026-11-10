@@ -8,10 +8,26 @@ import { useApp } from '../../store/app';
  *  `empty.category`. */
 const OWN: readonly Filter[] = ['all', 'active', 'done', 'torrent', 'failed', 'trash'];
 
-/** The task list when nothing matches the current filter. */
+/** The task list when nothing matches the current filter, or the search. */
 export function EmptyTasks({ filter }: { filter: Filter }) {
   const { t } = useTranslation();
   const openDialog = useApp((s) => s.openDialog);
+  const query = useApp((s) => s.query.trim());
+  const setQuery = useApp((s) => s.setQuery);
+  if (query) {
+    return (
+      <div className="emptyst">
+        <Icon name="search" />
+        <div>
+          <b className="empty-title">{t('empty.search.title', { query })}</b>
+          <p>{t('empty.search.hint')}</p>
+        </div>
+        <button type="button" className="btn" onClick={() => setQuery('')}>
+          {t('shell.search.clear')}
+        </button>
+      </div>
+    );
+  }
   const key = OWN.includes(filter) ? filter : 'category';
   const title = t(`empty.${key}.title`);
   const hint = t(`empty.${key}.hint`);

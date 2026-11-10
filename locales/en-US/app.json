@@ -246,7 +246,12 @@
   "shell": {
     "settings": "Settings",
     "taskCount": "{count, plural, one {# task} other {# tasks}}",
-    "paste": "Paste a download link",
+    "search": {
+      "placeholder": "Search tasks",
+      "label": "Search tasks (name, link or folder)",
+      "found": "{found} of {count}",
+      "clear": "Clear search"
+    },
     "filters": {
       "all": "All tasks",
       "active": "Active",
@@ -275,6 +280,7 @@
       "dark": "Dark",
       "system": "System"
     },
+    "language": "Language",
     "summary": {
       "title": "Show active tasks",
       "running": "{count, plural, one {# task downloading} other {# tasks downloading}}"
@@ -356,6 +362,10 @@
     "category": {
       "title": "No tasks in this category yet",
       "hint": "Downloaded files are sorted into categories by extension."
+    },
+    "search": {
+      "title": "Nothing matches “{query}”",
+      "hint": "Try other words, or look in another category."
     }
   },
   "fileTree": {

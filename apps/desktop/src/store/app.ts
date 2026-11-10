@@ -75,6 +75,8 @@ interface State {
   view: View;
   settingsTab: SettingsTab;
   filter: Filter;
+  /** The title bar's search: narrows the list within the filter (see `matches`). */
+  query: string;
   sort: { key: SortKey; desc: boolean };
   selection: string[];
   /** Where a shift-click range starts. */
@@ -109,6 +111,8 @@ interface State {
   setView: (v: View) => void;
   setSettingsTab: (t: SettingsTab) => void;
   setFilter: (f: Filter) => void;
+  /** Searches the list (shown, if the settings were). The selection keeps only what still shows. */
+  setQuery: (q: string) => void;
   setSort: (key: SortKey) => void;
   select: (ids: string[], anchor?: string | null) => void;
   /** Moves tasks to the recycle bin and says so, with a way back. */
@@ -190,6 +194,7 @@ export const useApp = create<State>((set, get) => ({
   view: 'tasks',
   settingsTab: 'general',
   filter: 'all',
+  query: '',
   sort: { key: 'added', desc: false },
   selection: [],
   anchor: null,
@@ -307,6 +312,17 @@ export const useApp = create<State>((set, get) => ({
   setView: (view) => set({ view }),
   setSettingsTab: (settingsTab) => set({ settingsTab, view: 'settings' }),
   setFilter: (filter) => set({ filter, view: 'tasks', selection: [], anchor: null }),
+  setQuery: (query) =>
+    set((s) => {
+      const keep = s.selection.filter((id) => s.tasks[id] && matches(s.tasks[id], query));
+      return {
+        query,
+        view: query.trim() ? 'tasks' : s.view,
+        selection: keep,
+        anchor: keep.includes(s.anchor ?? '') ? s.anchor : null,
+        detailFor: s.detailFor && keep.includes(s.detailFor) ? s.detailFor : null,
+      };
+    }),
   setSort: (key) => set((s) => ({ sort: { key, desc: s.sort.key === key ? !s.sort.desc : key === 'speed' || key === 'size' } })),
   select: (selection, anchor) =>
     set((s) => ({
@@ -458,9 +474,18 @@ export function inFilter(t: Task, f: Filter): boolean {
 
 const STATUS_ORDER: TaskStatus[] = ['downloading', 'probing', 'queued', 'paused', 'failed', 'seeding', 'completed', 'removed'];
 
-/** Ids of the tasks under `filter`, sorted. */
-export function visibleIds(tasks: Record<string, Task>, filter: Filter, sort: State['sort']): string[] {
-  const list = Object.values(tasks).filter((t) => inFilter(t, filter));
+/** Whether a task matches the search: every word of `query` (any case) is in its name, its link
+ *  or its folder. An empty query matches everything. */
+export function matches(t: Task, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = `${t.fileName}\n${t.source}\n${t.finalUrl ?? ''}\n${t.saveDir}`.toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+/** Ids of the tasks under `filter` that match `query`, sorted. */
+export function visibleIds(tasks: Record<string, Task>, filter: Filter, sort: State['sort'], query = ''): string[] {
+  const list = Object.values(tasks).filter((t) => inFilter(t, filter) && matches(t, query));
   const by: Record<SortKey, (a: Task, b: Task) => number> = {
     added: (a, b) => a.createdAt - b.createdAt,
     name: (a, b) => a.fileName.localeCompare(b.fileName, 'zh-CN', { numeric: true }),

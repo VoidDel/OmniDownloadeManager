@@ -246,7 +246,12 @@
   "shell": {
     "settings": "设置",
     "taskCount": "{count} 个任务",
-    "paste": "粘贴下载链接",
+    "search": {
+      "placeholder": "搜索任务",
+      "label": "搜索任务（名称、链接或文件夹）",
+      "found": "找到 {found} 个，共 {count} 个",
+      "clear": "清除搜索"
+    },
     "filters": {
       "all": "全部任务",
       "active": "进行中",
@@ -275,6 +280,7 @@
       "dark": "深色",
       "system": "跟随系统"
     },
+    "language": "语言",
     "summary": {
       "title": "查看进行中的任务",
       "running": "{count} 个任务下载中"
@@ -356,6 +362,10 @@
     "category": {
       "title": "这个分类里还没有任务",
       "hint": "下载的文件按扩展名自动归类。"
+    },
+    "search": {
+      "title": "没有找到“{query}”",
+      "hint": "换个关键词试试，或者看看其他分类。"
     }
   },
   "fileTree": {
