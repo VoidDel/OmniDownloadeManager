@@ -158,12 +158,13 @@ pub fn closed(state: &AppState, label: &str) {
     resolve(state, label, Decision::just(QuickAction::Cancel));
 }
 
-/// Hidden until the page has drawn (it shows and focuses itself), its own title bar.
+/// Hidden until the page has drawn (it shows and focuses itself), its own title bar. The page
+/// sets its height to what it shows ("Advanced" open or not, the language); this is the usual one.
 fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
     let settings = app.state::<AppState>().settings();
     let b = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title("Omni Download")
-        .inner_size(560.0, 304.0)
+        .inner_size(560.0, 244.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)

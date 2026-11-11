@@ -199,6 +199,11 @@
 .det-foot .btn.grow { flex: 1; justify-content: center; }
 .iconbtn.outline { width: var(--ctrl-h); height: var(--ctrl-h); border: 1px solid var(--border-default); background: var(--bg-surface); }
 
+/* ---------------------------------------------------------------- dialogs */
+/* The window's own background (the list's and the settings'), not omni-ui's elevated white:
+   fields, lists and cards in them stay on the surface colour, as on the settings page. */
+.modal { background: var(--bg-canvas); }
+
 /* ---------------------------------------------------------------- new-download dialog */
 .nt-urls { min-height: 72px; line-height: 1.55; }
 .hint { font-size: .8rem; color: var(--fg-secondary); }
@@ -218,8 +223,10 @@
   .pulse { animation: nt-pulse 1.6s ease-in-out infinite; }
   @keyframes nt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 }
-.nt-nums .inp { flex: 0 0 88px; min-width: 0; }
-.nt-nums > label { font-size: .86rem; color: var(--fg-secondary); }
+/* Connections and speed limit: short numbers, not the row's width. */
+/* A label beside a field with a hint under it: level with the field, not the pair. */
+.frow > label.top { align-self: start; line-height: var(--ctrl-h); }
+.frow > .nt-num, .nt-sum-field > .nt-num { width: 120px; justify-self: start; align-self: flex-start; }
 .nt-adv summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--fg-secondary); width: fit-content; }
 .nt-adv summary::-webkit-details-marker { display: none; }
 .nt-adv summary .ic { width: 14px; height: 14px; transition: transform var(--dur); }
@@ -265,6 +272,15 @@
 .bstate.ok i { background: var(--success); }
 .bstate.warn { color: var(--warning-text, var(--warning)); }
 .bstate.warn i { background: var(--warning); }
+/* The browsers as cards (omni-ui's .cards/.card) under the group's first row. */
+.bcards { margin: 0; padding: 4px 16px 16px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.bcard .ico { background: var(--bg-subtle); }
+.blogo { width: 26px; height: 26px; display: block; }
+/* Not installed: the logo greyed, so the installed ones stand out. */
+.bcard.off .blogo { filter: grayscale(1); opacity: .45; }
+.bcard .meta .bstate { font-size: .8rem; gap: 5px; }
+.bcard .meta .bstate i { width: 6px; height: 6px; flex: none; }
+.welcome-browsers .blogo { width: 22px; height: 22px; flex: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .site-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 2px; }
 .site-chip button { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--fg-muted); }
@@ -273,15 +289,21 @@
 
 /* ---------------------------------------------------------------- quick-download window */
 html:has(.quick), body:has(.quick) { overflow: hidden; }
-/* With a window material the whole quick window is material, under a veil of the canvas. */
-:root[data-material="true"] .quick { background: var(--canvas-material); }
+/* With a window material the whole quick window shows it, under the same light veil as the main
+   window's sidebar (the canvas's veil is thick enough to hide Mica almost entirely); its fields
+   stay on the opaque surface colour. */
+:root[data-material="true"] .quick { background: var(--sidebar-material); }
 .quick { height: 100vh; display: flex; flex-direction: column; background: var(--bg-canvas); color: var(--fg-primary); font-variant-numeric: tabular-nums; border: 1px solid var(--border-subtle); box-sizing: border-box; }
 .quick header { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding-left: 14px; }
 .quick header h1 { margin: 0; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; }
 .quick header h1 span { font-size: .82rem; font-weight: 400; color: var(--fg-secondary); overflow: hidden; text-overflow: ellipsis; }
 .q-close { width: 46px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-secondary); flex: none; }
 .q-close:hover { background: #e81123; color: #fff; }
-.q-body { flex: 1; padding: 8px 16px 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px 12px; align-content: start; }
+/* "Download in the browser instead": a quiet button in the title bar, beside closing. */
+.q-browser { height: 28px; padding: 0 8px; gap: 6px; font-size: .84rem; font-weight: 400; }
+.q-browser .ic { width: 14px; height: 14px; }
+/* At its own height: the window fits itself to it. */
+.q-body { flex: none; padding: 8px 16px 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px 12px; align-content: start; }
 .q-body > label { font-size: .9rem; color: var(--fg-secondary); }
 .q-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .q-name .inp { flex: 1; font-weight: 500; }
@@ -291,11 +313,23 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .q-probing { display: inline-flex; align-items: center; gap: 6px; }
 .q-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--success-text, var(--success)); }
 .q-ok .ic { width: 13px; height: 13px; }
-.q-nums .inp { flex: 0 0 72px; min-width: 0; }
-.q-nums > label { font-size: .86rem; color: var(--fg-secondary); }
+/* "Advanced" spans the body; its rows keep the body's label column (omni-ui stacks a .frow under
+   720 px, and this window is always narrower). */
+.q-adv { grid-column: 1 / -1; }
+.q-adv .frow { grid-template-columns: 76px minmax(0, 1fr); }
 .q-remember { color: var(--fg-secondary); font-size: .86rem; }
-.quick footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 16px; flex: none; }
-.q-keys { flex: 1; font-size: .8rem; color: var(--fg-muted); }
+/* The buttons from the right (`order`), the key hint last: when a language's buttons leave it no
+   room it wraps onto a second line, which the footer's height cuts off, instead of squeezing
+   them. */
+.quick footer {
+  display: flex; flex-direction: row-reverse; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 12px 16px 16px; flex: none; margin-top: auto;
+  max-height: calc(var(--ctrl-h) + 28px); overflow: clip; overflow-clip-margin: content-box;
+}
+.quick footer .btn { flex: none; }
+.quick footer .btn.primary { order: 1; }
+.quick footer .btn.outline { order: 2; }
+.q-keys { order: 3; flex: 1 0 auto; margin-right: auto; white-space: nowrap; font-size: .8rem; color: var(--fg-muted); }
 .q-keys kbd { font-family: var(--font-mono); font-size: .75rem; }
 
 /* ---------------------------------------------------------------- torrents: files, peers */
@@ -314,8 +348,31 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 .ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ft-size { display: flex; gap: 8px; font-size: .78rem; color: var(--fg-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ft-pct { color: var(--accent-text, var(--accent)); }
-.nt-hintrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.nt-hintrow .btn .ic { width: 14px; height: 14px; }
+/* Links or torrent files: a tab each. */
+.nt-src { --nt-src-h: 150px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.nt-pick {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: var(--nt-src-h); padding: 16px;
+  border: 1px dashed var(--border-default); border-radius: var(--radius-md); text-align: center;
+}
+.nt-pick > .ic { width: 22px; height: 22px; color: var(--fg-muted); margin-bottom: 2px; }
+.nt-pick b { font-weight: 500; font-size: .9rem; }
+.nt-pick small { font-size: .8rem; color: var(--fg-secondary); }
+.nt-pick .btn { margin-top: 8px; }
+.nt-more { align-self: flex-start; }
+.nt-more .ic { width: 14px; height: 14px; }
+.nt-row[data-x] { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
+.nt-x { width: 24px; height: 24px; margin-right: -4px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--fg-muted); }
+.nt-x:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.nt-x .ic { width: 14px; height: 14px; }
+/* The advanced options: a tab each, every panel in one cell so the section keeps its height. */
+.nt-adv > .tabs { margin-top: 10px; }
+.nt-adv-panels { display: grid; padding-top: 12px; }
+.nt-adv-panels > * { grid-area: 1 / 1; align-self: start; }
+.nt-adv-panels > [data-on="false"] { visibility: hidden; }
+.nt-adv-panels > .frow { padding-top: 0; }
+.nt-proxy { flex-wrap: nowrap; }
+.nt-proxy .inp { flex: 1; min-width: 0; }
 
 .peers { display: flex; flex-direction: column; font-size: .8rem; }
 .peer { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 64px 64px; gap: 8px; padding: 4px 0; align-items: center; }
@@ -359,7 +416,10 @@ html:has(.quick), body:has(.quick) { overflow: hidden; }
 /* The same place for every settings page, whether it scrolls or not. */
 .set-body { scrollbar-gutter: stable both-edges; }
 /* The links box grows with what is pasted into it, up to eight lines. */
-.nt-urls { field-sizing: content; min-height: calc(3lh + 18px); max-height: calc(8lh + 18px); }
+/* The link box starts as tall as the torrent tab's empty box (--nt-src-h), so switching tabs does
+   not move what is below; it grows with its lines up to eight. (Two classes: omni-ui's
+   `textarea.inp` sets a min-height too.) */
+.nt-src .nt-urls { field-sizing: content; min-height: var(--nt-src-h); max-height: calc(8lh + 18px); }
 
 /* ---------------------------------------------------------------- floating ball */
 /* The window is transparent: only the ball shows. */

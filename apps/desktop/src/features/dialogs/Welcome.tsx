@@ -13,7 +13,7 @@ import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
 import { api } from '../../lib/api';
 import type { Integration } from '../../lib/types';
 import { useApp } from '../../store/app';
-import { browserState } from '../settings/BrowserSettings';
+import { BrowserLogo, browserState } from '../settings/BrowserSettings';
 
 const STEPS = 3;
 
@@ -107,6 +107,7 @@ export function Welcome() {
                 const [cls, text] = browserState(b, seen.get(b.id), before.get(b.id));
                 return (
                   <li key={b.id}>
+                    <BrowserLogo id={b.id} />
                     <span className="nm">{b.name}</span>
                     <span className={`bstate ${cls}`}>
                       <i aria-hidden="true" />

@@ -1,6 +1,11 @@
 // Settings › Browser (docs/development-plan.md §6.3): which browsers can reach Omni Download, the
 // quick-download window, sites that never ask, and the HTTP fallback channel's pairing code.
 
+import braveLogo from '@icons/browsers/brave.svg';
+import chromeLogo from '@icons/browsers/chrome.svg';
+import chromiumLogo from '@icons/browsers/chromium.svg';
+import edgeLogo from '@icons/browsers/edge.svg';
+import firefoxLogo from '@icons/browsers/firefox.svg';
 import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +14,7 @@ import { Icon } from '../../components/Icon';
 import { Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
-import type { BrowserState, Integration, Settings } from '../../lib/types';
+import type { BrowserId, BrowserState, Integration, Settings } from '../../lib/types';
 import i18n from '../../i18n';
 import { useApp } from '../../store/app';
 
@@ -39,15 +44,29 @@ export function browserState(b: BrowserState, seen?: number, before?: number): [
   return ['off', i18n.t('settings.browser.state.waiting')];
 }
 
-function BrowserRow({ b, seen, before }: { b: BrowserState; seen?: number; before?: number }) {
-  const state = browserState(b, seen, before);
+/** The browsers' own logos (icons/browsers, from the @browser-logos packages). */
+const LOGO: Record<BrowserId, string> = { chrome: chromeLogo, edge: edgeLogo, firefox: firefoxLogo, brave: braveLogo, chromium: chromiumLogo };
+
+export function BrowserLogo({ id }: { id: BrowserId }) {
+  return <img className="blogo" src={LOGO[id]} alt="" draggable={false} />;
+}
+
+/** A browser as a card: its logo, name and state. One not installed is greyed. */
+function BrowserCard({ b, seen, before }: { b: BrowserState; seen?: number; before?: number }) {
+  const [cls, text] = browserState(b, seen, before);
   return (
-    <Row label={b.name}>
-      <span className={`bstate ${state[0]}`}>
-        <i aria-hidden="true" />
-        {state[1]}
+    <div className={`card bcard ${cls}`}>
+      <span className="ico">
+        <BrowserLogo id={b.id} />
       </span>
-    </Row>
+      <span className="meta">
+        <b>{b.name}</b>
+        <span className={`bstate ${cls}`}>
+          <i aria-hidden="true" />
+          {text}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -83,7 +102,13 @@ export function BrowserSettings({ s, set }: { s: Settings; set: (f: (s: Settings
             {t('settings.browser.repair')}
           </button>
         </Row>
-        {info?.browsers.map((br) => <BrowserRow key={br.id} b={br} seen={seen.get(br.id)} before={before.get(br.id)} />)}
+        {info && info.browsers.length > 0 && (
+          <div className="cards bcards">
+            {info.browsers.map((br) => (
+              <BrowserCard key={br.id} b={br} seen={seen.get(br.id)} before={before.get(br.id)} />
+            ))}
+          </div>
+        )}
         {info && !info.bridgeOk && (
           <Row label={t('settings.browser.bridge')} hint={t('settings.browser.bridgeBusy')}>
             <span className="bstate warn">

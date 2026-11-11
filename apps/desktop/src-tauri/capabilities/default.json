@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions of the main window, the quick-download windows (quick-*) and the floating ball (float): their own title bar (move, resize, minimise, maximise, close), showing themselves after the first frame, following the theme, and the folder picker. Downloads go through Omni Download commands only (docs/development-plan.md §8.1).",
+  "description": "Permissions of the main window, the quick-download windows (quick-*) and the floating ball (float): their own title bar (move, resize, minimise, maximise, close), showing themselves after the first frame, a quick-download window fitting its height to what it shows, following the theme, and the folder picker. Downloads go through Omni Download commands only (docs/development-plan.md §8.1).",
   "windows": [
     "main",
     "quick-*",
@@ -17,6 +17,7 @@
     "core:window:allow-start-resize-dragging",
     "core:window:allow-show",
     "core:window:allow-set-focus",
+    "core:window:allow-set-size",
     "core:window:allow-theme",
     "core:window:allow-set-theme",
     "dialog:allow-open"

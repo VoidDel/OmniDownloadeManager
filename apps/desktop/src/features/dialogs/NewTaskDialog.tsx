@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useTranslation } from 'react-i18next';
 
 import { FileIcon, Icon } from '../../components/Icon';
-import { Modal, PasswordInput, Segmented, Select } from '../../components/ui';
+import { Modal, PasswordInput, Segmented, Select, Tabs } from '../../components/ui';
 import { api, asError } from '../../lib/api';
 import { ALGO_NAME, parseChecksum } from '../../lib/checksum';
 import * as fmt from '../../lib/format';
@@ -39,7 +39,15 @@ const BADGE: Record<Link['kind'], string> = {
 /** Kinds this version adds. */
 const SUPPORTED: ReadonlySet<Link['kind']> = new Set(['http', 'ftp', 'magnet', 'torrent']);
 
-function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: Probe; previewed: boolean; connections: number }) {
+/** Shown in the empty link box under the hint: a link, a magnet link, a numbered series. */
+const LINK_EXAMPLES = ['https://example.com/file.zip', 'magnet:?xt=urn:btih:…', 'https://example.com/photo[01-20].jpg'].join('\n');
+
+/** Where the dialog's downloads come from: links typed or pasted, or .torrent files picked. */
+type Source = 'links' | 'torrents';
+type AdvTab = 'speed' | 'request' | 'mirrors' | 'checksum' | 'proxy';
+
+/** `onRemove`: a button to take the row out (the torrent files picked). */
+function LinkRow({ link, probe, previewed, connections, onRemove }: { link: Link; probe?: Probe; previewed: boolean; connections: number; onRemove?: () => void }) {
   const { t } = useTranslation();
   const supported = SUPPORTED.has(link.kind);
   const torrent = link.kind === 'magnet' || link.kind === 'torrent';
@@ -81,7 +89,7 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
   }
   const many = folder || (probe?.state === 'ok' && (probe.info.files?.length ?? 0) > 1);
   return (
-    <div className="nt-row" data-off={!supported}>
+    <div className="nt-row" data-off={!supported} data-x={onRemove ? true : undefined}>
       {probe?.state === 'ok' ? <FileIcon name={name} isDir={many} /> : <Icon name={torrent ? 'magnet' : 'link'} className="fi" />}
       <span className="nt-txt">
         <span className="nt-name" title={link.url}>
@@ -90,6 +98,11 @@ function LinkRow({ link, probe, previewed, connections }: { link: Link; probe?: 
         <span className="nt-sub">{sub}</span>
       </span>
       <span className={`badge ${BADGE[link.kind]}`}>{link.kind === 'http' ? 'HTTP' : link.kind === 'ftp' ? 'FTP' : t(`newTask.badge.${link.kind}`)}</span>
+      {onRemove && (
+        <button type="button" className="nt-x" aria-label={t('newTask.removeTorrent', { name })} title={t('newTask.removeTorrent', { name })} onClick={onRemove}>
+          <Icon name="x" />
+        </button>
+      )}
     </div>
   );
 }
@@ -101,8 +114,23 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const defaultDir = useApp((s) => s.settings.downloadDir || s.defaultDir);
   const { closeDialog, run, toast, select, setFilter } = useApp.getState();
 
-  const [text, setText] = useState(initial.text);
-  const links = useMemo(() => parseLinks(text), [text]);
+  // Only .torrent files handed in (dropped on the window, opened with the app): the torrent tab.
+  const [init] = useState(() => {
+    const given = parseLinks(initial.text);
+    return given.length > 0 && given.every((l) => l.kind === 'torrent')
+      ? { source: 'torrents' as Source, text: '', torrents: given.map((l) => l.url) }
+      : { source: 'links' as Source, text: initial.text, torrents: [] as string[] };
+  });
+  const [source, setSource] = useState<Source>(init.source);
+  const [text, setText] = useState(init.text);
+  const [torrents, setTorrents] = useState<string[]>(init.torrents);
+  // What is added: the current tab's (the other keeps its own until the dialog closes).
+  const links = useMemo(
+    () => (source === 'links' ? parseLinks(text) : torrents.map((url): Link => ({ url, kind: 'torrent' }))),
+    [source, text, torrents],
+  );
+  // From a browser the request details are what is worth seeing first.
+  const [advTab, setAdvTab] = useState<AdvTab>(initial.referer || initial.cookies || initial.userAgent ? 'request' : 'speed');
   const [probes, setProbes] = useState<Record<string, Probe>>({});
   // Until a folder is typed or picked, each download goes to its category's.
   const [dir, setDir] = useState<string | null>(null);
@@ -124,7 +152,6 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [advancedOpen] = useState(Boolean(initial.referer || initial.cookies || initial.userAgent));
   const [proxyMode, setProxyMode] = useState<ProxyMode>('inherit');
   const [proxyUrl, setProxyUrl] = useState('');
-  const [start, setStart] = useState(true);
   const [busy, setBusy] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -144,6 +171,8 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const [picked, setPicked] = useState<{ url: string; files: Set<number> } | null>(null);
   const chosen = picked && picked.url === single?.url ? picked.files : new Set(torrentFiles.map((f) => f.index));
   const defaultConnections = hasHttp || !hasFtp ? settings.engine.connections : settings.engine.ftpConnections;
+  // Torrents and magnet links only: a connection count means nothing to them.
+  const noConnections = source === 'torrents' || (addable.length > 0 && !hasHttp && !hasFtp);
   const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || defaultConnections));
   const speed = fmt.parseSpeed(limit);
 
@@ -216,7 +245,12 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const addTorrentFiles = async () => {
     const files = await open({ multiple: true, title: t('newTask.pickTorrents'), filters: [{ name: 'BitTorrent', extensions: ['torrent'] }] }).catch(() => null);
     const list = Array.isArray(files) ? files : typeof files === 'string' ? [files] : [];
-    if (list.length) setText((prev) => [prev.trim(), ...list].filter(Boolean).join('\n'));
+    if (list.length) setTorrents((prev) => [...new Set([...prev, ...list])]);
+  };
+  /** Choosing the torrent tab with none picked yet opens the file picker at once. */
+  const pickSource = (v: Source) => {
+    setSource(v);
+    if (v === 'torrents' && !torrents.length) void addTorrentFiles();
   };
 
   const browse = async () => {
@@ -233,7 +267,8 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   // One folder for all: shown; several (by category): the field says so.
   const shownDir = dir ?? (dirs.length === 1 ? dirs[0] : '');
 
-  const submit = async () => {
+  /** `start`: download now, or only add the tasks (paused) to start later. */
+  const submit = async (start: boolean) => {
     if (!addable.length || invalid || busy) return;
     setBusy(true);
     const opts = options;
@@ -272,58 +307,93 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
       <span className="grow nt-sum">
         {addable.length > 0 && (
           <>
-            <b>{t('newTask.summary', { count: taskCount })}</b>
+            {/* A series in a link: how many it made, in place of the plain count. */}
+            <b>
+              {source === 'links' && hasBatch(text)
+                ? t(links.length >= BATCH_MAX ? 'newTask.batchCapped' : 'newTask.batchMade', { count: links.length })
+                : t('newTask.summary', { count: taskCount })}
+            </b>
             {totalKnown > 0 && ` · ${fmt.bytes(totalKnown)}`}
           </>
         )}
       </span>
-      <button type="button" className="btn outline" onClick={closeDialog}>
-        {t('newTask.cancel')}
+      <button type="button" className="btn outline" disabled={!addable.length || invalid || busy} onClick={() => void submit(false)}>
+        <Icon name="clock" />
+        {t('newTask.later')}
       </button>
-      <button type="button" className="btn primary" disabled={!addable.length || invalid || busy} onClick={() => void submit()}>
-        {start ? t('newTask.addAndStart') : t('newTask.add')}
+      <button type="button" className="btn primary" disabled={!addable.length || invalid || busy} onClick={() => void submit(true)}>
+        <Icon name="download" />
+        {t('newTask.now')}
       </button>
     </>
   );
 
   return (
     <Modal title={t('newTask.title')} onClose={closeDialog} footer={footer} width={640} closeLabel={t('newTask.close')}>
-      <div className="field">
-        <label htmlFor="nt-urls">{t('newTask.links')}</label>
-        <textarea
-          id="nt-urls"
-          ref={textRef}
-          data-autofocus
-          className="inp mono nt-urls"
-          rows={3}
-          spellCheck={false}
-          value={text}
-          placeholder={t('newTask.linksPlaceholder')}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        <div className="nt-hintrow">
-          <small className="hint">
-            {hasBatch(text) ? t(links.length >= BATCH_MAX ? 'newTask.batchCapped' : 'newTask.batchMade', { count: links.length }) : t('newTask.linksHint')}
-          </small>
-          <button type="button" className="btn subtle sm" onClick={() => void addTorrentFiles()}>
-            <Icon name="folderOpen" />
-            {t('newTask.openTorrents')}
+      <Tabs<Source>
+        id="nt-src"
+        label={t('newTask.source')}
+        value={source}
+        onChange={pickSource}
+        options={[
+          ['links', t('newTask.links')],
+          ['torrents', t('newTask.tabTorrents')],
+        ]}
+      />
+      <div className="nt-src" role="tabpanel" aria-labelledby={`nt-src-${source}`}>
+        {source === 'links' ? (
+          <div className="field">
+            <textarea
+              id="nt-urls"
+              ref={textRef}
+              data-autofocus
+              className="inp mono nt-urls"
+              rows={3}
+              spellCheck={false}
+              value={text}
+              aria-label={t('newTask.links')}
+              placeholder={`${t('newTask.linksHint')}\n\n${LINK_EXAMPLES}`}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void submit(true);
+                }
+              }}
+            />
+          </div>
+        ) : torrents.length === 0 ? (
+          <div className="nt-pick">
+            <Icon name="magnet" />
+            <b>{t('newTask.torrentsEmpty')}</b>
+            <small>{t('newTask.torrentsEmptyHint')}</small>
+            <button type="button" className="btn outline" data-autofocus onClick={() => void addTorrentFiles()}>
+              <Icon name="folderOpen" />
+              {t('newTask.pickTorrents')}
+            </button>
+          </div>
+        ) : null}
+        {links.length > 0 && (
+          <div className="nt-list">
+            {links.map((l) => (
+              <LinkRow
+                key={l.url}
+                link={l}
+                probe={probes[keyOf(l)]}
+                previewed={isTauri() && addable.indexOf(l) < PROBE_MAX}
+                connections={conn}
+                onRemove={source === 'torrents' ? () => setTorrents((list) => list.filter((x) => x !== l.url)) : undefined}
+              />
+            ))}
+          </div>
+        )}
+        {source === 'torrents' && torrents.length > 0 && (
+          <button type="button" className="btn subtle sm nt-more" onClick={() => void addTorrentFiles()}>
+            <Icon name="plus" />
+            {t('newTask.addTorrents')}
           </button>
-        </div>
+        )}
       </div>
-      {links.length > 0 && (
-        <div className="nt-list">
-          {links.map((l) => (
-            <LinkRow key={l.url} link={l} probe={probes[keyOf(l)]} previewed={isTauri() && addable.indexOf(l) < PROBE_MAX} connections={conn} />
-          ))}
-        </div>
-      )}
       {single && torrentFiles.length > 1 && <FileTree files={torrentFiles} selected={chosen} onChange={(files) => setPicked({ url: single.url, files })} />}
       <div className="frow">
         {single?.kind === 'http' && (
@@ -344,33 +414,6 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           <button type="button" className="btn outline" onClick={() => void browse()}>
             {t('newTask.browse')}
           </button>
-        </div>
-        <label htmlFor={hasHttp || hasFtp ? 'nt-conn' : 'nt-limit'}>{hasHttp || hasFtp ? t('newTask.connections') : t('newTask.limit')}</label>
-        <div className="inline nt-nums">
-          {(hasHttp || hasFtp) && (
-            <>
-              <input
-                id="nt-conn"
-                className="inp"
-                type="number"
-                min={1}
-                max={hasHttp ? 64 : 8}
-                value={connections}
-                placeholder={String(defaultConnections)}
-                onChange={(e) => setConnections(e.target.value)}
-              />
-              <label htmlFor="nt-limit">{t('newTask.limit')}</label>
-            </>
-          )}
-          <input
-            id="nt-limit"
-            className="inp"
-            value={limit}
-            placeholder={t('newTask.limitPlaceholder')}
-            aria-invalid={speed === undefined}
-            title={t('newTask.limitHint')}
-            onChange={(e) => setLimit(e.target.value)}
-          />
         </div>
       </div>
       {hasFtp && (
@@ -407,20 +450,76 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           {t('newTask.advanced')}
           <small>{t('newTask.advancedSummary')}</small>
         </summary>
-        <div className="frow">
-          <label htmlFor="nt-ref">Referer</label>
-          <input id="nt-ref" className="inp mono" value={referer} placeholder="https://" onChange={(e) => setReferer(e.target.value)} />
-          <label htmlFor="nt-cookie">Cookie</label>
-          <input id="nt-cookie" className="inp mono" value={cookies} placeholder="name=value; other=value" onChange={(e) => setCookies(e.target.value)} />
-          <label htmlFor="nt-ua">User-Agent</label>
-          <input id="nt-ua" className="inp mono" value={userAgent} placeholder={t('newTask.followSettings')} onChange={(e) => setUserAgent(e.target.value)} />
-          <label htmlFor="nt-mirrors">{t('newTask.mirrors')}</label>
-          <div className="nt-sum-field">
+        <Tabs<AdvTab>
+          id="nt-adv"
+          label={t('newTask.advanced')}
+          value={advTab}
+          onChange={setAdvTab}
+          options={[
+            ['speed', t('newTask.advSpeed'), Boolean(connections.trim() || limit.trim())],
+            ['request', t('newTask.advRequest'), Boolean(referer.trim() || cookies.trim() || userAgent.trim())],
+            ['mirrors', t('newTask.mirrors'), mirrors.length > 0],
+            ['checksum', t('newTask.checksum'), checksum.trim() !== ''],
+            ['proxy', t('newTask.proxy'), proxyMode !== 'inherit'],
+          ]}
+        />
+        {/* Every panel in one grid cell, the hidden ones invisible: the section is as tall as the
+            tallest, so the dialog does not jump when the tab changes. */}
+        <div className="nt-adv-panels">
+          <div className="frow" role="tabpanel" aria-labelledby="nt-adv-speed" data-on={advTab === 'speed'} inert={advTab !== 'speed'}>
+            <label htmlFor="nt-conn" className="top">
+              {t('newTask.connections')}
+            </label>
+            <div className="nt-sum-field">
+              <input
+                id="nt-conn"
+                className="inp nt-num"
+                type="number"
+                min={1}
+                max={hasHttp || !hasFtp ? 64 : 8}
+                value={connections}
+                disabled={noConnections}
+                placeholder={String(defaultConnections)}
+                aria-describedby="nt-conn-hint"
+                onChange={(e) => setConnections(e.target.value)}
+              />
+              <small id="nt-conn-hint" className="muted">
+                {noConnections ? t('newTask.connectionsBt') : t('newTask.connectionsHint')}
+              </small>
+            </div>
+            <label htmlFor="nt-limit" className="top">
+              {t('newTask.limit')}
+            </label>
+            <div className="nt-sum-field">
+              <input
+                id="nt-limit"
+                className="inp nt-num"
+                value={limit}
+                placeholder={t('newTask.limitPlaceholder')}
+                aria-invalid={speed === undefined}
+                aria-describedby="nt-limit-hint"
+                onChange={(e) => setLimit(e.target.value)}
+              />
+              <small id="nt-limit-hint" className={speed === undefined ? 'err-text' : 'muted'}>
+                {t('newTask.limitHint')}
+              </small>
+            </div>
+          </div>
+          <div className="frow" role="tabpanel" aria-labelledby="nt-adv-request" data-on={advTab === 'request'} inert={advTab !== 'request'}>
+            <label htmlFor="nt-ref">Referer</label>
+            <input id="nt-ref" className="inp mono" value={referer} placeholder="https://" onChange={(e) => setReferer(e.target.value)} />
+            <label htmlFor="nt-cookie">Cookie</label>
+            <input id="nt-cookie" className="inp mono" value={cookies} placeholder="name=value; other=value" onChange={(e) => setCookies(e.target.value)} />
+            <label htmlFor="nt-ua">User-Agent</label>
+            <input id="nt-ua" className="inp mono" value={userAgent} placeholder={t('newTask.followSettings')} onChange={(e) => setUserAgent(e.target.value)} />
+          </div>
+          <div className="nt-sum-field" role="tabpanel" aria-labelledby="nt-adv-mirrors" data-on={advTab === 'mirrors'} inert={advTab !== 'mirrors'}>
             <textarea
               id="nt-mirrors"
               className="inp mono nt-mirrors"
-              rows={2}
+              rows={3}
               value={mirrorText}
+              aria-label={t('newTask.mirrors')}
               placeholder={t('newTask.mirrorsPlaceholder')}
               aria-invalid={mirrorsInvalid}
               aria-describedby="nt-mirrors-hint"
@@ -437,12 +536,12 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
                     : t('newTask.mirrorsCount', { count: mirrors.length })}
             </small>
           </div>
-          <label htmlFor="nt-sum">{t('newTask.checksum')}</label>
-          <div className="nt-sum-field">
+          <div className="nt-sum-field" role="tabpanel" aria-labelledby="nt-adv-checksum" data-on={advTab === 'checksum'} inert={advTab !== 'checksum'}>
             <input
               id="nt-sum"
               className="inp mono"
               value={checksum}
+              aria-label={t('newTask.checksum')}
               placeholder={t('newTask.checksumPlaceholder')}
               aria-invalid={sumInvalid}
               aria-describedby="nt-sum-hint"
@@ -459,10 +558,10 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
                     : t('checksum.invalid')}
             </small>
           </div>
-          <label htmlFor="nt-proxy">{t('newTask.proxy')}</label>
-          <div className="inline">
+          <div className="inline nt-proxy" role="tabpanel" aria-labelledby="nt-adv-proxy" data-on={advTab === 'proxy'} inert={advTab !== 'proxy'}>
             <Select<ProxyMode>
               id="nt-proxy"
+              label={t('newTask.proxy')}
               value={proxyMode}
               onChange={setProxyMode}
               options={[
@@ -478,10 +577,6 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           </div>
         </div>
       </details>
-      <label className="chk">
-        <input type="checkbox" checked={start} onChange={(e) => setStart(e.target.checked)} />
-        {t('newTask.startNow')}
-      </label>
     </Modal>
   );
 }

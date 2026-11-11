@@ -5,6 +5,7 @@
 // window shows itself once it has something to show.
 
 import { isTauri } from '@tauri-apps/api/core';
+import { LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useRef, useState } from 'react';
@@ -109,7 +110,7 @@ export function QuickApp() {
       if (e.key === 'Escape') {
         e.preventDefault();
         decideRef.current(escape.current);
-      } else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
+      } else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement) && !(e.target instanceof Element && e.target.closest('summary'))) {
         e.preventDefault();
         decideRef.current('start');
       }
@@ -117,6 +118,21 @@ export function QuickApp() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // The window is as tall as what it shows: opening "Advanced" (or a long error) makes it taller.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!req || !el || !isTauri()) return;
+    const fit = () => {
+      // Header, body and footer at their own heights, and the window's 1 px border.
+      const h = Math.ceil([...el.children].reduce((n, c) => n + c.getBoundingClientRect().height, 0) + 2);
+      if (Math.abs(h - window.innerHeight) > 1) void getCurrentWindow().setSize(new LogicalSize(window.innerWidth, h)).catch(() => undefined);
+    };
+    const ro = new ResizeObserver(fit);
+    for (const c of el.children) ro.observe(c);
+    return () => ro.disconnect();
+  }, [req]);
 
   const browse = async () => {
     const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('quick.pickDir') }).catch(() => null);
@@ -147,13 +163,20 @@ export function QuickApp() {
   const heading = fromBrowser ? (browser ? t('quick.fromBrowser', { browser }) : t('quick.fromAnyBrowser')) : req.origin === 'clipboard' ? t('quick.fromClipboard') : t('quick.fromFloat');
   const proto = /^ftps?:/i.test(req.url) ? 'FTP' : 'HTTP';
   return (
-    <div className="quick">
+    <div className="quick" ref={rootRef}>
       <header data-tauri-drag-region>
         <Logo size={18} />
         <h1 data-tauri-drag-region>
           {heading}
           <span>{req.site}</span>
         </h1>
+        {/* Handing it back, beside closing: the footer keeps its room for the two ways to keep it. */}
+        {fromBrowser && (
+          <button type="button" className="btn subtle sm q-browser" onClick={() => decide('browser')}>
+            <Icon name="globe" />
+            {t('quick.useBrowser')}
+          </button>
+        )}
         <button type="button" className="q-close" aria-label={t('quick.close')} title={t('quick.closeTitle')} onClick={() => decide('cancel')}>
           <Icon name="x" />
         </button>
@@ -216,40 +239,68 @@ export function QuickApp() {
             {t('quick.browse')}
           </button>
         </div>
-        <label htmlFor="qa-conn">{t('quick.connections')}</label>
-        <div className="inline q-nums">
-          <input id="qa-conn" className="inp" type="number" min={1} max={64} value={connections} onChange={(e) => setConnections(e.target.value)} />
-          <label htmlFor="qa-limit">{t('quick.limit')}</label>
-          <input
-            id="qa-limit"
-            className="inp"
-            value={limit}
-            placeholder={t('quick.limitPlaceholder')}
-            aria-invalid={speed === undefined}
-            title={t('quick.limitHint')}
-            onChange={(e) => setLimit(e.target.value)}
-          />
-        </div>
-        {fromBrowser && (
-          <>
-            <span />
-            <label className="chk q-remember">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              {req.site ? t('quick.remember', { site: req.site }) : t('quick.rememberAnySite')}
+        {/* As in the new-download dialog: connections and speed limit under "Advanced", and from
+            a browser the choice not to ask again for this site. */}
+        <details className="nt-adv q-adv">
+          <summary>
+            <Icon name="chevronRight" />
+            {t('newTask.advanced')}
+            <small>{fromBrowser ? `${t('newTask.advSpeed')} · ${t('quick.rememberShort')}` : t('newTask.advSpeed')}</small>
+          </summary>
+          <div className="frow">
+            <label htmlFor="qa-conn" className="top">
+              {t('quick.connections')}
             </label>
-          </>
-        )}
+            <div className="nt-sum-field">
+              <input
+                id="qa-conn"
+                className="inp nt-num"
+                type="number"
+                min={1}
+                max={64}
+                value={connections}
+                aria-describedby="qa-conn-hint"
+                onChange={(e) => setConnections(e.target.value)}
+              />
+              <small id="qa-conn-hint" className="muted">
+                {t('newTask.connectionsHint')}
+              </small>
+            </div>
+            <label htmlFor="qa-limit" className="top">
+              {t('quick.limit')}
+            </label>
+            <div className="nt-sum-field">
+              <input
+                id="qa-limit"
+                className="inp nt-num"
+                value={limit}
+                placeholder={t('quick.limitPlaceholder')}
+                aria-invalid={speed === undefined}
+                aria-describedby="qa-limit-hint"
+                onChange={(e) => setLimit(e.target.value)}
+              />
+              <small id="qa-limit-hint" className={speed === undefined ? 'err-text' : 'muted'}>
+                {t('quick.limitHint')}
+              </small>
+            </div>
+            {fromBrowser && (
+              <>
+                <span />
+                <label className="chk q-remember">
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                  {req.site ? t('quick.remember', { site: req.site }) : t('quick.rememberAnySite')}
+                </label>
+              </>
+            )}
+          </div>
+        </details>
       </div>
       <footer>
         <span className="q-keys">
           <kbd>Enter</kbd> {t('quick.keyStart')} · <kbd>Esc</kbd> {req.origin === 'clipboard' ? t('quick.keyCancel') : t('quick.keyLater')}
         </span>
-        {fromBrowser && (
-          <button type="button" className="btn subtle" onClick={() => decide('browser')}>
-            {t('quick.useBrowser')}
-          </button>
-        )}
         <button type="button" className="btn outline" onClick={() => decide('later')}>
+          <Icon name="clock" />
           {t('quick.later')}
         </button>
         <button type="button" className="btn primary" data-autofocus onClick={() => decide('start')}>

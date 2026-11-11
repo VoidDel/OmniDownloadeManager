@@ -1,7 +1,7 @@
 //! Window material (as in OmniZip): Windows 11 Mica, Mica Alt or Acrylic, macOS vibrancy. The
 //! windows are transparent where a material is available; the page paints the theme canvas
 //! itself while the material is off (omni-ui's `data-material`), and only the sidebar (and the
-//! quick-download window, under a veil of the canvas) lets the material show.
+//! quick-download window, under the sidebar's veil) lets the material show.
 
 use tauri::{
     AppHandle, Manager, WebviewWindowBuilder,
