@@ -37,7 +37,7 @@ export const api = {
   pause: (ids: string[]) => invoke<void>('task_pause', { ids }),
   resume: (ids: string[]) => invoke<void>('task_resume', { ids }),
   restart: (ids: string[]) => invoke<void>('task_restart', { ids }),
-  remove: (ids: string[]) => invoke<void>('task_remove', { ids }),
+  remove: (ids: string[], deleteFiles = false) => invoke<void>('task_remove', { ids, deleteFiles }),
   restore: (ids: string[]) => invoke<void>('task_restore', { ids }),
   purge: (ids: string[], deleteFiles: boolean) => invoke<void>('task_purge', { ids, deleteFiles }),
   detail: (id: string) => invoke<TaskDetail>('task_detail', { id }),

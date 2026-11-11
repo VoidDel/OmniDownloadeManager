@@ -160,6 +160,11 @@
       "conflict": "檔案已存在時",
       "conflictRename": "自動重新命名",
       "conflictOverwrite": "覆寫",
+      "removeFiles": "刪除任務時",
+      "removeFilesHint": "任務會移到回收筒；這裡決定本機檔案是否一起刪除",
+      "removeFilesAsk": "每次詢問",
+      "removeFilesKeep": "保留本機檔案",
+      "removeFilesDelete": "同時刪除本機檔案",
       "resumeOnStartup": "啟動時繼續未完成的下載",
       "resumeOnStartupHint": "結束時正在下載的任務，下次啟動後自動繼續",
       "syncWrites": "每秒將進度寫入磁碟",
@@ -400,6 +405,7 @@
       "listSeparator": "、"
     },
     "removed": "已移到回收筒：{count} 個任務",
+    "removedWithFiles": "已移到回收筒並刪除本機檔案：{count} 個任務",
     "undo": "復原"
   },
   "empty": {
@@ -664,8 +670,18 @@
       "titleMany": "要永久刪除 {count} 個任務嗎？",
       "titleOne": "要永久刪除這個任務嗎？",
       "confirm": "永久刪除",
-      "text": "任務記錄和未完成的暫存檔會被刪除，無法還原。",
-      "deleteFiles": "同時刪除已下載完成的檔案"
+      "text": "任務會直接刪除，不進回收筒，無法還原。",
+      "deleteFiles": "同時刪除本機檔案"
+    },
+    "remove": {
+      "titleMany": "要刪除 {count} 個任務嗎？",
+      "titleOne": "要刪除這個任務嗎？",
+      "confirm": "刪除",
+      "text": "任務會移到回收筒，可以從回收筒還原。",
+      "textFiles": "任務會移到回收筒；本機檔案會被刪除，無法復原。",
+      "deleteFiles": "同時刪除本機檔案",
+      "remember": "記住我的選擇，以後不再詢問",
+      "rememberHint": "可在 設定 › 下載 中變更"
     },
     "speed": {
       "title": "全域限速",

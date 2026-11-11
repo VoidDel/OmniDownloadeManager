@@ -24,6 +24,8 @@ export type Dialog =
   | ({ kind: 'new' } & Prefill)
   /** Delete for good, optionally with the files. */
   | { kind: 'purge'; ids: string[] }
+  /** Delete to the recycle bin: with the files or not, the answer optionally kept. */
+  | { kind: 'remove'; ids: string[] }
   /** A custom global speed limit. */
   | { kind: 'speed' }
   /** A newer version: what is new, then installing it. */
@@ -36,7 +38,7 @@ export type Dialog =
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
-  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '', floatBall: false, watchClipboard: false, openTorrents: true },
+  general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '', floatBall: false, watchClipboard: false, openTorrents: true, removeFiles: 'ask' },
   appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
   categoryDirs: {},
@@ -128,7 +130,9 @@ interface State {
   setSort: (key: SortKey) => void;
   select: (ids: string[], anchor?: string | null) => void;
   /** Moves tasks to the recycle bin and says so, with a way back. */
-  removeTasks: (ids: string[]) => Promise<void>;
+  /** To the recycle bin. `files`: with their files or not; left out, the kept answer, or the
+   *  question (the delete dialog). */
+  removeTasks: (ids: string[], files?: boolean) => Promise<void>;
   /** Scrolls the list to a task (one just added). */
   revealTask: (id: string) => void;
   /** Shows the panel for task `id` this once. */
@@ -345,11 +349,19 @@ export const useApp = create<State>((set, get) => ({
       anchor: anchor === undefined ? s.anchor : anchor,
       detailFor: selection.length === 1 && selection[0] === s.detailFor ? s.detailFor : null,
     })),
-  removeTasks: async (ids) => {
+  removeTasks: async (ids, files) => {
     if (!ids.length) return;
+    // Ask whether the files go too, unless the answer was kept (Settings › Download).
+    const kept = get().settings.general.removeFiles;
+    if (files === undefined && kept === 'ask') {
+      set({ dialog: { kind: 'remove', ids } });
+      return;
+    }
+    const withFiles = files ?? kept === 'delete';
     await get().run(async () => {
-      await api.remove(ids);
-      get().toast('info', i18n.t('shell.removed', { count: ids.length }), {
+      await api.remove(ids, withFiles);
+      // Undo brings the tasks back; deleted files stay deleted.
+      get().toast('info', i18n.t(withFiles ? 'shell.removedWithFiles' : 'shell.removed', { count: ids.length }), {
         label: i18n.t('shell.undo'),
         run: () => void get().run(() => api.restore(ids)),
       });

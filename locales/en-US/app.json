@@ -160,6 +160,11 @@
       "conflict": "When the file already exists",
       "conflictRename": "Rename automatically",
       "conflictOverwrite": "Overwrite",
+      "removeFiles": "When deleting a task",
+      "removeFilesHint": "The task moves to the trash; this decides whether its local files go too",
+      "removeFilesAsk": "Ask every time",
+      "removeFilesKeep": "Keep the local files",
+      "removeFilesDelete": "Delete the local files too",
       "resumeOnStartup": "Resume unfinished downloads at startup",
       "resumeOnStartupHint": "Tasks that were downloading when the app quit continue automatically the next time it starts",
       "syncWrites": "Save progress to disk every second",
@@ -400,6 +405,7 @@
       "listSeparator": ", "
     },
     "removed": "{count, plural, one {# task moved to the trash} other {# tasks moved to the trash}}",
+    "removedWithFiles": "{count, plural, one {# task moved to the trash, its files deleted} other {# tasks moved to the trash, their files deleted}}",
     "undo": "Undo"
   },
   "empty": {
@@ -664,8 +670,18 @@
       "titleMany": "{count, plural, one {Permanently delete # task?} other {Permanently delete # tasks?}}",
       "titleOne": "Permanently delete this task?",
       "confirm": "Delete permanently",
-      "text": "The task records and unfinished temporary files will be deleted. This cannot be undone.",
-      "deleteFiles": "Also delete completed downloaded files"
+      "text": "The task is deleted at once, without going to the trash. This cannot be undone.",
+      "deleteFiles": "Also delete the local files"
+    },
+    "remove": {
+      "titleMany": "{count, plural, one {Delete # task?} other {Delete # tasks?}}",
+      "titleOne": "Delete this task?",
+      "confirm": "Delete",
+      "text": "The task moves to the trash, where it can be restored.",
+      "textFiles": "The task moves to the trash; its local files are deleted and cannot be recovered.",
+      "deleteFiles": "Also delete the local files",
+      "remember": "Remember my choice and don't ask again",
+      "rememberHint": "You can change this in Settings › Download"
     },
     "speed": {
       "title": "Global speed limit",

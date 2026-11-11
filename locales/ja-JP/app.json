@@ -160,6 +160,11 @@
       "conflict": "ファイルが既に存在する場合",
       "conflictRename": "自動で名前を変更",
       "conflictOverwrite": "上書き",
+      "removeFiles": "タスクを削除するとき",
+      "removeFilesHint": "タスクはごみ箱に移動します。ローカルファイルも削除するかをここで決めます",
+      "removeFilesAsk": "毎回確認する",
+      "removeFilesKeep": "ローカルファイルを残す",
+      "removeFilesDelete": "ローカルファイルも削除する",
       "resumeOnStartup": "起動時に未完了のダウンロードを再開",
       "resumeOnStartupHint": "終了時にダウンロード中だったタスクを、次回の起動後に自動で再開します",
       "syncWrites": "進捗を毎秒ディスクに書き込む",
@@ -400,6 +405,7 @@
       "listSeparator": "、"
     },
     "removed": "{count} 件のタスクをごみ箱に移動しました",
+    "removedWithFiles": "{count} 件のタスクをごみ箱に移動し、ローカルファイルを削除しました",
     "undo": "元に戻す"
   },
   "empty": {
@@ -664,8 +670,18 @@
       "titleMany": "{count} 件のタスクを完全に削除しますか？",
       "titleOne": "このタスクを完全に削除しますか？",
       "confirm": "完全に削除",
-      "text": "タスクの記録と未完了の一時ファイルが削除されます。元に戻すことはできません。",
-      "deleteFiles": "ダウンロード済みのファイルも削除する"
+      "text": "タスクはごみ箱を経由せずにすぐ削除されます。元に戻すことはできません。",
+      "deleteFiles": "ローカルファイルも削除する"
+    },
+    "remove": {
+      "titleMany": "{count} 件のタスクを削除しますか？",
+      "titleOne": "このタスクを削除しますか？",
+      "confirm": "削除",
+      "text": "タスクはごみ箱に移動し、ごみ箱から元に戻せます。",
+      "textFiles": "タスクはごみ箱に移動します。ローカルファイルは削除され、元に戻せません。",
+      "deleteFiles": "ローカルファイルも削除する",
+      "remember": "選択を記憶し、次回から確認しない",
+      "rememberHint": "設定 › ダウンロード で変更できます"
     },
     "speed": {
       "title": "全体の速度制限",

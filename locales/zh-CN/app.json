@@ -160,6 +160,11 @@
       "conflict": "文件已存在时",
       "conflictRename": "自动重命名",
       "conflictOverwrite": "覆盖",
+      "removeFiles": "删除任务时",
+      "removeFilesHint": "任务会移到回收站；这里决定本地文件是否一起删除",
+      "removeFilesAsk": "每次询问",
+      "removeFilesKeep": "保留本地文件",
+      "removeFilesDelete": "同时删除本地文件",
       "resumeOnStartup": "启动时继续未完成的下载",
       "resumeOnStartupHint": "退出时正在下载的任务，下次启动后自动继续",
       "syncWrites": "每秒把进度写入磁盘",
@@ -400,6 +405,7 @@
       "listSeparator": "、"
     },
     "removed": "已移到回收站：{count} 个任务",
+    "removedWithFiles": "已移到回收站并删除本地文件：{count} 个任务",
     "undo": "撤销"
   },
   "empty": {
@@ -664,8 +670,18 @@
       "titleMany": "彻底删除 {count} 个任务？",
       "titleOne": "彻底删除这个任务？",
       "confirm": "彻底删除",
-      "text": "任务记录和未完成的临时文件会被删除，无法还原。",
-      "deleteFiles": "同时删除已下载完成的文件"
+      "text": "任务直接删除，不进回收站，无法还原。",
+      "deleteFiles": "同时删除本地文件"
+    },
+    "remove": {
+      "titleMany": "删除 {count} 个任务？",
+      "titleOne": "删除这个任务？",
+      "confirm": "删除",
+      "text": "任务会移到回收站，可以从回收站恢复。",
+      "textFiles": "任务会移到回收站；本地文件会被删除，无法恢复。",
+      "deleteFiles": "同时删除本地文件",
+      "remember": "记住我的选择，以后不再询问",
+      "rememberHint": "可在 设置 › 下载 中更改"
     },
     "speed": {
       "title": "全局限速",

@@ -244,9 +244,17 @@ pub async fn task_restart(state: State<'_, AppState>, ids: Vec<TaskId>) -> Resul
     state.manager.restart(&ids).await
 }
 
+/// To the recycle bin; with `delete_files` their files are deleted too (the tasks stay there).
 #[tauri::command]
-pub async fn task_remove(state: State<'_, AppState>, ids: Vec<TaskId>) -> Result<()> {
-    state.manager.remove(&ids).await
+pub async fn task_remove(
+    state: State<'_, AppState>,
+    ids: Vec<TaskId>,
+    delete_files: Option<bool>,
+) -> Result<()> {
+    state
+        .manager
+        .remove(&ids, delete_files.unwrap_or(false))
+        .await
 }
 
 #[tauri::command]

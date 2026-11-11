@@ -224,7 +224,7 @@ async fn moves_tasks_through_the_recycle_bin() {
         .unwrap()[0]
         .id;
     assert_eq!(m.get(id).unwrap().status, TaskStatus::Paused);
-    m.remove(&[id]).await.unwrap();
+    m.remove(&[id], false).await.unwrap();
     assert_eq!(m.get(id).unwrap().status, TaskStatus::Removed);
     m.restore(&[id]).await.unwrap();
     assert_eq!(m.get(id).unwrap().status, TaskStatus::Paused);
@@ -237,6 +237,45 @@ async fn moves_tasks_through_the_recycle_bin() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn removes_tasks_with_their_files() {
+    // The fake engine writes nothing: the files are put there by hand.
+    let dir = tempfile::tempdir().unwrap();
+    let in_dir = |name: &str| NewTask {
+        save_dir: dir.path().to_string_lossy().into_owned(),
+        ..new_task(&format!("https://e.com/{name}"), true)
+    };
+
+    // A finished download: its file goes, the task waits in the recycle bin and comes back
+    // finished (its file missing).
+    std::fs::write(dir.path().join("done.bin"), b"abc").unwrap();
+    let m = manager(FakeEngine::new(3, 3, 1), Db::memory().await.unwrap(), 3).await;
+    let done = m.add(vec![in_dir("done.bin")]).await.unwrap()[0].id;
+    wait_for(&m, done, |t| t.status == TaskStatus::Completed).await;
+    m.remove(&[done], true).await.unwrap();
+    assert_eq!(m.get(done).unwrap().status, TaskStatus::Removed);
+    assert!(!dir.path().join("done.bin").exists());
+    m.restore(&[done]).await.unwrap();
+    assert_eq!(m.get(done).unwrap().status, TaskStatus::Completed);
+
+    // A running one stops first; its partial file goes and it would start over.
+    let m = manager(
+        FakeEngine::new(1_000_000, 100, 5),
+        Db::memory().await.unwrap(),
+        3,
+    )
+    .await;
+    let running = m.add(vec![in_dir("part.bin")]).await.unwrap()[0].id;
+    let t = wait_for(&m, running, |t| t.status == TaskStatus::Downloading).await;
+    std::fs::write(t.partial_path(), b"partial").unwrap();
+    m.remove(&[running], true).await.unwrap();
+    let t = wait_for(&m, running, |t| t.status == TaskStatus::Removed).await;
+    assert!(!t.partial_path().exists());
+    assert_eq!(t.downloaded_bytes, 0);
+    m.restore(&[running]).await.unwrap();
+    assert_eq!(m.get(running).unwrap().status, TaskStatus::Paused);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn removing_a_running_task_stops_it_first() {
     let db = Db::memory().await.unwrap();
     let m = manager(FakeEngine::new(1_000_000, 100, 5), db, 3).await;
@@ -246,7 +285,7 @@ async fn removing_a_running_task_stops_it_first() {
         .unwrap()[0]
         .id;
     wait_for(&m, id, |t| t.status == TaskStatus::Downloading).await;
-    m.remove(&[id]).await.unwrap();
+    m.remove(&[id], false).await.unwrap();
     let t = wait_for(&m, id, |t| t.status == TaskStatus::Removed).await;
     assert_eq!(t.prev_status, Some(TaskStatus::Paused));
     m.restore(&[id]).await.unwrap();

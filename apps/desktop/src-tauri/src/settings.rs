@@ -68,6 +68,9 @@ pub struct General {
     /// A `.torrent` file downloaded over HTTP or FTP opens the new-download dialog with it (its
     /// files to choose), as one opened from the system does. On the BT page.
     pub open_torrents: bool,
+    /// Deleting a task (to the recycle bin): `ask` whether its files go too, or the answer
+    /// remembered from that question, `keep` or `delete`. On the Download page.
+    pub remove_files: String,
     /// The first-run guide has been through (or skipped).
     pub onboarded: bool,
 }
@@ -86,6 +89,7 @@ impl Default for General {
             float_ball: false,
             watch_clipboard: false,
             open_torrents: true,
+            remove_files: "ask".into(),
             onboarded: false,
         }
     }
@@ -223,6 +227,9 @@ impl Settings {
         }
         self.schedule = self.schedule.normalized();
         let g = &mut self.general;
+        if !matches!(g.remove_files.as_str(), "ask" | "keep" | "delete") {
+            g.remove_files = "ask".into();
+        }
         for s in [&mut g.shortcut_show, &mut g.shortcut_new] {
             *s = s.trim().to_owned();
             if !s.is_empty() && crate::shortcuts::parse(s).is_none() {

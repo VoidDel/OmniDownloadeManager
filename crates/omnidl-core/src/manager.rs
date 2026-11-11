@@ -76,8 +76,13 @@ pub struct TaskDetail {
 enum Stop {
     None,
     Pause,
-    Remove,
-    Purge { delete_files: bool },
+    /// To the recycle bin, with `delete_files` its files deleted (the task stays there).
+    Remove {
+        delete_files: bool,
+    },
+    Purge {
+        delete_files: bool,
+    },
     Shutdown,
 }
 
@@ -502,8 +507,9 @@ impl TaskManager {
         Ok(())
     }
 
-    /// Moves tasks to the recycle bin (running ones stop first). Files stay.
-    pub async fn remove(&self, ids: &[TaskId]) -> Result<()> {
+    /// Moves tasks to the recycle bin (running ones stop first). With `delete_files` their files
+    /// go too (see `Inner::delete_files`); the tasks stay in the bin.
+    pub async fn remove(&self, ids: &[TaskId], delete_files: bool) -> Result<()> {
         let mut changed = Vec::new();
         {
             let mut st = self.inner.state.lock();
@@ -511,7 +517,7 @@ impl TaskManager {
             for id in ids {
                 if let Some(r) = running.get_mut(id) {
                     if !matches!(r.stop, Stop::Purge { .. }) {
-                        r.stop = Stop::Remove;
+                        r.stop = Stop::Remove { delete_files };
                     }
                     r.cancel.cancel();
                 } else if let Some(t) = tasks.get_mut(id)
@@ -522,6 +528,9 @@ impl TaskManager {
                     changed.push(*id);
                 }
             }
+        }
+        if delete_files {
+            self.inner.delete_files(&changed).await;
         }
         for id in changed {
             self.inner.changed(id).await;
@@ -970,7 +979,7 @@ impl Inner {
                         }
                     };
                     match stop {
-                        Stop::Remove => {
+                        Stop::Remove { .. } => {
                             t.prev_status = Some(natural);
                             t.status = TaskStatus::Removed;
                         }
@@ -984,10 +993,58 @@ impl Inner {
             if completed && let Err(e) = self.db.clear_segments(&id.to_string()).await {
                 tracing::error!("clearing segments of {id}: {e}");
             }
+            if matches!(stop, Stop::Remove { delete_files: true }) {
+                self.delete_files(&[id]).await;
+            }
             self.changed(id).await;
         }
         self.stopped.notify_waiters();
         self.schedule();
+    }
+
+    /// Deletes the files of tasks in the recycle bin, keeping the tasks: a finished file, a
+    /// torrent's data (the torrent leaves its engine, as a deleted one does), a partial file.
+    /// What was unfinished starts over from the first byte if it is restored and resumed; a
+    /// finished one comes back as finished, its file missing.
+    async fn delete_files(&self, ids: &[TaskId]) {
+        let tasks: Vec<Task> = {
+            let mut st = self.state.lock();
+            ids.iter()
+                .filter_map(|id| {
+                    let t = st.tasks.get_mut(id)?;
+                    let before = t.clone();
+                    if t.prev_status != Some(TaskStatus::Completed) {
+                        t.downloaded_bytes = 0;
+                        t.etag = None;
+                        t.last_modified = None;
+                    }
+                    Some(before)
+                })
+                .collect()
+        };
+        for t in &tasks {
+            let finished =
+                t.status == TaskStatus::Completed || t.prev_status == Some(TaskStatus::Completed);
+            if t.kind == TaskKind::Torrent {
+                if let Some(engine) = self.engine(t.kind) {
+                    engine.forget(t.id).await;
+                }
+                // A torrent writes in place: there is data only once it started.
+                if t.started_at.is_some() {
+                    remove_torrent_data(t);
+                }
+            } else {
+                if t.started_at.is_some() {
+                    remove_file(&t.partial_path());
+                }
+                if finished {
+                    remove_file(&t.path());
+                }
+            }
+            if !finished && let Err(e) = self.db.clear_segments(&t.id.to_string()).await {
+                tracing::error!("clearing segments of {}: {e}", t.id);
+            }
+        }
     }
 
     async fn delete(&self, ids: &[TaskId], delete_files: bool) -> Result<()> {

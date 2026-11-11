@@ -13,7 +13,7 @@ import { Icon } from '../../components/Icon';
 import { ShortcutInput } from '../../components/ShortcutInput';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { Category, Density, MaterialKind, Settings as S, ThemeMode, WhenDone } from '../../lib/types';
+import type { Category, Density, MaterialKind, RemoveFiles, Settings as S, ThemeMode, WhenDone } from '../../lib/types';
 import { categoryLabel } from '../../lib/words';
 import { useApp } from '../../store/app';
 import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
@@ -436,6 +436,18 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             options={[
               ['rename', t('settings.download.conflictRename')],
               ['overwrite', t('settings.download.conflictOverwrite')],
+            ]}
+          />
+        </Row>
+        <Row label={t('settings.download.removeFiles')} hint={t('settings.download.removeFilesHint')}>
+          <Select<RemoveFiles>
+            value={s.general.removeFiles}
+            label={t('settings.download.removeFiles')}
+            onChange={(v) => set((x) => (x.general.removeFiles = v))}
+            options={[
+              ['ask', t('settings.download.removeFilesAsk')],
+              ['keep', t('settings.download.removeFilesKeep')],
+              ['delete', t('settings.download.removeFilesDelete')],
             ]}
           />
         </Row>

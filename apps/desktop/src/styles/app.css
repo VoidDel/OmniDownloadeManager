@@ -214,6 +214,10 @@
 .family-app span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------------------------------------------------------- dialogs */
+/* A checkbox with a line under its text: the box level with the first line. */
+.chk:has(.chk-hint) { align-items: flex-start; }
+.chk:has(.chk-hint) input { margin-top: 3px; }
+.chk-hint { display: block; margin-top: 2px; font-size: .78rem; }
 /* The window's own background (the list's and the settings'), not omni-ui's elevated white:
    fields, lists and cards in them stay on the surface colour, as on the settings page. */
 .modal { background: var(--bg-canvas); }

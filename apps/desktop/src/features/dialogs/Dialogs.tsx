@@ -12,10 +12,56 @@ import type { WhenDone } from '../../lib/types';
 import { useApp } from '../../store/app';
 import { NewTaskDialog } from './NewTaskDialog';
 
+/** Deleting to the recycle bin: with the local files or not, and whether to keep that answer
+ *  (then deleting asks no more; Settings › Download changes it). */
+function RemoveDialog({ ids }: { ids: string[] }) {
+  const { t } = useTranslation();
+  const { closeDialog, removeTasks, saveSettings } = useApp.getState();
+  const [files, setFiles] = useState(false);
+  const [remember, setRemember] = useState(false);
+  const confirm = async () => {
+    closeDialog();
+    if (remember) void saveSettings((s) => (s.general.removeFiles = files ? 'delete' : 'keep'));
+    await removeTasks(ids, files);
+  };
+  return (
+    <Modal
+      title={ids.length > 1 ? t('dialogs.remove.titleMany', { count: ids.length }) : t('dialogs.remove.titleOne')}
+      onClose={closeDialog}
+      closeLabel={t('dialogs.close')}
+      footer={
+        <>
+          <button type="button" className="btn outline" onClick={closeDialog}>
+            {t('dialogs.cancel')}
+          </button>
+          <button type="button" className={`btn primary${files ? ' danger-fill' : ''}`} data-autofocus onClick={() => void confirm()}>
+            {t('dialogs.remove.confirm')}
+          </button>
+        </>
+      }
+    >
+      <p className="dlg-text">{files ? t('dialogs.remove.textFiles') : t('dialogs.remove.text')}</p>
+      <label className="chk">
+        <input type="checkbox" checked={files} onChange={(e) => setFiles(e.target.checked)} />
+        {t('dialogs.remove.deleteFiles')}
+      </label>
+      <label className="chk">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+        <span>
+          {t('dialogs.remove.remember')}
+          <small className="muted chk-hint">{t('dialogs.remove.rememberHint')}</small>
+        </span>
+      </label>
+    </Modal>
+  );
+}
+
+/** Deleting for good: the tasks go at once, not to the recycle bin, and by default their local
+ *  files with them. */
 function PurgeDialog({ ids }: { ids: string[] }) {
   const { t } = useTranslation();
   const { closeDialog, run, select } = useApp.getState();
-  const [files, setFiles] = useState(false);
+  const [files, setFiles] = useState(true);
   const confirm = async () => {
     closeDialog();
     select([], null);
@@ -146,6 +192,8 @@ export function Dialogs() {
       return <NewTaskDialog initial={dialog} />;
     case 'purge':
       return <PurgeDialog ids={dialog.ids} />;
+    case 'remove':
+      return <RemoveDialog ids={dialog.ids} />;
     case 'speed':
       return <SpeedDialog />;
     case 'update':

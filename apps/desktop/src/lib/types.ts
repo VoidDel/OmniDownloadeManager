@@ -255,6 +255,9 @@ export interface BrowserSettings {
 /** What happens once everything is downloaded. */
 export type WhenDone = 'nothing' | 'quit' | 'sleep' | 'shutdown';
 
+/** Deleting a task (to the recycle bin): ask whether its files go too, or the answer kept. */
+export type RemoveFiles = 'ask' | 'keep' | 'delete';
+
 /** Scheduled downloads: start and stop times (`HH:MM`, local), days (0 = Sunday). */
 export interface Schedule {
   start: boolean;
@@ -295,6 +298,8 @@ export interface Settings {
     watchClipboard: boolean;
     /** A downloaded `.torrent` file opens the new-download dialog with it. */
     openTorrents: boolean;
+    /** Deleting a task: ask whether its files go too, or the remembered answer. */
+    removeFiles: RemoveFiles;
   };
   appearance: {
     mode: ThemeMode;
