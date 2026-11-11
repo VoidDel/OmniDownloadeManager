@@ -6,7 +6,7 @@ import { Icon } from 'omni-ui';
 import { CATEGORY_COLOR, CATEGORY_ICON, categoryOf } from '../lib/category';
 import type { Category } from '../lib/types';
 
-export { Icon, badgeStyle, type IconName } from 'omni-ui';
+export { Icon, GitHubMark, badgeStyle, type IconName } from 'omni-ui';
 
 /** A file's icon by its category, the same as the sidebar's for that category (omni-ui's
  *  `FileIcon` sorts types for an archiver: `.deb` is an archive there, a program here). A

@@ -44,6 +44,7 @@ export const SETTINGS_TABS: readonly [SettingsTab, string, IconName][] = [
   ['network', 'shell.settingsTabs.network', 'globe'],
   ['torrent', 'shell.settingsTabs.torrent', 'magnet'],
   ['browser', 'shell.settingsTabs.browser', 'plug'],
+  ['about', 'shell.settingsTabs.about', 'info'],
 ];
 
 export function settingsTabLabel(id: SettingsTab): string {

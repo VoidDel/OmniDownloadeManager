@@ -108,7 +108,6 @@
       "auto": "System ({lang})"
     },
     "general": {
-      "version": "Version",
       "logs": "Logs",
       "openFolder": "Open folder",
       "autostart": "Start with the system",
@@ -296,6 +295,19 @@
       "quit": "Quit Omni Download",
       "sleep": "Sleep",
       "shutdown": "Shut down"
+    },
+    "about": {
+      "tagline": "A download manager for HTTP, FTP, BitTorrent and HLS",
+      "version": "Version",
+      "license": "License",
+      "source": "Source code",
+      "protocols": "Downloads",
+      "magnet": "Magnet links",
+      "components": "Built with",
+      "family": "Also in the family",
+      "familyHint": "Sharing one design system and its themes",
+      "omnizipHint": "OmniZip, the archive manager, with the same design and themes",
+      "learnAbout": "Learn about {app}"
     }
   },
   "shell": {
@@ -321,7 +333,8 @@
       "download": "Downloads",
       "network": "Network",
       "torrent": "BT",
-      "browser": "Browser"
+      "browser": "Browser",
+      "about": "About"
     },
     "window": {
       "minimize": "Minimize",

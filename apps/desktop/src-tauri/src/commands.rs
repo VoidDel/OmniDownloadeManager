@@ -415,12 +415,15 @@ pub fn sound_test(app: AppHandle, file: String) {
     crate::sound::play(&app, &file);
 }
 
-/// Opens the user guide or the page for reporting a problem, in the browser.
+/// Opens the user guide, the page for reporting a problem, the source code or OmniZip's page (the
+/// same family's archiver; Settings › About), in the browser.
 #[tauri::command]
 pub fn help_open(app: AppHandle, page: String) -> Result<()> {
     let url = match page.as_str() {
         "guide" => "https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/user-guide.md",
         "feedback" => "https://github.com/VoidDel/OmniDownloadeManager/issues/new/choose",
+        "source" => "https://github.com/VoidDel/OmniDownloadeManager",
+        "omnizip" => "https://github.com/VoidDel/OmniZip",
         _ => return Err(Error::invalid(format!("no such page: {page}"))),
     };
     app.opener()

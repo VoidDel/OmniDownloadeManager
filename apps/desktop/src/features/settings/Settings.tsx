@@ -1,5 +1,5 @@
 // The settings page (docs/development-plan.md §6.3): general, appearance (language too), download,
-// network, BT, browser.
+// network, BT, browser, about.
 // Changes save at once (the backend applies them to downloads that start later; the global limit
 // and appearance apply immediately). Layout and classes are OmniZip's (omni-ui settings CSS).
 
@@ -18,6 +18,7 @@ import { categoryLabel } from '../../lib/words';
 import { useApp } from '../../store/app';
 import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
 import { SETTINGS_TABS } from '../shell/Chrome';
+import { AboutSettings } from './AboutSettings';
 import { BrowserSettings } from './BrowserSettings';
 import { TorrentSettings } from './TorrentSettings';
 
@@ -252,13 +253,11 @@ function Appearance({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
 }
 
 function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
-  const version = useApp((st) => st.version);
   const logDir = useApp((st) => st.logDir);
   const run = useApp((st) => st.run);
   const platform = useApp((st) => st.platform);
   const autostart = useApp((st) => st.autostart);
-  const { setAutostart, checkUpdate, toast } = useApp.getState();
-  const [checking, setChecking] = useState(false);
+  const { setAutostart, toast } = useApp.getState();
   const { t } = useTranslation();
   const g = s.general;
   /** Sets one shortcut, unless the other one already has those keys. */
@@ -272,11 +271,6 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
       set((x) => (x.general.soundFile = picked));
       void run(() => api.soundTest(picked));
     }
-  };
-  const check = async () => {
-    setChecking(true);
-    await checkUpdate(true);
-    setChecking(false);
   };
   return (
     <>
@@ -330,13 +324,6 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         </Row>
       </div>
       <div className="set-group">
-        <Row label={t('settings.general.version')}>
-          <span className="muted">Omni Download {version}</span>
-          <button type="button" className="btn outline" disabled={checking || !isTauri()} onClick={() => void check()}>
-            <Icon name="refresh" />
-            {checking ? t('update.checking') : t('update.check')}
-          </button>
-        </Row>
         <Row label={t('settings.general.checkUpdates')} hint={t('settings.general.checkUpdatesHint')}>
           <Switch label={t('settings.general.checkUpdates')} checked={g.checkUpdates} onChange={(v) => set((x) => (x.general.checkUpdates = v))} />
         </Row>
@@ -639,6 +626,7 @@ export function Settings() {
         {tab === 'network' && <Network s={s} set={set} />}
         {tab === 'torrent' && <TorrentSettings s={s} set={set} />}
         {tab === 'browser' && <BrowserSettings s={s} set={set} />}
+        {tab === 'about' && <AboutSettings />}
       </div>
     </div>
   );

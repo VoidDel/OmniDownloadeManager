@@ -108,7 +108,6 @@
       "auto": "跟隨系統（{lang}）"
     },
     "general": {
-      "version": "版本",
       "logs": "記錄檔",
       "openFolder": "開啟資料夾",
       "autostart": "隨系統啟動",
@@ -296,6 +295,19 @@
       "quit": "結束 Omni Download",
       "sleep": "睡眠",
       "shutdown": "關機"
+    },
+    "about": {
+      "tagline": "支援 HTTP、FTP、BitTorrent 與 HLS 的下載管理器",
+      "version": "版本",
+      "license": "授權條款",
+      "source": "原始碼",
+      "protocols": "支援的下載方式",
+      "magnet": "磁力連結",
+      "components": "建置元件",
+      "family": "同家族應用程式",
+      "familyHint": "共用同一套設計系統與主題",
+      "omnizipHint": "OmniZip 壓縮軟體，共用設計系統與主題",
+      "learnAbout": "了解 {app}"
     }
   },
   "shell": {
@@ -321,7 +333,8 @@
       "download": "下載",
       "network": "網路",
       "torrent": "BT",
-      "browser": "瀏覽器"
+      "browser": "瀏覽器",
+      "about": "關於"
     },
     "window": {
       "minimize": "最小化",

@@ -28,7 +28,7 @@ export const api = {
   /** The extension's store page for a browser (or how to install it). */
   extensionOpen: (browser: string) => invoke<void>('extension_open', { browser }),
   /** The user guide or the page for reporting a problem, in the browser. */
-  helpOpen: (page: 'guide' | 'feedback') => invoke<void>('help_open', { page }),
+  helpOpen: (page: 'guide' | 'feedback' | 'source' | 'omnizip') => invoke<void>('help_open', { page }),
   /** Plays the completion sound (`file`: a WAV file; empty: the built-in one). */
   soundTest: (file: string) => invoke<void>('sound_test', { file }),
 

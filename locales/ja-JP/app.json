@@ -108,7 +108,6 @@
       "auto": "システム（{lang}）"
     },
     "general": {
-      "version": "バージョン",
       "logs": "ログ",
       "openFolder": "フォルダーを開く",
       "autostart": "システムと一緒に起動",
@@ -296,6 +295,19 @@
       "quit": "Omni Download を終了",
       "sleep": "スリープ",
       "shutdown": "シャットダウン"
+    },
+    "about": {
+      "tagline": "HTTP・FTP・BitTorrent・HLS 対応のダウンロードマネージャー",
+      "version": "バージョン",
+      "license": "ライセンス",
+      "source": "ソースコード",
+      "protocols": "対応するダウンロード",
+      "magnet": "マグネットリンク",
+      "components": "使用コンポーネント",
+      "family": "同じファミリーのアプリ",
+      "familyHint": "同じデザインシステムとテーマを共有しています",
+      "omnizipHint": "圧縮・展開ソフト OmniZip。デザインとテーマを共有しています",
+      "learnAbout": "{app} について"
     }
   },
   "shell": {
@@ -321,7 +333,8 @@
       "download": "ダウンロード",
       "network": "ネットワーク",
       "torrent": "BT",
-      "browser": "ブラウザー"
+      "browser": "ブラウザー",
+      "about": "バージョン情報"
     },
     "window": {
       "minimize": "最小化",
