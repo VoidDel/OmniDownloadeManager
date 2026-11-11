@@ -42,6 +42,10 @@ pub struct TaskOptions {
     /// link; one that serves another file, refuses ranges or fails is left out.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mirrors: Vec<String>,
+    /// HTTP(S): the sound of a video whose link has only the picture (a site's DASH streams, as
+    /// the browser extension finds them). Both are downloaded and joined into one MP4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_source: Option<String>,
 }
 
 /// Where requests go.

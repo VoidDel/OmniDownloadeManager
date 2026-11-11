@@ -9,6 +9,7 @@
 mod client;
 mod download;
 mod hls;
+mod mp4;
 mod probe;
 mod ua;
 
@@ -54,6 +55,11 @@ impl DownloadEngine for HttpEngine {
 
     async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo> {
         let url = parse_url(source)?;
+        // Picture and sound apart (a site's DASH streams): one MP4 of both.
+        if let Some(audio) = options.audio_source.as_deref() {
+            let client = client::build_as(options, &ua::preferred(options, &url))?;
+            return hls::probe_pair(&client, &url, audio).await;
+        }
         if hls::is_playlist_url(&url) {
             let client = client::build_as(options, &ua::preferred(options, &url))?;
             return playlist(&client, &url, options).await;

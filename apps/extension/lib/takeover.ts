@@ -15,6 +15,8 @@ export interface Download {
   referer?: string | null;
   /** The page it started from. */
   pageUrl?: string | null;
+  /** The sound of a video whose `url` has only the picture (DASH): the app joins them. */
+  audioUrl?: string | null;
 }
 
 /** `taken`: the app has it (or the user dropped it there). `browser`: the browser should go on. */
@@ -51,6 +53,7 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
     user_agent: navigator.userAgent,
     cookies: await cookiesFor(d.url),
     silent,
+    ...(d.audioUrl ? { audio_url: d.audioUrl } : {}),
   };
 }
 

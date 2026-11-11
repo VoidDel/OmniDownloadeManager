@@ -38,7 +38,9 @@ const SAVE_EVERY: Duration = Duration::from_secs(1);
 
 pub(crate) async fn run(retry_delay: Duration, job: Job) -> Outcome {
     let job = Arc::new(job);
-    let playlist = parse_url(&job.source).is_ok_and(|u| hls::is_playlist_url(&u))
+    // Playlists, and a picture with its sound apart (fetched in parts the same way, joined).
+    let playlist = job.options.audio_source.is_some()
+        || parse_url(&job.source).is_ok_and(|u| hls::is_playlist_url(&u))
         || job.resume.as_ref().is_some_and(hls::is_hls_state);
     if playlist {
         return hls::run(retry_delay, job).await;

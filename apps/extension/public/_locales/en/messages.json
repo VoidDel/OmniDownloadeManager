@@ -257,6 +257,12 @@
   "mediaHls": {
     "message": "HLS stream"
   },
+  "mediaDash": {
+    "message": "Video (sound joined automatically)"
+  },
+  "mediaDashSilent": {
+    "message": "Video (picture only, no sound found)"
+  },
   "mediaDownload": {
     "message": "Download with Omni Download"
   },

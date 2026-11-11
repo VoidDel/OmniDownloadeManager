@@ -60,6 +60,8 @@ export interface TaskOptions {
   checksum?: Checksum | null;
   /** HTTP: other addresses of the same file; the connections are spread over them. */
   mirrors?: string[];
+  /** HTTP: the sound of a video whose link has only the picture; joined into one MP4. */
+  audioSource?: string | null;
 }
 
 export type HashAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512';

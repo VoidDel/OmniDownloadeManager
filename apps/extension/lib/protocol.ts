@@ -15,6 +15,8 @@ export interface AddDownload {
   tab_url?: string | null;
   /** Start without the quick-download window. */
   silent?: boolean;
+  /** The sound of a video whose `url` has only the picture (DASH): the app joins them. */
+  audio_url?: string | null;
 }
 
 export type RequestBody =

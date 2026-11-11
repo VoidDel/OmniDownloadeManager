@@ -1,5 +1,6 @@
-// Media sniffing in the Chromium build, loaded unpacked: a page that plays a video and loads an
-// HLS stream (with its segments and a small sound, which are not listed). The list and the
+// Media sniffing in the Chromium build, loaded unpacked: a page that plays a video, loads an
+// HLS stream (with its segments and a small sound, which are not listed) and a Bilibili-style
+// DASH picture and sound (whole files fetched in ranges: offered as one video to join). The list and the
 // toolbar badge of its tab, a download from the popup's list (to a stand-in for the app's HTTP
 // channel), and the list starting over on the next page.
 
@@ -41,6 +42,7 @@ test.beforeAll(async () => {
            <script>
              fetch('/hls/index.m3u8').then(() => fetch('/hls/seg0.ts'));
              fetch('/sfx/click.mp3');
+             for (const id of [30080, 30280]) fetch('/bili/5678-1-' + id + '.m4s', { headers: { Range: 'bytes=0-1023' } });
            </script>`,
         );
       case '/other':
@@ -51,6 +53,12 @@ test.beforeAll(async () => {
         return send('application/vnd.apple.mpegurl', '#EXTM3U\n#EXTINF:2,\nseg0.ts\n#EXT-X-ENDLIST\n');
       case '/hls/seg0.ts':
         return send('video/mp2t', Buffer.alloc(200 * 1024, 2));
+      case '/bili/5678-1-30080.m4s':
+      case '/bili/5678-1-30280.m4s': {
+        const total = req.url.includes('30080') ? 2 * MB : MB;
+        res.writeHead(206, { 'Content-Type': 'video/mp4', 'Content-Range': `bytes 0-1023/${total}`, 'Content-Length': '1024' });
+        return res.end(Buffer.alloc(1024, 4));
+      }
       case '/sfx/click.mp3':
         return send('audio/mpeg', Buffer.alloc(10 * 1024, 3));
       default:
@@ -113,18 +121,20 @@ test.describe('media sniffing', () => {
 
   const tabOf = (page: Page) => worker.evaluate((url) => chrome.tabs.query({ url }).then((t) => t[0]?.id ?? -1), page.url());
   const listOf = (tabId: number) =>
-    worker.evaluate((id) => chrome.storage.session.get(`media:${id}`).then((r) => ((r[`media:${id}`] ?? []) as { url: string; kind: string; size: number | null; title: string | null }[])), tabId);
+    worker.evaluate((id) => chrome.storage.session.get(`media:${id}`).then((r) => ((r[`media:${id}`] ?? []) as { url: string; kind: string; size: number | null; title: string | null; track?: string }[])), tabId);
   const badgeOf = (tabId: number) => worker.evaluate((id) => chrome.action.getBadgeText({ tabId: id }), tabId);
 
-  test('lists the video and the stream, not the pieces, with a badge', async () => {
+  test('lists the video and the streams, not the pieces, with a badge', async () => {
     const page = await context.newPage();
     await page.goto(`${siteUrl}/watch`);
     const tab = await tabOf(page);
-    await expect.poll(async () => (await listOf(tab)).map((m) => `${m.kind} ${new URL(m.url).pathname}`).sort()).toEqual(['hls /hls/index.m3u8', 'video /media/clip.mp4']);
+    await expect.poll(async () => (await listOf(tab)).map((m) => `${m.kind} ${new URL(m.url).pathname}`).sort()).toEqual(['dash /bili/5678-1-30080.m4s', 'dash /bili/5678-1-30280.m4s', 'hls /hls/index.m3u8', 'video /media/clip.mp4']);
     const list = await listOf(tab);
     expect(list.find((m) => m.kind === 'video')?.size).toBe(2 * MB);
     expect(list.find((m) => m.kind === 'hls')?.title).toBe('Big Buck Bunny');
-    await expect.poll(() => badgeOf(tab)).toBe('2');
+    expect(list.filter((m) => m.kind === 'dash').map((m) => `${m.track} ${m.size}`).sort()).toEqual([`audio ${MB}`, `video ${2 * MB}`]);
+    // The picture and its sound count once.
+    await expect.poll(() => badgeOf(tab)).toBe('3');
 
     // The popup's download button: the stream goes to the app named after the page.
     const popup = await context.newPage();
@@ -134,8 +144,19 @@ test.describe('media sniffing', () => {
     await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(1);
     expect(received.find((r) => r.type === 'add_download')?.payload).toMatchObject({
       url: `${siteUrl}/hls/index.m3u8`,
-      filename: 'Big Buck Bunny',
+      filename: 'Big Buck Bunny.mp4',
       referer: `${siteUrl}/watch`,
+    });
+    // The DASH picture goes with its sound, to be joined.
+    const picture = list.find((m) => m.kind === 'dash' && m.track === 'video');
+    const sound = list.find((m) => m.kind === 'dash' && m.track === 'audio');
+    await popup.evaluate(([media, audio]) => chrome.runtime.sendMessage({ type: 'download-media', media, audio, name: 'Big Buck Bunny.mp4' }), [picture, sound] as const);
+    await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(2);
+    expect(received.filter((r) => r.type === 'add_download')[1]?.payload).toMatchObject({
+      url: `${siteUrl}/bili/5678-1-30080.m4s`,
+      audio_url: `${siteUrl}/bili/5678-1-30280.m4s`,
+      filename: 'Big Buck Bunny.mp4',
+      size: 3 * MB,
     });
     await popup.close();
 

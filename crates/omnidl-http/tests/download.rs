@@ -491,6 +491,32 @@ async fn downloads_an_hls_stream_into_one_file() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn joins_a_picture_and_its_sound_served_apart() {
+    // The picture in two fragments of 3 MB (more than one request's worth), the sound in three
+    // small ones; the joined file holds both tracks and every fragment's data.
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = job(&server.url("/fmp4/vide/2/3000000"), dir.path(), None, 4);
+    r.job.options.audio_source = Some(server.url("/fmp4/soun/3/1000"));
+    r.job.file_name = Some("Show.m4s".into());
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(name, "Show.mp4");
+    let joined = std::fs::read(dir.path().join(&name)).unwrap();
+    assert_eq!(total, joined.len() as u64);
+    let has = |needle: &[u8]| joined.windows(needle.len()).any(|w| w == needle);
+    assert_eq!(joined.windows(4).filter(|w| w == b"trak").count(), 2);
+    assert!(has(b"vide") && has(b"soun"));
+    for i in 0..2 {
+        assert!(has(&common::fmp4_data(b"vide", i, 3_000_000)[..64]));
+    }
+    for i in 0..3 {
+        assert!(has(&common::fmp4_data(b"soun", i, 1000)));
+    }
+    // Nothing but the joined file is left.
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn decrypts_aes_128_segments() {
     let server = start().await;
     let dir = tempfile::tempdir().unwrap();

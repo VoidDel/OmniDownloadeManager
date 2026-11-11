@@ -266,6 +266,8 @@ pub struct JobOptions {
     pub insecure_tls: bool,
     /// Other addresses of the same file (HTTP).
     pub mirrors: Vec<String>,
+    /// The sound to join to the picture (HTTP; see `TaskOptions::audio_source`).
+    pub audio_source: Option<String>,
 }
 
 impl JobOptions {
@@ -324,6 +326,12 @@ impl JobOptions {
                 .map(|m| m.trim().to_owned())
                 .filter(|m| !m.is_empty())
                 .collect(),
+            audio_source: task
+                .audio_source
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned),
         }
     }
 }

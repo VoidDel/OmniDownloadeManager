@@ -257,6 +257,12 @@
   "mediaHls": {
     "message": "HLS 视频流"
   },
+  "mediaDash": {
+    "message": "视频（自动合并声音）"
+  },
+  "mediaDashSilent": {
+    "message": "视频（仅画面，未找到声音）"
+  },
   "mediaDownload": {
     "message": "用 Omni Download 下载"
   },

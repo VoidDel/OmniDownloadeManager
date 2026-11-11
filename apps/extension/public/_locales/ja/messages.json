@@ -257,6 +257,12 @@
   "mediaHls": {
     "message": "HLS ストリーム"
   },
+  "mediaDash": {
+    "message": "動画（音声を自動で結合）"
+  },
+  "mediaDashSilent": {
+    "message": "動画（映像のみ、音声が見つかりません）"
+  },
   "mediaDownload": {
     "message": "Omni Download でダウンロード"
   },

@@ -11,7 +11,7 @@
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, type Header } from '../lib/headers';
 import { t } from '../lib/i18n';
-import { classify, mediaName, mediaOf, saveMedia, withMedia, type Media } from '../lib/media';
+import { classify, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
 import { basename, handOver, notify, payloadFor, type Download } from '../lib/takeover';
@@ -214,7 +214,7 @@ function sniffMedia() {
       const m: Media = { ...c, url: d.url, title: tab?.title ?? null, pageUrl: tab?.url ?? d.documentUrl ?? null, at: Date.now() };
       const list = withMedia(await mediaOf(d.tabId), m);
       await saveMedia(d.tabId, list);
-      await badge(d.tabId, list.length);
+      await badge(d.tabId, offers(list).length);
     });
   };
   const webRequest = browser.webRequest as unknown as {
@@ -231,9 +231,11 @@ function sniffMedia() {
   browser.tabs.onRemoved.addListener((tabId) => inTab(tabId, () => saveMedia(tabId, [])));
 }
 
-/** A media item the popup asked for: an HLS stream is named after its page. */
-function downloadMedia(m: Media) {
-  void explicit({ url: m.url, pageUrl: m.pageUrl, referer: m.pageUrl, filename: m.kind === 'hls' ? mediaName(m) : null, size: m.size, mime: m.mime });
+/** A media item the popup asked for, under the name the list shows; a DASH picture with its
+ *  sound, which the app joins into one MP4. */
+function downloadMedia(m: Media, audio?: Media | null, name?: string) {
+  const size = m.size != null && audio?.size != null ? m.size + audio.size : m.size;
+  void explicit({ url: m.url, audioUrl: audio?.url ?? null, pageUrl: m.pageUrl, referer: m.pageUrl, filename: name || mediaName(m), size, mime: m.mime });
 }
 
 export default defineBackground(() => {
@@ -258,9 +260,9 @@ export default defineBackground(() => {
   // Alt+click from the content script: the browser keeps that link. The popup's media list:
   // download one (here, as the popup closes when the app's window opens).
   browser.runtime.onMessage.addListener((msg: unknown) => {
-    const m = msg as { type?: string; url?: string; media?: Media };
+    const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string };
     if (m?.type === 'bypass' && typeof m.url === 'string') mark(bypass, m.url, 5000);
-    if (m?.type === 'download-media' && m.media) downloadMedia(m.media);
+    if (m?.type === 'download-media' && m.media) downloadMedia(m.media, m.audio, m.name);
   });
 
   sniffMedia();

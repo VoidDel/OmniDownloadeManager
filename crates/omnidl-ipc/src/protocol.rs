@@ -21,6 +21,9 @@ pub struct Request {
     pub body: Body,
 }
 
+// A message is read once per request and handled at once: the size of its biggest variant
+// (a download with its headers) costs nothing worth boxing it for.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum Body {
@@ -63,6 +66,10 @@ pub struct AddDownload {
     pub tab_url: Option<String>,
     /// Start without asking (no quick-download window).
     pub silent: bool,
+    /// The sound of a video whose `url` has only the picture (a site's DASH streams, found by
+    /// the media sniffer): both are downloaded and joined into one MP4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

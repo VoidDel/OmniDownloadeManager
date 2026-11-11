@@ -257,6 +257,12 @@
   "mediaHls": {
     "message": "HLS 影片串流"
   },
+  "mediaDash": {
+    "message": "影片（自動合併聲音）"
+  },
+  "mediaDashSilent": {
+    "message": "影片（僅畫面，未找到聲音）"
+  },
   "mediaDownload": {
     "message": "用 Omni Download 下載"
   },

@@ -16,7 +16,7 @@ use aes::{
 };
 use futures_util::{StreamExt, stream::FuturesOrdered};
 use omnidl_core::{
-    Error, ErrorCode, Job, Outcome, Result, ResumeState, Segment,
+    Error, ErrorCode, Job, Outcome, ProbeInfo, Result, ResumeState, Segment,
     disk::{backoff, claim_name, place},
     filename,
 };
@@ -87,9 +87,25 @@ struct Media {
     ended: bool,
 }
 
+/// A variant of a master playlist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Variant {
+    bandwidth: u64,
+    url: Url,
+    /// The group of its sound when that is a playlist of its own (`AUDIO="…"`).
+    audio: Option<String>,
+}
+
+/// A sound playlist of a master playlist (`#EXT-X-MEDIA:TYPE=AUDIO` with a URI).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Rendition {
+    group: String,
+    url: Url,
+    default: bool,
+}
+
 enum Playlist {
-    /// Variants: (bandwidth, address).
-    Master(Vec<(u64, Url)>),
+    Master(Vec<Variant>, Vec<Rendition>),
     Media(Media),
 }
 
@@ -148,21 +164,34 @@ fn parse(text: &str, base: &Url) -> Result<Playlist> {
     }
     let join = |u: &str| base.join(u).map_err(|e| bad(&e.to_string()));
     let mut variants = Vec::new();
+    let mut renditions = Vec::new();
     let mut media = Media::default();
     let mut seq = 0u64;
     let mut key: Option<Key> = None;
     let mut pending_range: Option<String> = None;
-    let mut pending_variant: Option<u64> = None;
+    let mut pending_variant: Option<(u64, Option<String>)> = None;
     let mut next_offset: HashMap<Url, u64> = HashMap::new();
     for line in lines {
         if let Some(a) = line.strip_prefix("#EXT-X-STREAM-INF:") {
             let attrs = attributes(a);
-            pending_variant = Some(
+            pending_variant = Some((
                 attrs
                     .get("BANDWIDTH")
                     .and_then(|b| b.parse().ok())
                     .unwrap_or(0),
-            );
+                attrs.get("AUDIO").cloned(),
+            ));
+        } else if let Some(a) = line.strip_prefix("#EXT-X-MEDIA:") {
+            let attrs = attributes(a);
+            if attrs.get("TYPE").map(String::as_str) == Some("AUDIO")
+                && let (Some(group), Some(uri)) = (attrs.get("GROUP-ID"), attrs.get("URI"))
+            {
+                renditions.push(Rendition {
+                    group: group.clone(),
+                    url: join(uri)?,
+                    default: attrs.get("DEFAULT").map(String::as_str) == Some("YES"),
+                });
+            }
         } else if let Some(n) = line.strip_prefix("#EXT-X-MEDIA-SEQUENCE:") {
             seq = n.trim().parse().unwrap_or(0);
         } else if let Some(a) = line.strip_prefix("#EXT-X-KEY:") {
@@ -199,8 +228,12 @@ fn parse(text: &str, base: &Url) -> Result<Playlist> {
             media.ended = true;
         } else if line.starts_with('#') {
             // #EXTINF and the rest: nothing to keep.
-        } else if let Some(bw) = pending_variant.take() {
-            variants.push((bw, join(line)?));
+        } else if let Some((bandwidth, audio)) = pending_variant.take() {
+            variants.push(Variant {
+                bandwidth,
+                url: join(line)?,
+                audio,
+            });
         } else {
             let url = join(line)?;
             let range = pending_range.take().and_then(|r| {
@@ -220,7 +253,7 @@ fn parse(text: &str, base: &Url) -> Result<Playlist> {
         }
     }
     if !variants.is_empty() {
-        return Ok(Playlist::Master(variants));
+        return Ok(Playlist::Master(variants, renditions));
     }
     if media.parts.is_empty() {
         return Err(bad("an empty playlist"));
@@ -242,15 +275,38 @@ async fn get_text(client: &Client, url: &Url) -> Result<String> {
     resp.text().await.map_err(|e| request_error(&e))
 }
 
-/// The media playlist behind `url`: a master's best variant (highest bandwidth).
-async fn media_playlist(client: &Client, url: &Url) -> Result<(Url, Media)> {
+/// The media playlist behind `url` (a master's best variant, highest bandwidth) and, when that
+/// variant's sound is a playlist of its own, the sound's.
+async fn media_playlists(client: &Client, url: &Url) -> Result<(Url, Media, Option<Media>)> {
     let mut url = url.clone();
+    let mut audio: Option<Url> = None;
     for _ in 0..3 {
         match parse(&get_text(client, &url).await?, &url)? {
-            Playlist::Media(m) => return Ok((url, m)),
-            Playlist::Master(mut v) => {
-                v.sort_by_key(|(bw, _)| std::cmp::Reverse(*bw));
-                url = v.swap_remove(0).1;
+            Playlist::Media(m) => {
+                let sound = match audio.filter(|a| *a != url) {
+                    Some(a) => match parse(&get_text(client, &a).await?, &a)? {
+                        Playlist::Media(s) => Some(s),
+                        Playlist::Master(..) => {
+                            return Err(Error::new(
+                                ErrorCode::InvalidUrl,
+                                format!("{a}: a sound playlist that is a master playlist"),
+                            ));
+                        }
+                    },
+                    None => None,
+                };
+                return Ok((url, m, sound));
+            }
+            Playlist::Master(mut variants, renditions) => {
+                variants.sort_by_key(|v| std::cmp::Reverse(v.bandwidth));
+                let best = variants.swap_remove(0);
+                // The group's default sound, else its first.
+                audio = best.audio.as_ref().and_then(|g| {
+                    let mut group = renditions.iter().filter(|r| &r.group == g);
+                    let first = group.clone().next();
+                    group.find(|r| r.default).or(first).map(|r| r.url.clone())
+                });
+                url = best.url;
             }
         }
     }
@@ -260,17 +316,142 @@ async fn media_playlist(client: &Client, url: &Url) -> Result<(Url, Media)> {
     ))
 }
 
-/// What the new-download dialog shows: the file name and that it is a stream.
+/// What one run fetches: the parts in order, and where the sound to join begins.
+struct Plan {
+    /// Where the parts come from (the media playlist, or the picture's file): with `tag`, what
+    /// a resumed run checks.
+    final_url: Url,
+    tag: String,
+    parts: Vec<Part>,
+    /// The first part of the sound when it is joined to the picture at the end.
+    sound_from: Option<usize>,
+    fmp4: bool,
+    /// The bytes in all, when known beforehand (a pair of files).
+    total: Option<u64>,
+}
+
+/// A playlist (and its own sound playlist, joined when both are fragmented MP4).
+async fn playlist_plan(client: &Client, url: &Url) -> Result<Plan> {
+    let (media_url, media, sound) = media_playlists(client, url).await?;
+    if !media.ended {
+        return Err(live());
+    }
+    let count = media.parts.len();
+    let mut parts = media.parts;
+    let mut tag = format!("hls:{count}");
+    let mut sound_from = None;
+    match sound {
+        Some(s) if media.fmp4 && s.fmp4 && s.ended => {
+            tag = format!("hls:{count}+{}", s.parts.len());
+            sound_from = Some(parts.len());
+            parts.extend(s.parts);
+        }
+        Some(_) => tracing::warn!(
+            "{media_url}: the sound is a playlist of its own that cannot be joined (MPEG-TS); \
+             the picture only"
+        ),
+        None => {}
+    }
+    Ok(Plan {
+        final_url: media_url,
+        tag,
+        parts,
+        sound_from,
+        fmp4: media.fmp4,
+        total: None,
+    })
+}
+
+/// How much of a file one request of a pair fetches.
+const CHUNK: u64 = 4 << 20;
+
+/// A file of a pair in parts of `CHUNK` bytes (one part when the server ignores ranges).
+fn chunks(url: &Url, total: u64, ranges: bool, seq: &mut u64) -> Vec<Part> {
+    let mut parts = Vec::new();
+    let mut part = |range| {
+        parts.push(Part {
+            url: url.clone(),
+            range,
+            key: None,
+            seq: *seq,
+        });
+        *seq += 1;
+    };
+    if !ranges {
+        part(None);
+    } else {
+        let mut off = 0;
+        while off < total {
+            let len = CHUNK.min(total - off);
+            part(Some((len, off)));
+            off += len;
+        }
+    }
+    parts
+}
+
+/// The picture at `video` and the sound at `audio`: both their sizes.
+async fn pair_sizes(client: &Client, video: &Url, audio: &Url) -> Result<[(Url, u64, bool); 2]> {
+    let (v, a) = futures_util::future::try_join(
+        crate::probe::probe(client, video),
+        crate::probe::probe(client, audio),
+    )
+    .await?;
+    let sized = |p: crate::probe::Probe, what: &Url| {
+        p.total
+            .map(|t| (p.final_url, t, p.resumable))
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::Unsupported,
+                    format!("{what}: the server does not say the size; cannot join the streams"),
+                )
+            })
+    };
+    Ok([sized(v, video)?, sized(a, audio)?])
+}
+
+/// A video whose picture and sound are separate files (a site's DASH streams), joined.
+async fn pair_plan(client: &Client, video: &Url, audio: &str) -> Result<Plan> {
+    let audio = crate::parse_url(audio)?;
+    let [(vu, vt, vr), (au, at, ar)] = pair_sizes(client, video, &audio).await?;
+    let mut seq = 0;
+    let mut parts = chunks(&vu, vt, vr, &mut seq);
+    let sound_from = Some(parts.len());
+    parts.extend(chunks(&au, at, ar, &mut seq));
+    Ok(Plan {
+        final_url: vu,
+        tag: format!("hls:pair:{vt}:{at}"),
+        parts,
+        sound_from,
+        fmp4: true,
+        total: Some(vt + at),
+    })
+}
+
+/// What the new-download dialog shows for a playlist: the file name and that it is a stream.
 pub(crate) async fn probe(
     client: &Client,
     url: &Url,
     file_name: Option<&str>,
 ) -> Result<(Url, String)> {
-    let (media_url, m) = media_playlist(client, url).await?;
-    if !m.ended {
-        return Err(live());
-    }
-    Ok((media_url, output_name(url, file_name, m.fmp4)))
+    let plan = playlist_plan(client, url).await?;
+    Ok((plan.final_url, output_name(url, file_name, plan.fmp4)))
+}
+
+/// What the new-download dialog shows for a picture with its sound apart: one MP4 of both.
+pub(crate) async fn probe_pair(client: &Client, video: &Url, audio: &str) -> Result<ProbeInfo> {
+    let audio = crate::parse_url(audio)?;
+    let [(vu, vt, _), (_, at, _)] = pair_sizes(client, video, &audio).await?;
+    Ok(ProbeInfo {
+        file_name: output_name(video, None, true),
+        final_url: vu.to_string(),
+        total: Some(vt + at),
+        resumable: true,
+        content_type: Some("video/mp4".into()),
+        etag: None,
+        last_modified: None,
+        files: Vec::new(),
+    })
 }
 
 fn live() -> Error {
@@ -286,7 +467,10 @@ fn output_name(url: &Url, given: Option<&str>, fmp4: bool) -> String {
     let ext = if fmp4 { "mp4" } else { "ts" };
     if let Some(n) = given.map(str::trim).filter(|n| !n.is_empty()) {
         let stem = n.rsplit_once('.').map_or(n, |(s, e)| {
-            if matches!(e.to_ascii_lowercase().as_str(), "m3u8" | "ts" | "mp4") {
+            if matches!(
+                e.to_ascii_lowercase().as_str(),
+                "m3u8" | "ts" | "mp4" | "m4s" | "m4v" | "m4a"
+            ) {
                 s
             } else {
                 n
@@ -455,12 +639,20 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     // The user agent that worked for this host, if another did (`ua`).
     let ua = crate::ua::preferred(&job.options, &url);
     let client = client::build_as(&job.options, &ua).map_err(early)?;
-    let (media_url, media) = media_playlist(&client, &url).await.map_err(early)?;
-    if !media.ended {
-        return Err(early(live()));
+    let plan = match job.options.audio_source.as_deref() {
+        Some(audio) => pair_plan(&client, &url, audio).await,
+        None => playlist_plan(&client, &url).await,
     }
-    let count = media.parts.len();
-    let tag = format!("hls:{count}");
+    .map_err(early)?;
+    let Plan {
+        final_url: media_url,
+        tag,
+        parts: all_parts,
+        sound_from,
+        fmp4,
+        total,
+    } = plan;
+    let count = all_parts.len();
     let dir = job.save_dir.clone();
     std::fs::create_dir_all(&dir).map_err(|e| early(Error::io(&e, dir.display())))?;
 
@@ -498,7 +690,7 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
                 (name, Vec::new())
             }
             None => {
-                let base = output_name(&url, job.file_name.as_deref(), media.fmp4);
+                let base = output_name(&url, job.file_name.as_deref(), fmp4);
                 let (name, _) =
                     claim_name(&dir, &base, None, job.options.conflict).map_err(early)?;
                 (name, Vec::new())
@@ -509,7 +701,7 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     let mut state = ResumeState {
         file_name: file_name.clone(),
         final_url: Some(media_url.to_string()),
-        total: None,
+        total,
         etag: Some(tag),
         last_modified: None,
         resumable: true,
@@ -518,6 +710,9 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     };
     let mut written: u64 = state.segments.iter().map(|s| s.downloaded).sum();
     job.progress.set_downloaded(written);
+    if total.is_some() {
+        job.progress.set_total(total);
+    }
     job.checkpoint.started(&state).await.map_err(early)?;
 
     let mut file = tokio::fs::OpenOptions::new()
@@ -538,7 +733,7 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     );
     let first = state.segments.len();
     // In order, as many at a time as the connections asked for (by the user or the tuner).
-    let mut todo = media.parts.into_iter().skip(first);
+    let mut todo = all_parts.into_iter().skip(first);
     let mut parts = FuturesOrdered::new();
     let mut last_save = tokio::time::Instant::now();
     loop {
@@ -567,10 +762,13 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         job.progress.add(len);
         job.conns
             .observe(job.progress.downloaded(), job.speed_limit());
-        // The size so far, spread over what is left: an estimate until the end.
-        let n = state.segments.len() as u64;
-        job.progress
-            .set_total(((n as usize) < count).then(|| written / n.max(1) * count as u64));
+        // The size so far, spread over what is left: an estimate until the end (a pair of
+        // files knows it from the start).
+        if total.is_none() {
+            let n = state.segments.len() as u64;
+            job.progress
+                .set_total(((n as usize) < count).then(|| written / n.max(1) * count as u64));
+        }
         if last_save.elapsed() >= SAVE_EVERY {
             last_save = tokio::time::Instant::now();
             file.flush()
@@ -593,6 +791,13 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         .await
         .map_err(|e| (Error::io(&e, "writing the file"), Some(state.clone())))?;
     drop(file);
+    // Picture and sound apart: joined into one MP4 in place of the two.
+    let written = match sound_from {
+        Some(i) => join_sound(&partial, &state, i)
+            .await
+            .map_err(|e| (e, Some(state.clone())))?,
+        None => written,
+    };
     job.progress.set_total(Some(written));
     let name =
         place(&dir, &file_name, job.options.conflict).map_err(|e| (e, Some(state.clone())))?;
@@ -600,6 +805,39 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         file_name: name,
         total: written,
     })
+}
+
+/// Joins the picture (the parts before `sound_from`) and the sound in `partial` into one MP4,
+/// which takes the partial file's place; its size.
+async fn join_sound(
+    partial: &std::path::Path,
+    state: &ResumeState,
+    sound_from: usize,
+) -> Result<u64> {
+    let split = state
+        .segments
+        .get(sound_from)
+        .map(|s| s.start)
+        .ok_or_else(|| Error::internal("the sound was not downloaded"))?;
+    let end: u64 = state.segments.iter().map(|s| s.downloaded).sum();
+    let partial = partial.to_path_buf();
+    let mut joined = partial.clone().into_os_string();
+    joined.push(".join");
+    let joined = std::path::PathBuf::from(joined);
+    tokio::task::spawn_blocking(move || {
+        let r = crate::mp4::join(&partial, 0..split, split..end, &joined).and_then(|()| {
+            std::fs::rename(&joined, &partial).map_err(|e| Error::io(&e, partial.display()))
+        });
+        if r.is_err() {
+            let _ = std::fs::remove_file(&joined);
+        }
+        r?;
+        std::fs::metadata(&partial)
+            .map(|m| m.len())
+            .map_err(|e| Error::io(&e, partial.display()))
+    })
+    .await
+    .map_err(Error::internal)?
 }
 
 #[cfg(test)]
@@ -613,17 +851,47 @@ mod tests {
     #[test]
     fn reads_a_master_playlist() {
         let text = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.4d401e,mp4a.40.2\"\nlow/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000\nhigh/index.m3u8\n";
-        let Playlist::Master(v) = parse(text, &base()).unwrap() else {
+        let Playlist::Master(v, r) = parse(text, &base()).unwrap() else {
             panic!("not a master")
         };
         assert_eq!(v.len(), 2);
+        assert!(r.is_empty());
         assert_eq!(
             v[1],
-            (
-                2_800_000,
-                Url::parse("https://cdn.example.com/show/ep1/high/index.m3u8").unwrap()
-            )
+            Variant {
+                bandwidth: 2_800_000,
+                url: Url::parse("https://cdn.example.com/show/ep1/high/index.m3u8").unwrap(),
+                audio: None,
+            }
         );
+    }
+
+    #[test]
+    fn reads_sound_playlists_of_a_master() {
+        let text = "#EXTM3U\n\
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aac\",NAME=\"en\",DEFAULT=NO,URI=\"a/en.m3u8\"\n\
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aac\",NAME=\"zh\",DEFAULT=YES,URI=\"a/zh.m3u8\"\n\
+            #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"s\",NAME=\"zh\",URI=\"s/zh.m3u8\"\n\
+            #EXT-X-STREAM-INF:BANDWIDTH=2800000,AUDIO=\"aac\"\nv/high.m3u8\n";
+        let Playlist::Master(v, r) = parse(text, &base()).unwrap() else {
+            panic!("not a master")
+        };
+        assert_eq!(v[0].audio.as_deref(), Some("aac"));
+        assert_eq!(r.len(), 2);
+        assert!(r[1].default && r[1].url.path().ends_with("/a/zh.m3u8"));
+    }
+
+    #[test]
+    fn cuts_a_pair_of_files_into_ranges() {
+        let url = base();
+        let mut seq = 0;
+        let parts = chunks(&url, CHUNK * 2 + 5, true, &mut seq);
+        assert_eq!(
+            parts.iter().map(|p| p.range).collect::<Vec<_>>(),
+            [Some((CHUNK, 0)), Some((CHUNK, CHUNK)), Some((5, CHUNK * 2))]
+        );
+        assert_eq!(chunks(&url, 10, false, &mut seq)[0].range, None);
+        assert_eq!(seq, 4);
     }
 
     #[test]

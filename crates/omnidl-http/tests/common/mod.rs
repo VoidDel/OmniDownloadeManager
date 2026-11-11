@@ -124,6 +124,7 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/named/{size}", get(named))
         .route("/chunked/{size}", get(chunked))
         .route("/hls/{kind}/{n}/{name}", get(hls))
+        .route("/fmp4/{handler}/{frags}/{size}", get(fmp4_file))
         .route("/missing", get(|| async { StatusCode::NOT_FOUND }))
         .route(
             "/redirect",
@@ -582,5 +583,110 @@ async fn hls(State(s): S, UrlPath((kind, n, name)): UrlPath<(String, u64, String
             };
             ([(header::CONTENT_TYPE, "video/mp2t")], body).into_response()
         }
+    }
+}
+
+// ------------------------------------------------------------------ fragmented MP4 (DASH)
+
+fn mp4_box(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    let mut out = ((payload.len() + 8) as u32).to_be_bytes().to_vec();
+    out.extend_from_slice(kind);
+    out.extend_from_slice(payload);
+    out
+}
+
+fn mp4_full(kind: &[u8; 4], version: u8, flags: u32, rest: &[u8]) -> Vec<u8> {
+    let mut p = vec![version];
+    p.extend_from_slice(&flags.to_be_bytes()[1..]);
+    p.extend_from_slice(rest);
+    mp4_box(kind, &p)
+}
+
+/// The data of fragment `i` of the `handler` stream: recognisable in the joined file.
+pub fn fmp4_data(handler: &[u8; 4], i: u32, size: usize) -> Vec<u8> {
+    (0..size)
+        .map(|j| handler[0] ^ (i as u8) ^ (j as u8))
+        .collect()
+}
+
+/// A fragmented MP4 of one track (`vide` or `soun`, track 1, 1000 per second): its init
+/// section, then `frags` fragments a second apart with `size` bytes of data each.
+pub fn fmp4(handler: &[u8; 4], frags: u32, size: usize) -> Vec<u8> {
+    let mut mvhd = vec![0u8; 96];
+    mvhd[8..12].copy_from_slice(&1000u32.to_be_bytes());
+    mvhd[92..96].copy_from_slice(&2u32.to_be_bytes());
+    let mut tkhd = vec![0u8; 80];
+    tkhd[8..12].copy_from_slice(&1u32.to_be_bytes());
+    let mut mdhd = vec![0u8; 20];
+    mdhd[8..12].copy_from_slice(&1000u32.to_be_bytes());
+    let mut hdlr = vec![0u8; 21];
+    hdlr[4..8].copy_from_slice(handler);
+    let mdia = mp4_box(
+        b"mdia",
+        &[
+            mp4_full(b"mdhd", 0, 0, &mdhd),
+            mp4_full(b"hdlr", 0, 0, &hdlr),
+        ]
+        .concat(),
+    );
+    let trak = mp4_box(b"trak", &[mp4_full(b"tkhd", 0, 3, &tkhd), mdia].concat());
+    let mut trex = 1u32.to_be_bytes().to_vec();
+    trex.extend_from_slice(&[0u8; 16]);
+    let mvex = mp4_box(b"mvex", &mp4_full(b"trex", 0, 0, &trex));
+    let moov = mp4_box(
+        b"moov",
+        &[mp4_full(b"mvhd", 0, 0, &mvhd), trak, mvex].concat(),
+    );
+    let mut out = [mp4_box(b"ftyp", b"iso5\0\0\0\0iso5dash"), moov].concat();
+    for i in 0..frags {
+        let data = fmp4_data(handler, i, size);
+        let tfhd = mp4_full(b"tfhd", 0, 0x020000, &1u32.to_be_bytes());
+        let tfdt = mp4_full(b"tfdt", 1, 0, &(u64::from(i) * 1000).to_be_bytes());
+        let trun = |off: i32| {
+            let mut r = 1u32.to_be_bytes().to_vec();
+            r.extend_from_slice(&off.to_be_bytes());
+            r.extend_from_slice(&(size as u32).to_be_bytes());
+            mp4_full(b"trun", 0, 0x000201, &r)
+        };
+        let moof = |off| {
+            mp4_box(
+                b"moof",
+                &[
+                    mp4_full(b"mfhd", 0, 0, &(i + 1).to_be_bytes()),
+                    mp4_box(b"traf", &[tfhd.clone(), tfdt.clone(), trun(off)].concat()),
+                ]
+                .concat(),
+            )
+        };
+        let off = moof(0).len() as i32 + 8;
+        out.extend(moof(off));
+        out.extend(mp4_box(b"mdat", &data));
+    }
+    out
+}
+
+async fn fmp4_file(
+    headers: HeaderMap,
+    UrlPath((handler, frags, size)): UrlPath<(String, u32, usize)>,
+) -> Response {
+    let h: [u8; 4] = handler.as_bytes().try_into().unwrap_or(*b"vide");
+    let body = fmp4(&h, frags, size);
+    let total = body.len() as u64;
+    match parse_range(&headers, total) {
+        Some(Ok((a, b))) => Response::builder()
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header(header::CONTENT_TYPE, "video/mp4")
+            .header(header::ACCEPT_RANGES, "bytes")
+            .header(header::CONTENT_RANGE, format!("bytes {a}-{b}/{total}"))
+            .header(header::CONTENT_LENGTH, b - a + 1)
+            .body(Body::from(body[a as usize..=b as usize].to_vec()))
+            .unwrap(),
+        Some(Err(())) => StatusCode::RANGE_NOT_SATISFIABLE.into_response(),
+        None => Response::builder()
+            .header(header::CONTENT_TYPE, "video/mp4")
+            .header(header::ACCEPT_RANGES, "bytes")
+            .header(header::CONTENT_LENGTH, total)
+            .body(Body::from(body))
+            .unwrap(),
     }
 }

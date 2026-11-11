@@ -145,6 +145,9 @@ fn options_of(d: &AddDownload) -> TaskOptions {
         referer: non_empty(&d.referer).or_else(|| non_empty(&d.tab_url)),
         cookies: non_empty(&d.cookies),
         headers: d.headers.clone(),
+        // An HTTP link's sound only: anything else is not a stream to join.
+        audio_source: non_empty(&d.audio_url)
+            .filter(|a| TaskKind::detect(a) == Some(TaskKind::Http)),
         ..Default::default()
     }
 }
