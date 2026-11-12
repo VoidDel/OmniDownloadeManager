@@ -350,6 +350,28 @@ async fn downloads_bodies_of_unknown_length_and_empty_files() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_file_whose_probe_says_empty() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = MIB + 3;
+    let (name, total) = completed(
+        engine()
+            .run(
+                job(
+                    &server.url(&format!("/plainget/{size}")),
+                    dir.path(),
+                    None,
+                    8,
+                )
+                .job,
+            )
+            .await,
+    );
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(name), size);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn keeps_to_the_speed_limit() {
     let server = start().await;
     let dir = tempfile::tempdir().unwrap();

@@ -3,6 +3,10 @@
 //! `HEAD` first. When it is refused or does not tell length and range support, a
 //! `GET` with `Range: bytes=0-0`: a 206 answer gives the length in `Content-Range` and proves
 //! ranges work; a 200 means they do not.
+//!
+//! A length of 0 counts as unknown: some servers (webmail attachments, for one) answer `HEAD`
+//! or a ranged `GET` with an empty body and the file only to a plain `GET`. The download then
+//! reads the body to its end, which an empty file ends at once.
 
 use omnidl_core::{Error, ErrorCode, Result, filename};
 use reqwest::{
@@ -59,7 +63,7 @@ pub(crate) async fn probe(client: &Client, url: &Url) -> Result<Probe> {
     };
     let from_head = head.filter(|r| r.status().is_success()).map(|r| {
         let h = r.headers();
-        let total = header_u64(h, CONTENT_LENGTH);
+        let total = length(h, CONTENT_LENGTH);
         let ranges = header_str(h, ACCEPT_RANGES).is_some_and(|v| v.eq_ignore_ascii_case("bytes"));
         (describe(&r, total, ranges && total.is_some()), ranges)
     });
@@ -89,13 +93,15 @@ pub(crate) async fn probe(client: &Client, url: &Url) -> Result<Probe> {
             let total = header_str(r.headers(), CONTENT_RANGE).and_then(content_range_total);
             Ok(describe(&r, total, total.is_some()))
         }
-        // An empty file: nothing to range over.
+        // An empty file, or a server that will not range: read the body to its end.
         StatusCode::RANGE_NOT_SATISFIABLE => {
-            let total = header_str(r.headers(), CONTENT_RANGE).and_then(content_range_total);
-            Ok(describe(&r, total.or(Some(0)), false))
+            let total = header_str(r.headers(), CONTENT_RANGE)
+                .and_then(content_range_total)
+                .filter(|&n| n > 0);
+            Ok(describe(&r, total, false))
         }
         s if s.is_success() => {
-            let total = header_u64(r.headers(), CONTENT_LENGTH);
+            let total = length(r.headers(), CONTENT_LENGTH);
             Ok(describe(&r, total, false))
         }
         s => match from_head {
@@ -135,8 +141,11 @@ fn header_str(h: &HeaderMap, name: reqwest::header::HeaderName) -> Option<&str> 
         .filter(|s| !s.is_empty())
 }
 
-fn header_u64(h: &HeaderMap, name: reqwest::header::HeaderName) -> Option<u64> {
-    header_str(h, name).and_then(|v| v.parse().ok())
+/// A length header; 0 counts as unknown (see the module docs).
+fn length(h: &HeaderMap, name: reqwest::header::HeaderName) -> Option<u64> {
+    header_str(h, name)
+        .and_then(|v| v.parse().ok())
+        .filter(|&n| n > 0)
 }
 
 /// `bytes 0-0/1234` → 1234; `bytes */1234` → 1234; `bytes 0-0/*` → unknown.

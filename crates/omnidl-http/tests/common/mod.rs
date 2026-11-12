@@ -123,6 +123,7 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
         .route("/chunked/{size}", get(chunked))
+        .route("/plainget/{size}", get(plainget))
         .route("/hls/{kind}/{n}/{name}", get(hls))
         .route("/fmp4/{handler}/{frags}/{size}", get(fmp4_file))
         .route("/missing", get(|| async { StatusCode::NOT_FOUND }))
@@ -357,6 +358,28 @@ async fn chunked(method: Method, headers: HeaderMap, State(s): S, UrlPath(size):
     let o = Opts {
         ranges: false,
         unknown_length: true,
+        ..Opts::default()
+    };
+    serve(&method, &headers, size, o, &s)
+}
+
+/// Like a webmail attachment: `HEAD` and ranged `GET`s answer 200 with an empty body; only a
+/// plain `GET` gives the file.
+async fn plainget(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath(size): Size,
+) -> Response {
+    if method == Method::HEAD || headers.contains_key(header::RANGE) {
+        return Response::builder()
+            .header(header::CONTENT_LENGTH, 0)
+            .header(header::ACCEPT_RANGES, "bytes")
+            .body(Body::empty())
+            .unwrap();
+    }
+    let o = Opts {
+        ranges: false,
         ..Opts::default()
     };
     serve(&method, &headers, size, o, &s)
