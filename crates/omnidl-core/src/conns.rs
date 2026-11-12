@@ -968,7 +968,10 @@ mod tests {
         shifts.remove(2);
         assert_eq!(crew.vacancies(4), 1);
         shifts.push(crew.join());
-        assert!(shifts[3].worker().is_replacement(), "started in the slow one's place");
+        assert!(
+            shifts[3].worker().is_replacement(),
+            "started in the slow one's place"
+        );
         assert!(!shifts[0].worker().is_replacement());
         // Fewer wanted: the slowest go first (the new one, not measured yet, stays).
         assert_eq!(crew.rebalance(2, false), 0);

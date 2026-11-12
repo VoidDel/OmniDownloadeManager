@@ -428,6 +428,9 @@ impl Drop for OpenGuard {
     }
 }
 
+/// How far behind its pace a delayed body may catch up (see `serve`).
+const PACE_SLACK: Duration = Duration::from_millis(50);
+
 fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats>) -> Response {
     let range = if o.ranges {
         parse_range(headers, size)
@@ -479,7 +482,7 @@ fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats
     };
     let stop = start + len;
     let limit = o.break_after.map_or(stop, |n| (start + n).min(stop));
-    let body = futures_util::stream::unfold((start, guard), move |(pos, mut guard)| {
+    let body = futures_util::stream::unfold((start, guard, None), move |(pos, mut guard, due)| {
         let o = o.clone();
         async move {
             if pos >= stop {
@@ -488,14 +491,23 @@ fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats
             }
             if pos >= limit {
                 let e = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "broken");
-                return Some((Err(e), (stop, guard)));
+                return Some((Err(e), (stop, guard, due)));
             }
             let delay = match o.burst {
                 Some((after, slow)) if pos - start >= after => Some(slow),
                 _ => o.delay,
             };
+            // Each chunk is due `delay` after the one before, not after a sleep of `delay`:
+            // sleeps end late (by up to 15 ms on Windows, whose timer ticks every 15.6 ms), and
+            // a body paced by them would be far slower than asked. A chunk sent late is made up
+            // for by the next ones, up to `PACE_SLACK` (a body nobody read for a while does not
+            // come in one burst afterwards).
+            let mut due: Option<tokio::time::Instant> = due;
             if let Some(d) = delay {
-                tokio::time::sleep(d).await;
+                let now = tokio::time::Instant::now();
+                let from = due.map_or(now, |t| t.max(now.checked_sub(PACE_SLACK).unwrap_or(now)));
+                tokio::time::sleep_until(from + d).await;
+                due = Some(from + d);
             }
             let next = (pos + o.chunk as u64).min(limit);
             if next >= stop {
@@ -514,7 +526,7 @@ fn serve(method: &Method, headers: &HeaderMap, size: u64, o: Opts, s: &Arc<Stats
                 tokio::time::sleep_until(at).await;
             }
             let data: Vec<u8> = (pos..next).map(byte_at).collect();
-            Some((Ok(Bytes::from(data)), (next, guard)))
+            Some((Ok(Bytes::from(data)), (next, guard, due)))
         }
     });
     b.body(Body::from_stream(body)).unwrap()
