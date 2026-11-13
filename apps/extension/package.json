@@ -31,7 +31,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
-    "typescript": "~5.9.3",
+    "typescript": "~7.0.2",
     "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5",
     "wxt": "^0.21.5"
