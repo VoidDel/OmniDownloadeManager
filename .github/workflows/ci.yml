@@ -194,14 +194,6 @@ jobs:
       # As released, but unoptimised and without an installer: the window's files are inside.
       - name: Build the app
         run: pnpm --filter omnidl-desktop tauri build --debug --no-bundle
-      # Edge's policies apply to WebView2 too: one that turns the developer tools off also closes
-      # the port the tests connect to.
-      - name: Edge and WebView2 policies
-        shell: pwsh
-        run: |
-          foreach ($k in 'HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2', 'HKCU:\SOFTWARE\Policies\Microsoft\Edge', 'HKLM:\SOFTWARE\WOW6432Node\Policies\Microsoft\Edge') {
-            if (Test-Path $k) { "== $k"; Get-ItemProperty $k | Format-List | Out-String -Width 300 } else { "(none) $k" }
-          }
       - name: End-to-end tests
         env:
           OMNIDL_APP: ${{ github.workspace }}\target\debug\omnidl-desktop.exe

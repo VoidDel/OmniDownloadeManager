@@ -93,6 +93,7 @@ fn build(app: &AppHandle) -> tauri::Result<()> {
         // Links dragged from a browser arrive as the page's drop events.
         .disable_drag_drop_handler()
         .visible(false);
+    b = crate::with_devtools(b);
     // First time: the lower right of the main screen (afterwards where it was left).
     if let Ok(Some(m)) = app.primary_monitor() {
         let scale = m.scale_factor();

@@ -173,7 +173,7 @@ fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
         .decorations(false)
         .center()
         .visible(false);
-    let w = crate::material::prepare(b, &settings).build()?;
+    let w = crate::material::prepare(crate::with_devtools(b), &settings).build()?;
     crate::window_icons(&w.as_ref().window());
     Ok(())
 }

@@ -375,9 +375,29 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .traffic_light_position(tauri::LogicalPosition::new(13.0, 22.5));
     #[cfg(not(target_os = "macos"))]
     let b = b.decorations(false);
-    let w = material::prepare(b, &settings).build()?;
+    let w = material::prepare(with_devtools(b), &settings).build()?;
     window_icons(&w.as_ref().window());
     Ok(w)
+}
+
+/// Debug builds on Windows: `OMNIDL_DEVTOOLS_PORT` opens WebView2's DevTools port, which the
+/// end-to-end tests drive the windows through (apps/desktop/e2e). WebView2's own
+/// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` is not enough: runtimes before 157 ignore it when the
+/// app passes arguments of its own, as wry always does. Every window gets the same arguments
+/// (wry's defaults and the port): windows that share a data folder must.
+pub(crate) fn with_devtools<'a, R: tauri::Runtime, M: Manager<R>>(
+    b: WebviewWindowBuilder<'a, R, M>,
+) -> WebviewWindowBuilder<'a, R, M> {
+    #[cfg(all(windows, debug_assertions))]
+    if let Some(port) = std::env::var("OMNIDL_DEVTOOLS_PORT")
+        .ok()
+        .and_then(|p| p.trim().parse::<u16>().ok())
+    {
+        return b.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection              --autoplay-policy=no-user-gesture-required --remote-debugging-port={port}"
+        ));
+    }
+    b
 }
 
 /// Windows: taskbar and title icons at the window's DPI (see `win_icon`).

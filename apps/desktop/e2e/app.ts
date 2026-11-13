@@ -15,7 +15,8 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-/** The app to test: `omnidl-desktop.exe` of a `tauri build` (`--debug --no-bundle` is enough). */
+/** The app to test: `omnidl-desktop.exe` of `tauri build --debug --no-bundle` (a debug build: only
+ *  those open WebView2's DevTools port). */
 export const APP = process.env.OMNIDL_APP ?? '';
 
 export interface App {
@@ -80,8 +81,8 @@ export async function launch(engine = ''): Promise<App> {
       OMNIDL_DATA_DIR: data,
       OMNIDL_IPC_ENDPOINT: `\\\\.\\pipe\\omnidl-e2e-${process.pid}-${port}`,
       WEBVIEW2_USER_DATA_FOLDER: path.join(work, 'webview'),
-      // `--enable-logging`: WebView2 writes chrome_debug.log in its folder, read when it does not come up.
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --enable-logging --v=0`,
+      // A debug build opens WebView2's DevTools port when asked (`with_devtools` in lib.rs).
+      OMNIDL_DEVTOOLS_PORT: String(port),
     },
   });
   let browser: Browser | undefined;
@@ -111,7 +112,7 @@ export async function launch(engine = ''): Promise<App> {
     const logs = path.join(data, 'logs');
     for (const f of fs.existsSync(logs) ? fs.readdirSync(logs) : []) lines.push(`--- ${f}\n${tail(path.join(logs, f))}`);
     lines.push(`--- output\n${tail(path.join(work, 'output.txt'))}`);
-    // WebView2: its processes, its version, and its own log.
+    // WebView2: its processes (the browser's with its arguments) and its version.
     const ps = (script: string) => {
       try {
         return execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 20_000 }).trim();
@@ -124,7 +125,6 @@ export async function launch(engine = ''): Promise<App> {
     const webview = path.join(work, 'webview');
     const files = fs.existsSync(webview) ? fs.readdirSync(webview, { recursive: true }).map(String) : [];
     lines.push(`--- WebView2 folder: ${files.length} entries ${files.slice(0, 15).join(', ')}`);
-    for (const f of files.filter((f) => f.endsWith('chrome_debug.log'))) lines.push(`--- ${f}\n${tail(path.join(webview, f))}`);
     return lines.join('\n');
   };
   try {
