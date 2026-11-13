@@ -119,7 +119,7 @@ export async function launch(engine = ''): Promise<App> {
         return `(${e instanceof Error ? e.message.split('\n')[0] : e})`;
       }
     };
-    lines.push(`--- WebView2 processes\n${ps("Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.CommandLine.Substring(0, [Math]::Min(300, $_.CommandLine.Length)) }") || 'none'}`);
+    lines.push(`--- WebView2 processes\n${ps("Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | ForEach-Object { $_.ProcessId.ToString() + ' ' + $(if ($_.CommandLine -notmatch '--type=') { $_.CommandLine } else { $_.CommandLine.Substring(0, [Math]::Min(160, $_.CommandLine.Length)) }) }") || 'none'}`);
     lines.push(`--- WebView2 runtime\n${ps("foreach ($k in 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}','HKCU:\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}') { if (Test-Path $k) { $k + ' ' + (Get-ItemProperty $k).pv } }") || 'not found'}`);
     const webview = path.join(work, 'webview');
     const files = fs.existsSync(webview) ? fs.readdirSync(webview, { recursive: true }).map(String) : [];
