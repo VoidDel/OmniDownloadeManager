@@ -84,7 +84,16 @@ pub struct Stats {
     pub cut: AtomicUsize,
     /// `/throttled`: when the server's shared bandwidth is free again.
     pub bandwidth: Mutex<Option<tokio::time::Instant>>,
+    /// `/basic` and `/digest`: the `Authorization` header of each request ("" without one).
+    pub logins: Mutex<Vec<String>>,
+    /// `/digest`: the nonce in use is `n<number>`, and how many requests it has answered (it
+    /// expires after `DIGEST_NONCE_USES`).
+    pub nonce: AtomicU64,
+    pub nonce_uses: AtomicUsize,
 }
+
+/// Requests a `/digest` nonce is good for before the server asks for a new one.
+pub const DIGEST_NONCE_USES: usize = 3;
 
 pub struct Server {
     pub addr: SocketAddr,
@@ -124,6 +133,8 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/named/{size}", get(named))
         .route("/chunked/{size}", get(chunked))
         .route("/plainget/{size}", get(plainget))
+        .route("/basic/{user}/{password}/{size}", get(basic))
+        .route("/digest/{algorithm}/{user}/{password}/{size}", get(digest))
         .route("/hls/{kind}/{n}/{name}", get(hls))
         .route("/fmp4/{handler}/{frags}/{size}", get(fmp4_file))
         .route("/missing", get(|| async { StatusCode::NOT_FOUND }))
@@ -386,6 +397,136 @@ async fn plainget(
 }
 
 /// `bytes=a-b` / `bytes=a-` → inclusive range; `Err` when unsatisfiable.
+fn authorization(headers: &HeaderMap, s: &Stats) -> String {
+    let sent = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
+    s.logins.lock().push(sent.clone());
+    sent
+}
+
+/// A file for the account in its address, asked for with Basic authentication.
+async fn basic(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((user, password, size)): UrlPath<(String, String, u64)>,
+) -> Response {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let sent = authorization(&headers, &s);
+    let wanted = format!("Basic {}", STANDARD.encode(format!("{user}:{password}")));
+    if sent != wanted {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [(
+                header::WWW_AUTHENTICATE,
+                "Basic realm=\"files\", charset=\"UTF-8\"",
+            )],
+        )
+            .into_response();
+    }
+    serve(&method, &headers, size, Opts::default(), &s)
+}
+
+/// The same with Digest authentication (`algorithm`: `md5`, `md5-sess`, `sha-256`, or `legacy`
+/// for the form without `qop`), offered next to Basic for a made-up account. The nonce expires
+/// after a few requests.
+async fn digest(
+    method: Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((algorithm, user, password, size)): UrlPath<(String, String, String, u64)>,
+) -> Response {
+    use omnidl_core::{HashAlgo, checksum::hex_of};
+    const REALM: &str = "files \"here\"";
+    let legacy = algorithm == "legacy";
+    let name = if legacy {
+        "MD5".to_owned()
+    } else {
+        algorithm.to_ascii_uppercase()
+    };
+    let algo = if name.starts_with("SHA-256") {
+        HashAlgo::Sha256
+    } else {
+        HashAlgo::Md5
+    };
+    let h = |v: String| hex_of(algo, v.as_bytes());
+    let challenge = |nonce: u64, stale: bool| {
+        let mut v = format!(
+            "Digest realm=\"files \\\"here\\\"\", nonce=\"n{nonce}\", opaque=\"o1\", algorithm={name}"
+        );
+        if !legacy {
+            v.push_str(", qop=\"auth,auth-int\"");
+        }
+        if stale {
+            v.push_str(", stale=true");
+        }
+        (
+            StatusCode::UNAUTHORIZED,
+            [(
+                header::WWW_AUTHENTICATE,
+                format!("Basic realm=\"other\", {v}"),
+            )],
+        )
+            .into_response()
+    };
+    let sent = authorization(&headers, &s);
+    let nonce = s.nonce.load(Ordering::SeqCst);
+    let Some(params) = sent.strip_prefix("Digest ") else {
+        return challenge(nonce, false);
+    };
+    // `name="value"` or `name=value`, separated by `, ` (values here hold no such separator
+    // but the realm's escaped quotes).
+    let get = |key: &str| -> String {
+        params
+            .split(", ")
+            .find_map(|p| p.strip_prefix(&format!("{key}=")))
+            .map(|v| {
+                let inner = v.strip_prefix('"').and_then(|v| v.strip_suffix('"'));
+                inner
+                    .unwrap_or(v)
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+            })
+            .unwrap_or_default()
+    };
+    if get("nonce") != format!("n{nonce}") {
+        return challenge(nonce, true);
+    }
+    if s.nonce_uses.fetch_add(1, Ordering::SeqCst) >= DIGEST_NONCE_USES {
+        s.nonce_uses.store(0, Ordering::SeqCst);
+        return challenge(s.nonce.fetch_add(1, Ordering::SeqCst) + 1, true);
+    }
+    let asked = uri.path_and_query().map_or("", |p| p.as_str());
+    let mut ha1 = h(format!("{user}:{REALM}:{password}"));
+    if name.ends_with("-SESS") {
+        ha1 = h(format!("{ha1}:n{nonce}:{}", get("cnonce")));
+    }
+    let ha2 = h(format!("{method}:{asked}"));
+    let response = if legacy {
+        h(format!("{ha1}:n{nonce}:{ha2}"))
+    } else {
+        h(format!(
+            "{ha1}:n{nonce}:{}:{}:auth:{ha2}",
+            get("nc"),
+            get("cnonce")
+        ))
+    };
+    let ok = get("username") == user
+        && get("realm") == REALM
+        && get("uri") == asked
+        && get("opaque") == "o1"
+        && get("response") == response
+        && (legacy || (get("qop") == "auth" && get("nc").len() == 8));
+    if !ok {
+        return challenge(nonce, false);
+    }
+    serve(&method, &headers, size, Opts::default(), &s)
+}
+
 fn parse_range(headers: &HeaderMap, size: u64) -> Option<Result<(u64, u64), ()>> {
     let v = headers.get(header::RANGE)?.to_str().ok()?;
     let spec = v.strip_prefix("bytes=")?;

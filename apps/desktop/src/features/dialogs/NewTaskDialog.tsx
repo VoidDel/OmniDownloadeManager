@@ -158,11 +158,22 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
   const addable = useMemo(() => links.filter((l) => SUPPORTED.has(l.kind)), [links]);
   const hasHttp = addable.some((l) => l.kind === 'http');
   const hasFtp = addable.some((l) => l.kind === 'ftp');
-  // FTP links are probed again when the account or TLS choice changes.
+  // FTP links are probed again when the account or TLS choice changes; HTTP links when an
+  // account is given.
   const ftpKey = JSON.stringify([username, password, ftpMode, insecureTls]);
-  const keyOf = useCallback((l: Link) => (l.kind === 'ftp' ? `${l.url}\u0000${ftpKey}` : l.url), [ftpKey]);
+  const httpKey = username.trim() ? JSON.stringify([username, password]) : '';
+  const keyOf = useCallback((l: Link) => (l.kind === 'ftp' ? `${l.url}\u0000${ftpKey}` : l.kind === 'http' && httpKey ? `${l.url}\u0000${httpKey}` : l.url), [ftpKey, httpKey]);
   const single = addable.length === 1 ? addable[0] : null;
   const singleProbe = single ? probes[keyOf(single)] : undefined;
+  // A web server asked for an account (401): the account row shows for it too, and stays once
+  // a name is typed.
+  const httpLogin =
+    hasHttp &&
+    (username.trim() !== '' ||
+      addable.some((l) => {
+        const p = l.kind === 'http' ? probes[keyOf(l)] : undefined;
+        return p?.state === 'error' && p.error.code === 'auth_required' && p.error.status !== 407;
+      }));
   // The files of a single torrent: all chosen until the user unticks some.
   const torrentFiles = useMemo(
     () => (single && single.kind !== 'http' && singleProbe?.state === 'ok' ? (singleProbe.info.files ?? []).map((f, index) => ({ ...f, index })) : []),
@@ -416,9 +427,18 @@ export function NewTaskDialog({ initial }: { initial: Prefill }) {
           </button>
         </div>
       </div>
+      {!hasFtp && httpLogin && (
+        <div className="frow">
+          <label htmlFor="nt-user">{t('newTask.account')}</label>
+          <div className="inline">
+            <input id="nt-user" className="inp" value={username} placeholder={t('newTask.accountName')} autoComplete="off" spellCheck={false} onChange={(e) => setUsername(e.target.value)} />
+            {username.trim() && <PasswordInput id="nt-pass" label={t('newTask.password')} toggleLabel={t('newTask.showPassword')} value={password} onChange={setPassword} />}
+          </div>
+        </div>
+      )}
       {hasFtp && (
         <div className="frow">
-          <label htmlFor="nt-user">{t('newTask.ftpAccount')}</label>
+          <label htmlFor="nt-user">{t(httpLogin ? 'newTask.account' : 'newTask.ftpAccount')}</label>
           <div className="inline">
             <input id="nt-user" className="inp" value={username} placeholder={t('newTask.ftpAnonymous')} autoComplete="off" spellCheck={false} onChange={(e) => setUsername(e.target.value)} />
             {username.trim() && <PasswordInput id="nt-pass" label={t('newTask.password')} toggleLabel={t('newTask.showPassword')} value={password} onChange={setPassword} />}

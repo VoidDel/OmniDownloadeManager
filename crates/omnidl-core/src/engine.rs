@@ -250,7 +250,11 @@ pub struct JobOptions {
     pub connect_timeout: Duration,
     pub read_timeout: Duration,
     pub max_retries: u32,
+    /// Redirects from `https://` to `http://` are followed.
+    pub allow_insecure_redirect: bool,
     pub conflict: ConflictPolicy,
+    /// The finished file is marked as downloaded (`disk::mark_downloaded`).
+    pub mark_downloads: bool,
     pub sync_writes: bool,
     /// The task's own download limit, for engines that throttle inside a library.
     pub speed_limit: Option<u64>,
@@ -305,7 +309,9 @@ impl JobOptions {
             connect_timeout: Duration::from_secs(config.connect_timeout_secs.into()),
             read_timeout: Duration::from_secs(config.read_timeout_secs.into()),
             max_retries: config.max_retries,
-            conflict: config.conflict,
+            allow_insecure_redirect: config.allow_insecure_redirect,
+            conflict: task.conflict.unwrap_or(config.conflict),
+            mark_downloads: config.mark_downloads,
             sync_writes: config.sync_writes,
             speed_limit: task.speed_limit,
             only_files: task.only_files.clone(),

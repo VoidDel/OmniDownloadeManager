@@ -26,8 +26,13 @@ pub struct TaskOptions {
     pub proxy: Option<ProxyConfig>,
     /// BitTorrent: indices of the files to download, in the torrent's order (`None`: all).
     pub only_files: Option<Vec<usize>>,
-    /// FTP: the account (anonymous without one). A password in the link moves here when the
-    /// task is added, so it is stored sealed rather than in the link.
+    /// What to do when the file name is taken, for this task (the answer to
+    /// `ConflictPolicy::Ask`); unset: as the settings say.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflict: Option<crate::ConflictPolicy>,
+    /// The account: FTP (anonymous without one), or HTTP when the server asks for one (Basic or
+    /// Digest). A password in the link moves here when the task is added, so it is stored
+    /// sealed rather than in the link.
     pub username: Option<String>,
     pub password: Option<String>,
     /// FTP: active mode (the server connects back) instead of passive.

@@ -10,7 +10,9 @@
     "removed": "已刪除",
     "fetchingTorrent": "取得種子資訊",
     "fileMissing": "檔案已刪除",
-    "checksumMismatch": "校驗不符"
+    "checksumMismatch": "校驗不符",
+    "needsLogin": "需要登入",
+    "nameTaken": "檔案已存在"
   },
   "category": {
     "video": "影片",
@@ -36,6 +38,8 @@
     "auth_required": "需要登入或授權，帳號或密碼不正確",
     "forbidden": "伺服器拒絕存取",
     "remote_changed": "伺服器上的檔案已變更，需要重新下載",
+    "insecure_redirect": "連結從 HTTPS 跳轉到未加密的 HTTP，已停止下載",
+    "file_exists": "儲存位置已有同名檔案",
     "file_missing": "檔案遺失或無法讀取",
     "disk_full": "磁碟空間不足",
     "io": "讀寫檔案失敗",
@@ -50,9 +54,11 @@
       "http_status": "伺服器暫時出了問題。稍後重試。",
       "ftp_reply": "伺服器可能限制了同時登入的數量。在「設定 › 網路」裡減少 FTP 工作階段數後重試。",
       "not_found": "連結可能已經失效。到原來的網頁重新取得下載連結。",
-      "auth_required": "從瀏覽器重新發起下載，登入資訊會一起帶過來；FTP 請在連結裡寫上帳號。",
+      "auth_required": "按兩下任務輸入使用者名稱和密碼；如果是在網頁上登入的，從瀏覽器重新發起下載，登入資訊會一起帶過來。",
       "forbidden": "連結可能已過期，或只允許從原網頁下載。從瀏覽器重新發起下載。",
       "remote_changed": "已下載的部分和新檔案對不上。點「重新下載」從頭開始。",
+      "insecure_redirect": "檔案會在未加密的連線上傳輸，可能被別人看到或竄改。如果信任這個網站，可以在「設定 › 網路」裡允許後重試。",
+      "file_exists": "按兩下任務，選擇重新命名或覆寫。",
       "file_missing": "任務用的種子檔案讀不到了。重新新增這個種子，或改用磁力連結。",
       "disk_full": "清出空間後點「重試」，已下載的部分會保留。",
       "io": "檢查儲存位置是否還在、能否寫入（外接硬碟、網路磁碟是否已連線），然後重試。",
@@ -110,6 +116,14 @@
     "general": {
       "logs": "記錄檔",
       "openFolder": "開啟資料夾",
+      "tasks": "任務清單",
+      "tasksHint": "匯出為檔案，或從匯出的檔案匯入：換電腦或備份時用",
+      "tasksExport": "匯出…",
+      "tasksImport": "匯入…",
+      "tasksImported": "已匯入 {count} 個任務",
+      "tasksImportedSkipped": "已匯入 {count} 個任務，略過 {skipped} 個（已在清單中，或不是可下載的連結）",
+      "tasksNotOurs": "這不是 Omni Download 匯出的任務清單",
+      "tasksNewer": "這個任務清單來自較新的版本，請先更新 Omni Download",
       "autostart": "隨系統啟動",
       "autostartHint": "在背景啟動，只顯示在通知區域",
       "closeToTray": "關閉視窗時最小化到系統匣",
@@ -160,6 +174,7 @@
       "conflict": "檔案已存在時",
       "conflictRename": "自動重新命名",
       "conflictOverwrite": "覆寫",
+      "conflictAsk": "詢問",
       "removeFiles": "刪除任務時",
       "removeFilesHint": "任務會移到回收筒；這裡決定本機檔案是否一起刪除",
       "removeFilesAsk": "每次詢問",
@@ -169,6 +184,9 @@
       "resumeOnStartupHint": "結束時正在下載的任務，下次啟動後自動繼續",
       "syncWrites": "每秒將進度寫入磁碟",
       "syncWritesHint": "斷電或系統當機後也能從準確的位置繼續；關閉可以減少磁碟寫入",
+      "markDownloads": "標記檔案來自網際網路",
+      "markDownloadsHint": "和瀏覽器下載的檔案一樣：執行程式前 Windows 會先確認，Office 會用受保護的檢視開啟文件。來自本機和區域網路的檔案不標記。",
+      "markDownloadsHintMac": "和瀏覽器下載的檔案一樣：第一次開啟時 macOS 會檢查並確認。來自本機和區域網路的檔案不標記。",
       "byCategory": "依類型儲存到不同資料夾",
       "byCategoryHint": "下載的檔案依副檔名歸類，放到各自的資料夾；留空的類型存到上面的預設下載資料夾",
       "byCategoryPick": "選擇存放{category}的資料夾",
@@ -192,6 +210,8 @@
       "readTimeoutHint": "連線這麼久都收不到資料就中斷並重新連線",
       "retries": "失敗重試次數",
       "retriesHint": "網路錯誤或伺服器 5xx 時，每個連線依 1、2、4… 秒的間隔重試",
+      "insecureRedirect": "允許從 HTTPS 跳轉到 HTTP",
+      "insecureRedirectHint": "關閉時，加密的連結跳轉到未加密的位址會停止下載，以免檔案和 Cookie 在網路上暴露。",
       "seconds": "{n} 秒",
       "times": "{n} 次",
       "ftpSessions": "FTP 工作階段數",
@@ -370,7 +390,7 @@
       "customValue": "自訂（{speed}）"
     },
     "sort": {
-      "added": "依加入時間",
+      "added": "清單順序",
       "name": "依名稱",
       "size": "依大小",
       "progress": "依進度",
@@ -567,6 +587,10 @@
     },
     "menu": {
       "details": "詳細資料",
+      "account": "輸入帳號…",
+      "conflict": "處理同名檔案…",
+      "moveTop": "移到最前",
+      "moveBottom": "移到最後",
       "restore": "還原",
       "purge": "永久刪除…",
       "open": "開啟",
@@ -580,7 +604,8 @@
       "copiedMany": "已複製 {count} 個連結",
       "delete": "刪除"
     },
-    "avgSpeed": "平均速度"
+    "avgSpeed": "平均速度",
+    "grip": "拖曳調整順序"
   },
   "newTask": {
     "title": "新增下載",
@@ -612,6 +637,8 @@
     "limitHint": "例如 500K、2M；留空即不限速",
     "ftpAccount": "FTP 帳號",
     "ftpAnonymous": "留空為匿名登入",
+    "account": "帳號",
+    "accountName": "使用者名稱",
     "password": "密碼",
     "showPassword": "顯示密碼",
     "transferMode": "傳輸模式",
@@ -704,6 +731,32 @@
         "sleep": "立即睡眠",
         "shutdown": "立即關機"
       }
+    },
+    "auth": {
+      "title": "需要登入",
+      "text": "{host} 要求登入後才能下載 {name}。",
+      "textRefused": "{host} 沒有接受剛才的使用者名稱或密碼，請重新輸入後再下載 {name}。",
+      "username": "使用者名稱",
+      "password": "密碼",
+      "confirm": "登入並下載",
+      "hint": "密碼儲存在這台電腦上，只傳送給這個伺服器。",
+      "plainHint": "這個連結沒有加密（HTTP）。如果伺服器只支援基本驗證，密碼在網路上可能被別人看到。"
+    },
+    "conflict": {
+      "title": "檔案已存在",
+      "text": "儲存位置已經有一個名為 {name} 的檔案。",
+      "hint": "重新命名會保留原檔案，新檔案的名稱後加上編號；覆寫會在下載完成時取代原檔案。",
+      "rename": "重新命名",
+      "overwrite": "覆寫",
+      "later": "稍後再說"
+    },
+    "export": {
+      "title": "匯出任務清單",
+      "text": "把回收筒以外的所有任務寫入一個 JSON 檔案，可以在另一台電腦上匯入。下載進度不會匯出：未完成的任務匯入後從頭開始。",
+      "secrets": "包含 Cookie、自訂請求標頭和密碼",
+      "secretsHint": "這些內容會以明文寫入檔案，拿到檔案的人可以用它們登入。",
+      "confirm": "選擇位置並匯出",
+      "done": "已匯出 {count} 個任務"
     }
   },
   "quick": {

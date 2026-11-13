@@ -77,6 +77,19 @@
 /* The drag selection band. */
 .sel-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); border-radius: 2px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .task-row { top: 0; cursor: default; user-select: none; }
+/* The handle a row is dragged by to another place in the list: in the row's left padding, shown
+   when the pointer is on the row. */
+.task-row .grip {
+  position: absolute; left: 2px; top: 50%; width: 11px; height: 16px; margin-top: -8px; cursor: grab; opacity: 0; transition: opacity 80ms;
+  /* Two columns of three dots. */
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1.5px); background-size: 5px 5px; background-position: 1px 1px;
+}
+.task-row:hover .grip { opacity: .45; }
+.task-row .grip:hover { opacity: .9; }
+.task-row.dragging { opacity: .45; }
+.task-row.dragging .grip { cursor: grabbing; }
+/* Where dragged rows will go. */
+.drop-line { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; z-index: 4; pointer-events: none; border-radius: 1px; background: var(--accent); }
 .task-row .nm .fi { width: 20px; height: 20px; }
 .task-row .nm-txt { flex: 0 1 auto; }
 /* The name in two parts: the base gives way, the extension stays. */
@@ -258,6 +271,9 @@
 .nt-sum b { color: var(--fg-primary); font-weight: 600; }
 .inp[aria-invalid="true"] { border-color: var(--danger); }
 .dlg-text { margin: 0; color: var(--fg-secondary); font-size: .9rem; line-height: 1.6; }
+.dlg-text + .dlg-text { margin-top: 4px; overflow-wrap: anywhere; }
+/* The account a server asks for: name and password, one above the other. */
+.auth-form { display: grid; gap: 12px; margin: 14px 0 10px; }
 
 /* ---------------------------------------------------------------- settings */
 .set-row.col .ctl > .inline { flex: 1; }

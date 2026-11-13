@@ -9,9 +9,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "tsc -b --noEmit",
+    "lint": "tsc -b --noEmit && tsc -p e2e --noEmit",
     "eslint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.26",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
     "@tauri-apps/cli": "~2.12.4",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",

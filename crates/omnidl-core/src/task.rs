@@ -220,10 +220,12 @@ pub struct Task {
     pub active_ms: u64,
     /// The highest download speed seen (bytes per second).
     pub peak_bps: u64,
+    /// Its place in the list (and in the queue, within a priority): the order tasks were
+    /// added in, until the user moves them (`TaskManager::reorder`).
+    #[serde(default)]
+    pub sort_order: i64,
     #[serde(skip)]
     pub(crate) prev_status: Option<TaskStatus>,
-    #[serde(skip)]
-    pub(crate) sort_order: i64,
     #[serde(skip)]
     pub(crate) etag: Option<String>,
     #[serde(skip)]

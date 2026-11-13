@@ -15,6 +15,7 @@ omnidl-storage.workspace = true
 # the tree).
 aes = "0.8"
 async-trait.workspace = true
+base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 httpdate.workspace = true
@@ -24,12 +25,14 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 url.workspace = true
+# The client nonce of Digest authentication.
+uuid.workspace = true
 
 [dev-dependencies]
 axum = { workspace = true, features = ["http1", "tokio"] }
+uuid.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["net", "signal"] }
-uuid.workspace = true
 # The bench example's log (RUST_LOG).
 tracing-subscriber.workspace = true

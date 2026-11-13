@@ -13,6 +13,9 @@ pub enum ConflictPolicy {
     #[default]
     Rename,
     Overwrite,
+    /// The download stops with `ErrorCode::FileExists` and the user chooses for that task
+    /// (`TaskOptions::conflict`).
+    Ask,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -39,7 +42,12 @@ pub struct EngineConfig {
     pub read_timeout_secs: u32,
     /// Attempts per connection after a network error or a 5xx, with exponential backoff.
     pub max_retries: u32,
+    /// Follow a redirect from `https://` to `http://`. Off: such a download fails
+    /// (`ErrorCode::InsecureRedirect`) rather than going on unencrypted.
+    pub allow_insecure_redirect: bool,
     pub conflict: ConflictPolicy,
+    /// Mark finished files as coming from the internet, as browsers do (`disk::mark_downloaded`).
+    pub mark_downloads: bool,
     /// Downloads that were running when the app quit start again on launch.
     pub resume_on_startup: bool,
     /// Sync the file to disk before each progress checkpoint (crash-safe resume). Off trades
@@ -93,7 +101,9 @@ impl Default for EngineConfig {
             connect_timeout_secs: 15,
             read_timeout_secs: 30,
             max_retries: 10,
+            allow_insecure_redirect: false,
             conflict: ConflictPolicy::Rename,
+            mark_downloads: true,
             resume_on_startup: true,
             sync_writes: true,
             seeding: true,

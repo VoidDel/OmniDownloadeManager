@@ -33,7 +33,7 @@ pub use engine::{
 };
 pub use error::{Error, ErrorCode, Result};
 pub use events::{EventBus, ProgressItem, Stats, TaskEvent};
-pub use manager::{NewTask, TaskDetail, TaskManager};
+pub use manager::{ExportedTask, ImportSummary, NewTask, TaskDetail, TaskExport, TaskManager};
 pub use options::{ProxyConfig, TaskOptions};
 pub use ratelimit::RateLimiter;
 pub use secrets::{AesSecrets, NoSecrets, Secrets};

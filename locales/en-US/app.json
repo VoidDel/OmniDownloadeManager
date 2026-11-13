@@ -10,7 +10,9 @@
     "removed": "Deleted",
     "fetchingTorrent": "Fetching metadata",
     "fileMissing": "File deleted",
-    "checksumMismatch": "Checksum mismatch"
+    "checksumMismatch": "Checksum mismatch",
+    "needsLogin": "Sign-in needed",
+    "nameTaken": "File exists"
   },
   "category": {
     "video": "Video",
@@ -36,6 +38,8 @@
     "auth_required": "Sign-in required, or the user name or password is wrong",
     "forbidden": "The server denied access",
     "remote_changed": "The file on the server has changed and must be downloaded again",
+    "insecure_redirect": "The link redirected from HTTPS to unencrypted HTTP, so the download was stopped",
+    "file_exists": "A file with this name is already in the folder",
     "file_missing": "The file is missing or cannot be read",
     "disk_full": "Not enough disk space",
     "io": "Failed to read or write the file",
@@ -50,9 +54,11 @@
       "http_status": "The server has a temporary problem. Retry later.",
       "ftp_reply": "The server may limit simultaneous logins. Lower the FTP sessions in Settings › Network and retry.",
       "not_found": "The link may have expired. Get a new download link from the original page.",
-      "auth_required": "Start the download from your browser again so your sign-in comes along; for FTP, put the account in the link.",
+      "auth_required": "Double-click the task to enter a user name and password. If you signed in on a web page, start the download from your browser again so your sign-in comes along.",
       "forbidden": "The link may have expired, or only works from the original page. Start the download from your browser again.",
       "remote_changed": "What was downloaded no longer matches the new file. Choose Download again to start over.",
+      "insecure_redirect": "The file would travel over an unencrypted connection, where others could read or change it. If you trust the site, allow this in Settings › Network and retry.",
+      "file_exists": "Double-click the task to choose between renaming and overwriting.",
       "file_missing": "The torrent file this download was added from can no longer be read. Add the torrent again, or use its magnet link.",
       "disk_full": "Free up space, then choose Retry. What was downloaded is kept.",
       "io": "Check that the save location still exists and can be written to (is the external or network drive connected?), then retry.",
@@ -110,6 +116,14 @@
     "general": {
       "logs": "Logs",
       "openFolder": "Open folder",
+      "tasks": "Task list",
+      "tasksHint": "Export it to a file, or import an exported file: for moving to another computer or keeping a backup",
+      "tasksExport": "Export…",
+      "tasksImport": "Import…",
+      "tasksImported": "{count, plural, one {Imported # task} other {Imported # tasks}}",
+      "tasksImportedSkipped": "{count, plural, one {Imported # task} other {Imported # tasks}}, skipped {skipped} (already in the list, or not a downloadable link)",
+      "tasksNotOurs": "This is not a task list exported by Omni Download",
+      "tasksNewer": "This task list comes from a newer version. Update Omni Download first",
       "autostart": "Start with the system",
       "autostartHint": "Starts in the background, in the notification area",
       "closeToTray": "Keep running when the window is closed",
@@ -160,6 +174,7 @@
       "conflict": "When the file already exists",
       "conflictRename": "Rename automatically",
       "conflictOverwrite": "Overwrite",
+      "conflictAsk": "Ask",
       "removeFiles": "When deleting a task",
       "removeFilesHint": "The task moves to the trash; this decides whether its local files go too",
       "removeFilesAsk": "Ask every time",
@@ -169,6 +184,9 @@
       "resumeOnStartupHint": "Tasks that were downloading when the app quit continue automatically the next time it starts",
       "syncWrites": "Save progress to disk every second",
       "syncWritesHint": "Downloads resume from the exact position even after a power loss or system crash; turn off to reduce disk writes",
+      "markDownloads": "Mark files as downloaded from the internet",
+      "markDownloadsHint": "As with files downloaded by a browser: Windows asks before running a program, and Office opens documents in Protected View. Files from this computer or the local network are not marked.",
+      "markDownloadsHintMac": "As with files downloaded by a browser: macOS checks a file and asks the first time it is opened. Files from this computer or the local network are not marked.",
       "byCategory": "Folders by file type",
       "byCategoryHint": "Downloads are sorted by their extension into these folders; an empty one means the default download folder above",
       "byCategoryPick": "Choose a folder for {category}",
@@ -192,6 +210,8 @@
       "readTimeoutHint": "Reconnect when a connection receives no data for this long",
       "retries": "Retries on failure",
       "retriesHint": "On network errors or server 5xx responses, each connection retries after 1, 2, 4… seconds",
+      "insecureRedirect": "Allow redirects from HTTPS to HTTP",
+      "insecureRedirectHint": "When off, a download stops if an encrypted link redirects to an unencrypted address, so the file and cookies are not exposed on the network.",
       "seconds": "{n} s",
       "times": "{n, plural, one {# time} other {# times}}",
       "ftpSessions": "FTP sessions",
@@ -370,7 +390,7 @@
       "customValue": "Custom ({speed})"
     },
     "sort": {
-      "added": "By date added",
+      "added": "List order",
       "name": "By name",
       "size": "By size",
       "progress": "By progress",
@@ -567,6 +587,10 @@
     },
     "menu": {
       "details": "Details",
+      "account": "Enter account…",
+      "conflict": "Resolve name conflict…",
+      "moveTop": "Move to top",
+      "moveBottom": "Move to bottom",
       "restore": "Restore",
       "purge": "Delete permanently…",
       "open": "Open",
@@ -580,7 +604,8 @@
       "copiedMany": "{count, plural, one {# link copied} other {# links copied}}",
       "delete": "Delete"
     },
-    "avgSpeed": "Average speed"
+    "avgSpeed": "Average speed",
+    "grip": "Drag to reorder"
   },
   "newTask": {
     "title": "New download",
@@ -612,6 +637,8 @@
     "limitHint": "For example 500K or 2M; leave empty for no limit",
     "ftpAccount": "FTP account",
     "ftpAnonymous": "Leave empty to log in anonymously",
+    "account": "Account",
+    "accountName": "User name",
     "password": "Password",
     "showPassword": "Show password",
     "transferMode": "Transfer mode",
@@ -704,6 +731,32 @@
         "sleep": "Sleep now",
         "shutdown": "Shut down now"
       }
+    },
+    "auth": {
+      "title": "Sign-in required",
+      "text": "{host} asks you to sign in to download {name}.",
+      "textRefused": "{host} did not accept the user name or password. Enter them again to download {name}.",
+      "username": "User name",
+      "password": "Password",
+      "confirm": "Sign in and download",
+      "hint": "The password is kept on this computer and sent to this server only.",
+      "plainHint": "This link is not encrypted (HTTP). If the server only supports Basic authentication, others on the network could see the password."
+    },
+    "conflict": {
+      "title": "File already exists",
+      "text": "The folder already has a file named {name}.",
+      "hint": "Renaming keeps the existing file and numbers the new one; overwriting replaces the existing file when the download finishes.",
+      "rename": "Rename",
+      "overwrite": "Overwrite",
+      "later": "Not now"
+    },
+    "export": {
+      "title": "Export task list",
+      "text": "Writes every task outside the recycle bin to a JSON file that can be imported on another computer. Progress is not exported: unfinished tasks start over after import.",
+      "secrets": "Include cookies, custom headers and passwords",
+      "secretsHint": "They are written to the file as plain text: anyone with the file could use them to sign in.",
+      "confirm": "Choose a file and export",
+      "done": "{count, plural, one {Exported # task} other {Exported # tasks}}"
     }
   },
   "quick": {

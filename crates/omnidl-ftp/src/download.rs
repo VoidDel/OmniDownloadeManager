@@ -382,6 +382,9 @@ impl Download {
             Ok(n) => n,
             Err(e) => return Outcome::Failed(e, Some(state)),
         };
+        if self.job.options.mark_downloads {
+            omnidl_core::disk::mark_downloaded(&self.dir.join(&name), &self.job.source, None);
+        }
         // The server's modification time.
         if let Some(secs) = state
             .last_modified

@@ -92,9 +92,19 @@ pub fn run() {
             #[cfg(not(windows))]
             handle.plugin(tauri_plugin_notification::init())?;
             let paths = handle.path();
-            let data_dir = paths.app_data_dir()?;
-            let config_dir = paths.app_config_dir()?;
-            let log_dir = paths.app_log_dir()?;
+            // `OMNIDL_DATA_DIR`: everything the app keeps in one folder of its own (the
+            // end-to-end tests; a second copy run side by side).
+            let own = std::env::var_os("OMNIDL_DATA_DIR")
+                .filter(|d| !d.is_empty())
+                .map(std::path::PathBuf::from);
+            let (data_dir, config_dir, log_dir) = match own {
+                Some(dir) => (dir.clone(), dir.clone(), dir.join("logs")),
+                None => (
+                    paths.app_data_dir()?,
+                    paths.app_config_dir()?,
+                    paths.app_log_dir()?,
+                ),
+            };
             init_logging(&log_dir);
             tracing::info!("Omni Download {} starting", env!("CARGO_PKG_VERSION"));
             let default_dir = paths
@@ -148,6 +158,7 @@ pub fn run() {
                 bt,
                 settings: Mutex::new(settings),
                 settings_path,
+                data_dir: data_dir.clone(),
                 default_dir,
                 log_dir: log_dir.to_string_lossy().into_owned(),
                 quitting: Default::default(),
@@ -227,6 +238,11 @@ pub fn run() {
             commands::task_detail,
             commands::task_set_speed_limit,
             commands::task_set_connections,
+            commands::task_reorder,
+            commands::task_set_credentials,
+            commands::task_resolve_conflict,
+            commands::tasks_export,
+            commands::tasks_import,
             commands::user_agent_presets,
             commands::task_set_checksum,
             commands::task_digests,

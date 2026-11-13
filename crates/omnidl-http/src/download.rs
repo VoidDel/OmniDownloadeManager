@@ -19,13 +19,14 @@ use omnidl_core::{
 use omnidl_storage::{FileWriter, file};
 use parking_lot::Mutex;
 use reqwest::{
-    Client, StatusCode,
+    Client, Method, StatusCode,
     header::{CONTENT_RANGE, RANGE},
 };
 use tokio::{task::JoinSet, time::Instant};
 use url::Url;
 
 use crate::{
+    auth::Auth,
     client::{request_error, status_error},
     hls, parse_url,
     probe::{self, Probe},
@@ -63,11 +64,13 @@ enum Prepared {
 
 /// Probes, settles name and partial file, and reports the start.
 async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
-    let url = parse_url(&job.source)?;
+    let mut url = parse_url(&job.source)?;
+    // The account, for the server that asks for one (`auth`).
+    let auth = Arc::new(Auth::new(&job.options, &mut url));
     // Another user agent when the server refuses this one (`ua`).
     let (client, probe) = crate::ua::probe_with(&job.options, &url, |c| {
-        let (job, url) = (job.clone(), url.clone());
-        async move { probe_retrying(retry_delay, &job, &c, &url).await }
+        let (job, url, auth) = (job.clone(), url.clone(), auth.clone());
+        async move { probe_retrying(retry_delay, &job, &c, &auth, &url).await }
     })
     .await?;
     if hls::is_playlist_type(probe.content_type.as_deref()) {
@@ -137,7 +140,7 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
     }
     // Mirrors serve ranges of the same file: only for a download in segments.
     let mirrors = if resumable && !job.options.mirrors.is_empty() {
-        check_mirrors(job, &client, &probe).await
+        check_mirrors(job, &client, &auth, &probe).await
     } else {
         Vec::new()
     };
@@ -145,6 +148,7 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
     let download = Download {
         job: job.clone(),
         client,
+        auth,
         url: probe.final_url.clone(),
         mirrors,
         dir,
@@ -174,12 +178,13 @@ async fn probe_retrying(
     retry_delay: Duration,
     job: &Job,
     client: &Client,
+    auth: &Auth,
     url: &Url,
 ) -> Result<Probe> {
     let mut attempt = 0;
     loop {
         let r = tokio::select! {
-            r = probe::probe(client, url) => r,
+            r = probe::probe(client, auth, url) => r,
             _ = job.cancel.cancelled() => return Err(Error::internal("cancelled")),
         };
         match r {
@@ -198,7 +203,7 @@ async fn probe_retrying(
 
 /// The mirrors that serve the same file as `probe` (same length, ranges accepted), asked at
 /// once and only once each; the others are left out (and said why in the log).
-async fn check_mirrors(job: &Job, client: &Client, probe: &Probe) -> Vec<Url> {
+async fn check_mirrors(job: &Job, client: &Client, auth: &Auth, probe: &Probe) -> Vec<Url> {
     let asks = job
         .options
         .mirrors
@@ -211,7 +216,9 @@ async fn check_mirrors(job: &Job, client: &Client, probe: &Probe) -> Vec<Url> {
             }
         });
     let checks = asks.map(|u| async move {
-        let r = tokio::time::timeout(Duration::from_secs(20), probe::probe(client, &u)).await;
+        // The account is the link's host's alone: a mirror elsewhere is asked without it.
+        let asked = probe::probe(client, auth, &u);
+        let r = tokio::time::timeout(Duration::from_secs(20), asked).await;
         (u, r)
     });
     let mut good = Vec::new();
@@ -263,6 +270,7 @@ enum FetchError {
 struct Download {
     job: Arc<Job>,
     client: Client,
+    auth: Arc<Auth>,
     url: Url,
     /// Other addresses of the file, checked (see `check_mirrors`).
     mirrors: Vec<Url>,
@@ -312,6 +320,7 @@ impl Download {
         let conn = Arc::new(Conn {
             job: self.job.clone(),
             client: self.client.clone(),
+            auth: self.auth.clone(),
             dropped: Mutex::new(vec![false; sources.len()]),
             sources,
             table: self.table.clone(),
@@ -486,6 +495,10 @@ impl Download {
         {
             let _ = f.set_modified(t);
         }
+        if self.job.options.mark_downloads {
+            let referer = self.job.options.referer.as_deref();
+            omnidl_core::disk::mark_downloaded(&target, self.url.as_str(), referer);
+        }
         Outcome::Completed {
             file_name: name,
             total: got,
@@ -497,6 +510,7 @@ impl Download {
 struct Conn {
     job: Arc<Job>,
     client: Client,
+    auth: Arc<Auth>,
     /// The link, then the mirrors in use.
     sources: Vec<Url>,
     /// Mirrors left out after they failed (the link never is).
@@ -643,16 +657,19 @@ impl Conn {
             (s.pos(), s.end)
         };
         w.set_left(end.map(|e| e + 1 - start));
-        let mut req = self.client.get(self.sources[src].clone());
-        if self.ranged {
-            let range = match end {
-                Some(e) => format!("bytes={start}-{e}"),
-                None => format!("bytes={start}-"),
-            };
-            req = req.header(RANGE, range);
-        }
+        let range = self.ranged.then(|| match end {
+            Some(e) => format!("bytes={start}-{e}"),
+            None => format!("bytes={start}-"),
+        });
+        let with_range = |req: reqwest::RequestBuilder| match &range {
+            Some(r) => req.header(RANGE, r),
+            None => req,
+        };
+        let sent = self
+            .auth
+            .send(&self.client, Method::GET, &self.sources[src], with_range);
         let resp = tokio::select! {
-            r = req.send() => r.map_err(|e| FetchError::Failed(request_error(&e)))?,
+            r = sent => r.map_err(|e| FetchError::Failed(request_error(&e)))?,
             _ = w.cancelled() => return Err(FetchError::Cancelled),
         };
         match resp.status() {

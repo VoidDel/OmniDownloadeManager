@@ -857,3 +857,152 @@ async fn keeps_the_user_agent_of_a_task_with_cookies() {
     let agents = server.stats.agents.lock().clone();
     assert!(agents.iter().all(|a| a.contains("Mozilla")), "{agents:?}");
 }
+
+fn failed(o: Outcome) -> omnidl_core::Error {
+    match o {
+        Outcome::Failed(e, _) => e,
+        other => panic!("not failed: {other:?}"),
+    }
+}
+
+fn with_account(mut run: Run, user: &str, password: &str) -> Job {
+    run.job.options.username = Some(user.into());
+    run.job.options.password = Some(password.into());
+    run.job
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn logs_in_with_digest_when_the_server_asks() {
+    let size = 3 * MIB + 5;
+    for algorithm in ["sha-256", "md5", "md5-sess", "legacy"] {
+        let server = start().await;
+        let dir = tempfile::tempdir().unwrap();
+        let url = server.url(&format!("/digest/{algorithm}/bob/s3cret/{size}?a=1"));
+        // What the new-download dialog asks first.
+        let o = JobOptions {
+            username: Some("bob".into()),
+            password: Some("s3cret".into()),
+            ..JobOptions::default()
+        };
+        let info = engine().probe(&url, &o).await.unwrap();
+        assert_eq!((info.total, info.resumable), (Some(size), true));
+        // Four connections share the login; the nonce expires several times on the way.
+        let run = job(&url, dir.path(), None, 4);
+        let (name, total) = completed(engine().run(with_account(run, "bob", "s3cret")).await);
+        assert_eq!(total, size, "{algorithm}");
+        assert_content(&dir.path().join(name), size);
+        let logins = server.stats.logins.lock().clone();
+        // Nothing was sent before the server asked, and never the password itself (Basic,
+        // which the server offers too).
+        assert_eq!(logins[0], "", "{algorithm}");
+        assert!(logins.iter().all(|l| !l.starts_with("Basic")), "{logins:?}");
+        assert!(
+            server.stats.nonce.load(Ordering::SeqCst) > 0,
+            "the nonce never expired: {} logins",
+            logins.len()
+        );
+        // Once the server has asked, requests log in without being asked: far fewer
+        // refusals than requests.
+        let refused = logins.iter().filter(|l| l.is_empty()).count();
+        assert!(
+            refused <= 2,
+            "{refused} requests without a login ({algorithm})"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn logs_in_with_the_account_in_the_link() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = MIB + 3;
+    // Digest and Basic, percent-encoded characters in the password.
+    for path in [
+        format!("/digest/md5/bob/p@ss:word/{size}"),
+        format!("/basic/bob/p@ss:word/{size}"),
+    ] {
+        let url = server
+            .url(&path)
+            .replace("http://", "http://bob:p%40ss%3Aword@");
+        let info = engine().probe(&url, &JobOptions::default()).await.unwrap();
+        // What is shown and stored has no account in it.
+        let account = |u: &str| url::Url::parse(u).unwrap().username().to_owned();
+        assert_eq!(account(&info.final_url), "", "{}", info.final_url);
+        let run = job(&url, dir.path(), None, 3);
+        let recorder = run.recorder.clone();
+        let (name, _) = completed(engine().run(run.job).await);
+        assert_content(&dir.path().join(name), size);
+        let started = recorder.started.lock().clone().unwrap();
+        assert_eq!(account(&started.final_url.unwrap()), "");
+    }
+    // Over plain HTTP the password is not sent before the server asks for Basic.
+    let logins = server.stats.logins.lock().clone();
+    let basic: Vec<&String> = logins.iter().filter(|l| !l.starts_with("Digest")).collect();
+    assert_eq!(basic[0], "");
+    assert!(basic.iter().skip(1).any(|l| l.starts_with("Basic ")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn fails_when_the_login_is_missing_or_wrong() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    for path in ["/digest/sha-256/bob/right/1000", "/basic/bob/right/1000"] {
+        let url = server.url(path);
+        // No account.
+        let e = failed(engine().run(job(&url, dir.path(), None, 2).job).await);
+        assert_eq!((e.code, e.status), (ErrorCode::AuthRequired, Some(401)));
+        let e = engine()
+            .probe(&url, &JobOptions::default())
+            .await
+            .unwrap_err();
+        assert_eq!(e.code, ErrorCode::AuthRequired);
+        // A wrong password: asked once, not again and again.
+        let before = server.stats.logins.lock().len();
+        let run = job(&url, dir.path(), None, 2);
+        let e = failed(engine().run(with_account(run, "bob", "wrong")).await);
+        assert_eq!(e.code, ErrorCode::AuthRequired);
+        let asked = server.stats.logins.lock().len() - before;
+        assert!(asked <= 6, "{asked} requests for a wrong password");
+        // The right one then works.
+        let run = job(&url, dir.path(), None, 2);
+        completed(engine().run(with_account(run, "bob", "right")).await);
+    }
+    assert!(std::fs::read_dir(dir.path()).unwrap().count() == 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn asks_before_taking_the_name_of_an_existing_file() {
+    use omnidl_core::ConflictPolicy;
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let url = server.url("/get/5000/report.pdf");
+    std::fs::write(dir.path().join("report.pdf"), b"mine").unwrap();
+    let with = |policy| {
+        let mut run = job(&url, dir.path(), None, 2);
+        run.job.options.conflict = policy;
+        run.job
+    };
+    // Asking: the download stops before it writes anything.
+    let e = failed(engine().run(with(ConflictPolicy::Ask)).await);
+    assert_eq!(e.code, ErrorCode::FileExists);
+    assert_eq!(
+        std::fs::read(dir.path().join("report.pdf")).unwrap(),
+        b"mine"
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    // The answers.
+    let (name, _) = completed(engine().run(with(ConflictPolicy::Rename)).await);
+    assert_eq!(name, "report (1).pdf");
+    assert_eq!(
+        std::fs::read(dir.path().join("report.pdf")).unwrap(),
+        b"mine"
+    );
+    let (name, _) = completed(engine().run(with(ConflictPolicy::Overwrite)).await);
+    assert_eq!(name, "report.pdf");
+    assert_content(&dir.path().join("report.pdf"), 5000);
+    // Nothing in the way: asking changes nothing.
+    let other = server.url("/get/5000/other.pdf");
+    let mut run = job(&other, dir.path(), None, 2);
+    run.job.options.conflict = ConflictPolicy::Ask;
+    assert_eq!(completed(engine().run(run.job).await).0, "other.pdf");
+}

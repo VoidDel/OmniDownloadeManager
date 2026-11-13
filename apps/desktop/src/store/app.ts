@@ -28,6 +28,12 @@ export type Dialog =
   | { kind: 'remove'; ids: string[] }
   /** A custom global speed limit. */
   | { kind: 'speed' }
+  /** The server asks for an account: name and password for task `id`. */
+  | { kind: 'auth'; id: string }
+  /** A file of the task's name exists: rename, overwrite, or leave it. */
+  | { kind: 'conflict'; id: string }
+  /** Exporting the task list to a file. */
+  | { kind: 'export' }
   /** A newer version: what is new, then installing it. */
   | { kind: 'update' }
   /** The first-run guide. */
@@ -54,7 +60,9 @@ export const DEFAULT_SETTINGS: Settings = {
     connectTimeoutSecs: 15,
     readTimeoutSecs: 30,
     maxRetries: 10,
+    allowInsecureRedirect: false,
     conflict: 'rename',
+    markDownloads: true,
     resumeOnStartup: true,
     syncWrites: true,
     seeding: true,
@@ -103,6 +111,9 @@ interface State {
    *  clicking empty space) closes it for good. */
   detailFor: string | null;
   dialog: Dialog;
+  /** Downloads that stopped for an answer while another dialog was open (or the settings
+   *  shown): asked one after the other as dialogs close. */
+  asks: string[];
   toasts: ToastItem[];
   /** Browsers whose extension has been in touch since the app started: [name, Unix ms]. */
   seenBrowsers: [string, number][];
@@ -127,7 +138,10 @@ interface State {
   setFilter: (f: Filter) => void;
   /** Searches the list (shown, if the settings were). The selection keeps only what still shows. */
   setQuery: (q: string) => void;
+  /** Sorts by a column: its usual direction, then the other, then back to the list's own order. */
   setSort: (key: SortKey) => void;
+  /** Moves tasks next to `anchor` in the list's own order (and so in the queue). */
+  moveTasks: (ids: string[], anchor: string, after: boolean) => Promise<void>;
   select: (ids: string[], anchor?: string | null) => void;
   /** Moves tasks to the recycle bin and says so, with a way back. */
   /** To the recycle bin. `files`: with their files or not; left out, the kept answer, or the
@@ -198,6 +212,23 @@ export function detailTask(s: Pick<State, 'selection' | 'detailPinned' | 'detail
 
 const withTask = (tasks: Record<string, Task>, t: Task) => ({ ...tasks, [t.id]: t });
 
+/** The list's own order: as added, or as the user arranged it. */
+export const MANUAL_SORT: State['sort'] = { key: 'added', desc: false };
+
+/** Whether the list shows its own order, which dragging can change (not in the recycle bin). */
+export function canReorder(s: Pick<State, 'sort' | 'filter'>): boolean {
+  return s.sort.key === 'added' && !s.sort.desc && s.filter !== 'trash';
+}
+
+/** The dialog for a download that failed for want of an answer: an account (HTTP 401, an FTP
+ *  login refused; not a proxy's 407), or what to do about a file of the same name. */
+export function questionFor(t: Task): Dialog {
+  if (t.status !== 'failed' || !t.error) return null;
+  if (t.error.code === 'file_exists') return { kind: 'conflict', id: t.id };
+  if (t.error.code === 'auth_required' && t.error.status !== 407 && t.kind !== 'torrent') return { kind: 'auth', id: t.id };
+  return null;
+}
+
 export const useApp = create<State>((set, get) => ({
   ready: false,
   platform: 'win',
@@ -211,13 +242,14 @@ export const useApp = create<State>((set, get) => ({
   settingsTab: 'general',
   filter: 'all',
   query: '',
-  sort: { key: 'added', desc: false },
+  sort: MANUAL_SORT,
   selection: [],
   anchor: null,
   reveal: null,
   detailPinned: readPinned(),
   detailFor: null,
   dialog: null,
+  asks: [],
   toasts: [],
   seenBrowsers: [],
   materialSupported: false,
@@ -243,8 +275,14 @@ export const useApp = create<State>((set, get) => ({
         added: (t) => set((s) => ({ tasks: withTask(s.tasks, t) })),
         changed: (t) =>
           set((s) => {
-            if (!s.tasks[t.id]) return {};
+            const before = s.tasks[t.id];
+            if (!before) return {};
             if (!['probing', 'downloading'].includes(t.status)) history.delete(t.id);
+            // It just stopped for something only the user can give (an account, a choice about
+            // a taken name): asked at once, unless another dialog is open.
+            const ask = before.status !== 'failed' ? questionFor(t) : null;
+            if (ask && !s.dialog && s.view === 'tasks') return { tasks: withTask(s.tasks, t), dialog: ask };
+            if (ask && !s.asks.includes(t.id)) return { tasks: withTask(s.tasks, t), asks: [...s.asks, t.id] };
             // Downloading it again brings the file back.
             if (s.missing[t.id] && t.status !== 'completed') {
               const missing = { ...s.missing };
@@ -262,6 +300,14 @@ export const useApp = create<State>((set, get) => ({
             }
             const gone = new Set(ids);
             return { tasks, selection: s.selection.filter((id) => !gone.has(id)) };
+          }),
+        reordered: (ids) =>
+          set((s) => {
+            const tasks = { ...s.tasks };
+            ids.forEach((id, i) => {
+              if (tasks[id] && tasks[id].sortOrder !== i) tasks[id] = { ...tasks[id], sortOrder: i };
+            });
+            return { tasks };
           }),
         progress: ({ items, stats }) =>
           set((s) => {
@@ -342,7 +388,16 @@ export const useApp = create<State>((set, get) => ({
         detailFor: s.detailFor && keep.includes(s.detailFor) ? s.detailFor : null,
       };
     }),
-  setSort: (key) => set((s) => ({ sort: { key, desc: s.sort.key === key ? !s.sort.desc : key === 'speed' || key === 'size' } })),
+  setSort: (key) =>
+    set((s) => {
+      const first = key === 'speed' || key === 'size';
+      if (s.sort.key !== key) return { sort: { key, desc: first } };
+      // The third click on a column goes back to the list's own order.
+      return { sort: s.sort.desc === first ? { key, desc: !first } : MANUAL_SORT };
+    }),
+  moveTasks: async (ids, anchor, after) => {
+    await get().run(() => api.reorder(ids, anchor, after));
+  },
   select: (selection, anchor) =>
     set((s) => ({
       selection,
@@ -379,7 +434,13 @@ export const useApp = create<State>((set, get) => ({
     set((s) => ({ detailPinned, detailFor: detailPinned ? s.detailFor : (s.selection.length === 1 ? s.selection[0] : null) }));
   },
   openDialog: (dialog) => set({ dialog }),
-  closeDialog: () => set({ dialog: null }),
+  closeDialog: () =>
+    set((s) => {
+      // The next download that waits for an answer, if it still does.
+      const waiting = s.asks.map((id) => s.tasks[id]).filter((t) => t && questionFor(t));
+      const [next, ...rest] = waiting;
+      return { dialog: next && s.view === 'tasks' ? questionFor(next) : null, asks: (next && s.view === 'tasks' ? rest : waiting).map((t) => t.id) };
+    }),
 
   toast: (tone, text, action) => {
     const id = ++toastId;
@@ -514,7 +575,7 @@ export function matches(t: Task, query: string): boolean {
 export function visibleIds(tasks: Record<string, Task>, filter: Filter, sort: State['sort'], query = ''): string[] {
   const list = Object.values(tasks).filter((t) => inFilter(t, filter) && matches(t, query));
   const by: Record<SortKey, (a: Task, b: Task) => number> = {
-    added: (a, b) => a.createdAt - b.createdAt,
+    added: (a, b) => a.sortOrder - b.sortOrder,
     name: (a, b) => a.fileName.localeCompare(b.fileName, 'zh-CN', { numeric: true }),
     size: (a, b) => (a.totalBytes ?? -1) - (b.totalBytes ?? -1),
     progress: (a, b) => progressOf(a) - progressOf(b),

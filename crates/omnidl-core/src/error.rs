@@ -25,8 +25,13 @@ pub enum ErrorCode {
     Forbidden,
     /// ETag, Last-Modified or length changed since the download started.
     RemoteChanged,
+    /// An `https://` link redirected to `http://`, which the settings do not allow.
+    InsecureRedirect,
     /// The partial file disappeared.
     FileMissing,
+    /// A file of that name is in the folder and the settings say to ask
+    /// (`ConflictPolicy::Ask`): the user chooses, then the task is resumed.
+    FileExists,
     /// The finished file does not have the checksum the user gave (the file stays).
     ChecksumMismatch,
     DiskFull,

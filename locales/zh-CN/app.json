@@ -10,7 +10,9 @@
     "removed": "已删除",
     "fetchingTorrent": "获取种子信息",
     "fileMissing": "文件已删除",
-    "checksumMismatch": "校验不符"
+    "checksumMismatch": "校验不符",
+    "needsLogin": "需要登录",
+    "nameTaken": "文件已存在"
   },
   "category": {
     "video": "视频",
@@ -36,6 +38,8 @@
     "auth_required": "需要登录或授权，账号或密码不对",
     "forbidden": "服务器拒绝访问",
     "remote_changed": "服务器上的文件已变更，需要重新下载",
+    "insecure_redirect": "链接从 HTTPS 跳转到了未加密的 HTTP，已停止下载",
+    "file_exists": "保存位置已有同名文件",
     "file_missing": "文件丢失或无法读取",
     "disk_full": "磁盘空间不足",
     "io": "读写文件失败",
@@ -50,9 +54,11 @@
       "http_status": "服务器暂时出了问题。稍后重试。",
       "ftp_reply": "服务器可能限制了同时登录的数量。在“设置 › 网络”里减少 FTP 会话数后重试。",
       "not_found": "链接可能已经失效。到原来的网页重新获取下载链接。",
-      "auth_required": "从浏览器里重新发起下载，登录信息会一起带过来；FTP 请在链接里写上账号。",
+      "auth_required": "双击任务输入用户名和密码；如果是在网页上登录的，从浏览器里重新发起下载，登录信息会一起带过来。",
       "forbidden": "链接可能已过期，或只允许从原网页下载。从浏览器里重新发起下载。",
       "remote_changed": "已下载的部分对不上新文件。点“重新下载”从头开始。",
+      "insecure_redirect": "文件会在不加密的连接上传输，可能被别人看到或改动。如果信任这个网站，可以在“设置 › 网络”里允许后重试。",
+      "file_exists": "双击任务，选择重命名或覆盖。",
       "file_missing": "任务用的种子文件读不到了。重新添加这个种子，或改用磁力链接。",
       "disk_full": "清理出空间后点“重试”，已下载的部分会保留。",
       "io": "检查保存位置是否还在、能否写入（移动硬盘、网络盘是否已连接），然后重试。",
@@ -110,6 +116,14 @@
     "general": {
       "logs": "日志",
       "openFolder": "打开文件夹",
+      "tasks": "任务列表",
+      "tasksHint": "导出为文件，或从导出的文件导入：换电脑或备份时用",
+      "tasksExport": "导出…",
+      "tasksImport": "导入…",
+      "tasksImported": "已导入 {count} 个任务",
+      "tasksImportedSkipped": "已导入 {count} 个任务，跳过 {skipped} 个（已在列表中，或不是可下载的链接）",
+      "tasksNotOurs": "这不是 Omni Download 导出的任务列表",
+      "tasksNewer": "这个任务列表来自更新的版本，请先更新 Omni Download",
       "autostart": "随系统启动",
       "autostartHint": "在后台启动，只显示在通知区域",
       "closeToTray": "关闭窗口时最小化到托盘",
@@ -160,6 +174,7 @@
       "conflict": "文件已存在时",
       "conflictRename": "自动重命名",
       "conflictOverwrite": "覆盖",
+      "conflictAsk": "询问",
       "removeFiles": "删除任务时",
       "removeFilesHint": "任务会移到回收站；这里决定本地文件是否一起删除",
       "removeFilesAsk": "每次询问",
@@ -169,6 +184,9 @@
       "resumeOnStartupHint": "退出时正在下载的任务，下次启动后自动继续",
       "syncWrites": "每秒把进度写入磁盘",
       "syncWritesHint": "断电或系统崩溃后也能从准确的位置继续；关闭可以减少磁盘写入",
+      "markDownloads": "标记文件来自互联网",
+      "markDownloadsHint": "和浏览器下载的文件一样：运行程序前 Windows 会先确认，Office 用受保护的视图打开文档。来自本机和局域网的文件不标记。",
+      "markDownloadsHintMac": "和浏览器下载的文件一样：第一次打开时 macOS 会检查并确认。来自本机和局域网的文件不标记。",
       "byCategory": "按类型保存到不同文件夹",
       "byCategoryHint": "下载的文件按扩展名归类，放到各自的文件夹；留空的类型存到上面的默认下载文件夹",
       "byCategoryPick": "选择存放{category}的文件夹",
@@ -192,6 +210,8 @@
       "readTimeoutHint": "连接这么久收不到数据就断开重连",
       "retries": "失败重试次数",
       "retriesHint": "网络错误或服务器 5xx 时，每个连接按 1、2、4… 秒的间隔重试",
+      "insecureRedirect": "允许从 HTTPS 跳转到 HTTP",
+      "insecureRedirectHint": "关闭时，加密的链接跳转到不加密的地址会停止下载，以免文件和 Cookie 在网络上暴露。",
       "seconds": "{n} 秒",
       "times": "{n} 次",
       "ftpSessions": "FTP 会话数",
@@ -370,7 +390,7 @@
       "customValue": "自定义（{speed}）"
     },
     "sort": {
-      "added": "按添加时间",
+      "added": "列表顺序",
       "name": "按名称",
       "size": "按大小",
       "progress": "按进度",
@@ -567,6 +587,10 @@
     },
     "menu": {
       "details": "详情",
+      "account": "输入账号…",
+      "conflict": "处理同名文件…",
+      "moveTop": "移到最前",
+      "moveBottom": "移到最后",
       "restore": "还原",
       "purge": "彻底删除…",
       "open": "打开",
@@ -580,7 +604,8 @@
       "copiedMany": "已复制 {count} 个链接",
       "delete": "删除"
     },
-    "avgSpeed": "平均速度"
+    "avgSpeed": "平均速度",
+    "grip": "拖动调整顺序"
   },
   "newTask": {
     "title": "新建下载",
@@ -612,6 +637,8 @@
     "limitHint": "例如 500K、2M；留空不限速",
     "ftpAccount": "FTP 账号",
     "ftpAnonymous": "留空为匿名登录",
+    "account": "账号",
+    "accountName": "用户名",
     "password": "密码",
     "showPassword": "显示密码",
     "transferMode": "传输模式",
@@ -704,6 +731,32 @@
         "sleep": "立即睡眠",
         "shutdown": "立即关机"
       }
+    },
+    "auth": {
+      "title": "需要登录",
+      "text": "{host} 要求登录后才能下载 {name}。",
+      "textRefused": "{host} 没有接受刚才的用户名或密码，请重新输入后再下载 {name}。",
+      "username": "用户名",
+      "password": "密码",
+      "confirm": "登录并下载",
+      "hint": "密码保存在这台电脑上，只发给这个服务器。",
+      "plainHint": "这个链接没有加密（HTTP）。如果服务器只支持基本认证，密码在网络上可能被别人看到。"
+    },
+    "conflict": {
+      "title": "文件已存在",
+      "text": "保存位置已经有一个名为 {name} 的文件。",
+      "hint": "重命名会保留原文件，新文件的名称后加上编号；覆盖会在下载完成时替换原文件。",
+      "rename": "重命名",
+      "overwrite": "覆盖",
+      "later": "以后再说"
+    },
+    "export": {
+      "title": "导出任务列表",
+      "text": "把回收站以外的所有任务写入一个 JSON 文件，可以在另一台电脑上导入。下载进度不会导出：未完成的任务导入后从头开始。",
+      "secrets": "包含 Cookie、自定义请求头和密码",
+      "secretsHint": "这些内容会以明文写入文件，拿到文件的人可以用它们登录。",
+      "confirm": "选择位置并导出",
+      "done": "已导出 {count} 个任务"
     }
   },
   "quick": {

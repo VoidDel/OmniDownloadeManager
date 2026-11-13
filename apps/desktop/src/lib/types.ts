@@ -22,7 +22,9 @@ export type ErrorCode =
   | 'auth_required'
   | 'forbidden'
   | 'remote_changed'
+  | 'insecure_redirect'
   | 'file_missing'
+  | 'file_exists'
   | 'checksum_mismatch'
   | 'disk_full'
   | 'io'
@@ -50,7 +52,10 @@ export interface TaskOptions {
   proxy: ProxyConfig | null;
   /** BitTorrent: indices of the files to download (null: all). */
   onlyFiles: number[] | null;
-  /** FTP account (anonymous when null); a password in the link moves here. */
+  /** This task's answer to "a file of this name exists" (the settings' otherwise). */
+  conflict?: 'rename' | 'overwrite' | null;
+  /** The account: FTP (anonymous when null), or HTTP when the server asks for one; a password
+   *  in the link moves here. */
   username: string | null;
   password: string | null;
   ftpActive: boolean | null;
@@ -99,6 +104,15 @@ export interface Task {
   activeMs: number;
   /** The highest download speed seen (bytes per second). */
   peakBps: number;
+  /** Its place in the list and the queue (the order added in, until moved). */
+  sortOrder: number;
+}
+
+/** What importing a task list did. */
+export interface ImportSummary {
+  added: number;
+  /** In the list already, or not a link that can be downloaded. */
+  skipped: number;
 }
 
 export interface ProbeInfo {
@@ -222,7 +236,11 @@ export interface EngineConfig {
   connectTimeoutSecs: number;
   readTimeoutSecs: number;
   maxRetries: number;
-  conflict: 'rename' | 'overwrite';
+  /** Follow a redirect from https to http. */
+  allowInsecureRedirect: boolean;
+  conflict: 'rename' | 'overwrite' | 'ask';
+  /** Mark finished files as downloaded from the internet (Windows, macOS). */
+  markDownloads: boolean;
   resumeOnStartup: boolean;
   syncWrites: boolean;
   seeding: boolean;

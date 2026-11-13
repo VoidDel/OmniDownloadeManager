@@ -20,6 +20,10 @@ pub enum TaskEvent {
     Deleted {
         ids: Vec<TaskId>,
     },
+    /// The user moved tasks: every task, in the new list order.
+    Reordered {
+        ids: Vec<TaskId>,
+    },
     /// Live numbers of the running tasks.
     Progress {
         items: Vec<ProgressItem>,

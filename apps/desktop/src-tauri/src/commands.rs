@@ -4,8 +4,8 @@
 use std::{path::Path, sync::atomic::Ordering};
 
 use omnidl_core::{
-    Error, ErrorCode, NewTask, ProbeInfo, Result, Task, TaskDetail, TaskId, TaskKind, TaskOptions,
-    TaskStatus,
+    ConflictPolicy, Error, ErrorCode, ImportSummary, NewTask, ProbeInfo, Result, Task, TaskDetail,
+    TaskExport, TaskId, TaskKind, TaskOptions, TaskStatus,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -293,6 +293,78 @@ pub async fn task_set_speed_limit(
     limit: Option<u64>,
 ) -> Result<()> {
     state.manager.set_task_speed_limit(id, limit).await
+}
+
+/// Moves tasks in the list (and the queue): `ids` go next to `anchor`, after it or before it.
+#[tauri::command]
+pub async fn task_reorder(
+    state: State<'_, AppState>,
+    ids: Vec<TaskId>,
+    anchor: TaskId,
+    after: bool,
+) -> Result<()> {
+    state.manager.reorder(&ids, anchor, after).await
+}
+
+/// The account for a download whose server asks for one (`auth_required`), then tries again.
+#[tauri::command]
+pub async fn task_set_credentials(
+    state: State<'_, AppState>,
+    id: TaskId,
+    username: Option<String>,
+    password: Option<String>,
+) -> Result<()> {
+    state
+        .manager
+        .set_credentials(id, username, password)
+        .await?;
+    state.manager.resume(&[id]).await
+}
+
+/// The answer to "a file of this name exists" (`file_exists`): `rename` or `overwrite`, then
+/// the download goes on.
+#[tauri::command]
+pub async fn task_resolve_conflict(
+    state: State<'_, AppState>,
+    id: TaskId,
+    policy: ConflictPolicy,
+) -> Result<()> {
+    state.manager.set_conflict(id, policy).await?;
+    state.manager.resume(&[id]).await
+}
+
+/// Writes the task list (or the tasks in `ids`) to a JSON file; how many tasks it holds.
+/// Cookies, extra headers and passwords only with `with_secrets`.
+#[tauri::command]
+pub async fn tasks_export(
+    state: State<'_, AppState>,
+    path: String,
+    ids: Option<Vec<TaskId>>,
+    with_secrets: bool,
+) -> Result<usize> {
+    let file = state.manager.export(ids.as_deref(), with_secrets).await;
+    let json = serde_json::to_vec_pretty(&file).map_err(Error::internal)?;
+    std::fs::write(&path, json).map_err(|e| Error::io(&e, &path))?;
+    Ok(file.tasks.len())
+}
+
+/// Adds the tasks of an exported list (see `TaskManager::import`).
+#[tauri::command]
+pub async fn tasks_import(state: State<'_, AppState>, path: String) -> Result<ImportSummary> {
+    let l = i18n::resolve(&state.settings().language);
+    let bytes = std::fs::read(&path).map_err(|e| Error::io(&e, &path))?;
+    let file: TaskExport = serde_json::from_slice(&bytes)
+        .ok()
+        .filter(|f: &TaskExport| f.app == TaskExport::APP)
+        .ok_or_else(|| Error::invalid(i18n::tr(l, "settings.general.tasksNotOurs", &[])))?;
+    if file.version > TaskExport::VERSION {
+        return Err(Error::invalid(i18n::tr(
+            l,
+            "settings.general.tasksNewer",
+            &[],
+        )));
+    }
+    state.manager.import(file).await
 }
 
 /// Common user agents to choose from in the settings (name, value).

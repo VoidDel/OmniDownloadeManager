@@ -392,9 +392,11 @@ fn chunks(url: &Url, total: u64, ranges: bool, seq: &mut u64) -> Vec<Part> {
 
 /// The picture at `video` and the sound at `audio`: both their sizes.
 async fn pair_sizes(client: &Client, video: &Url, audio: &Url) -> Result<[(Url, u64, bool); 2]> {
+    // The account, if any, is in the links (`auth::embed`).
+    let auth = crate::auth::Auth::none();
     let (v, a) = futures_util::future::try_join(
-        crate::probe::probe(client, video),
-        crate::probe::probe(client, audio),
+        crate::probe::probe(client, &auth, video),
+        crate::probe::probe(client, &auth, audio),
     )
     .await?;
     let sized = |p: crate::probe::Probe, what: &Url| {
@@ -444,7 +446,7 @@ pub(crate) async fn probe_pair(client: &Client, video: &Url, audio: &str) -> Res
     let [(vu, vt, _), (_, at, _)] = pair_sizes(client, video, &audio).await?;
     Ok(ProbeInfo {
         file_name: output_name(video, None, true),
-        final_url: vu.to_string(),
+        final_url: crate::auth::without_account(vu).to_string(),
         total: Some(vt + at),
         resumable: true,
         content_type: Some("video/mp4".into()),
@@ -635,7 +637,9 @@ type Failed = (Error, Option<ResumeState>);
 #[allow(clippy::result_large_err)]
 async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     let early = |e: Error| (e, None);
-    let url = crate::parse_url(&job.source).map_err(early)?;
+    let mut url = crate::parse_url(&job.source).map_err(early)?;
+    // The task's account goes in the link: the playlist and its parts log in with it (Basic).
+    crate::auth::embed(&job.options, &mut url);
     // The user agent that worked for this host, if another did (`ua`).
     let ua = crate::ua::preferred(&job.options, &url);
     let client = client::build_as(&job.options, &ua).map_err(early)?;
@@ -652,6 +656,8 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
         fmp4,
         total,
     } = plan;
+    // Stored and shown without the account.
+    let media_url = crate::auth::without_account(media_url);
     let count = all_parts.len();
     let dir = job.save_dir.clone();
     std::fs::create_dir_all(&dir).map_err(|e| early(Error::io(&e, dir.display())))?;
@@ -801,6 +807,10 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     job.progress.set_total(Some(written));
     let name =
         place(&dir, &file_name, job.options.conflict).map_err(|e| (e, Some(state.clone())))?;
+    if job.options.mark_downloads {
+        let referer = job.options.referer.as_deref();
+        omnidl_core::disk::mark_downloaded(&dir.join(&name), &job.source, referer);
+    }
     Ok(Outcome::Completed {
         file_name: name,
         total: written,

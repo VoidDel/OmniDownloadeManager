@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import type { AppError, Bootstrap, FloatState, Integration, PowerPending, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, TrackersStatus, UpdateInfo, UpdateProgress } from './types';
+import type { AppError, Bootstrap, FloatState, ImportSummary, Integration, PowerPending, MagnetHandler, NewTask, Prefill, ProbeInfo, ProgressBatch, QuickDecision, QuickRequest, Settings, Task, TaskDetail, TaskOptions, TrackersStatus, UpdateInfo, UpdateProgress } from './types';
 
 export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
@@ -46,6 +46,15 @@ export const api = {
   userAgentPresets: () => invoke<[string, string][]>('user_agent_presets'),
   /** A number of connections, or null to tune them; a running download changes at once. */
   setTaskConnections: (id: string, connections: number | null) => invoke<void>('task_set_connections', { id, connections }),
+  /** Moves tasks in the list and the queue: next to `anchor`, after it or before it. */
+  reorder: (ids: string[], anchor: string, after: boolean) => invoke<void>('task_reorder', { ids, anchor, after }),
+  /** The account a download logs in with (a null name clears it); the download is tried again. */
+  setCredentials: (id: string, username: string | null, password: string | null) => invoke<void>('task_set_credentials', { id, username, password }),
+  /** The answer to "a file of this name exists"; the download then goes on. */
+  resolveConflict: (id: string, policy: 'rename' | 'overwrite') => invoke<void>('task_resolve_conflict', { id, policy }),
+  /** Writes the task list (or the tasks `ids`) to a file; resolves to how many tasks. */
+  exportTasks: (path: string, ids: string[] | null, withSecrets: boolean) => invoke<number>('tasks_export', { path, ids, withSecrets }),
+  importTasks: (path: string) => invoke<ImportSummary>('tasks_import', { path }),
   /** The checksum the file should have, as typed (empty clears it); a finished file is checked now. */
   setChecksum: (id: string, value: string) => invoke<Task>('task_set_checksum', { id, value }),
   /** MD5, SHA-1 and SHA-256 of a finished file: [algorithm, hex] pairs. */
@@ -112,6 +121,8 @@ export interface TaskEvents {
   added: (t: Task) => void;
   changed: (t: Task) => void;
   deleted: (ids: string[]) => void;
+  /** The list order changed: every task's id, in the new order. */
+  reordered: (ids: string[]) => void;
   progress: (b: ProgressBatch) => void;
   /** Events were missed: reload the list. */
   resync: () => void;
@@ -122,6 +133,7 @@ export async function listenTasks(h: TaskEvents): Promise<UnlistenFn> {
     listen<Task>('task:added', (e) => h.added(e.payload)),
     listen<Task>('task:changed', (e) => h.changed(e.payload)),
     listen<string[]>('task:deleted', (e) => h.deleted(e.payload)),
+    listen<string[]>('task:reordered', (e) => h.reordered(e.payload)),
     listen<ProgressBatch>('task:progress', (e) => h.progress(e.payload)),
     listen('task:resync', () => h.resync()),
   ]);

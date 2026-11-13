@@ -47,6 +47,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.14.0(jiti@2.7.0))
+      '@playwright/test':
+        specifier: ^1.65.0
+        version: 1.65.0
       '@tauri-apps/cli':
         specifier: ~2.12.4
         version: 2.12.4

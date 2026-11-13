@@ -24,7 +24,7 @@ pub fn path(data_dir: &Path) -> PathBuf {
 }
 
 fn file(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|d| path(&d))
+    app.try_state::<AppState>().map(|s| path(&s.data_dir))
 }
 
 /// The subscribed addresses of the settings, trimmed, without empty ones or repeats.
@@ -103,10 +103,10 @@ pub fn in_use(e: &EngineConfig, data_dir: &Path) -> Vec<String> {
 
 /// Hands the trackers of the settings to the engine.
 pub fn apply(app: &AppHandle) {
-    let (Some(state), Ok(dir)) = (app.try_state::<AppState>(), app.path().app_data_dir()) else {
+    let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    let list = in_use(&state.settings().engine, &dir);
+    let list = in_use(&state.settings().engine, &state.data_dir);
     state.bt.set_extra_trackers(&list);
 }
 
@@ -129,7 +129,7 @@ pub fn trackers_status(app: AppHandle) -> TrackersStatus {
     let state = app.state::<AppState>();
     let mut e = state.settings().engine;
     e.bt_extra_trackers = true;
-    let (Some(p), Ok(dir)) = (file(&app), app.path().app_data_dir()) else {
+    let (Some(p), dir) = (file(&app), state.data_dir.clone()) else {
         return TrackersStatus {
             count: 0,
             fetched: 0,

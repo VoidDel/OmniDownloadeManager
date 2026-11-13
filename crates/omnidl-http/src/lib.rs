@@ -6,6 +6,7 @@
 //! unchanged. Servers that ignore ranges get one connection and start over after a pause.
 //! An HLS playlist (`.m3u8`) is downloaded segment by segment into one video file (`hls`).
 
+mod auth;
 mod client;
 mod download;
 mod hls;
@@ -54,24 +55,28 @@ impl DownloadEngine for HttpEngine {
     }
 
     async fn probe(&self, source: &str, options: &JobOptions) -> Result<ProbeInfo> {
-        let url = parse_url(source)?;
+        let mut url = parse_url(source)?;
+        // Playlists and their parts log in with the account in their link.
+        let mut with_account = url.clone();
+        auth::embed(options, &mut with_account);
         // Picture and sound apart (a site's DASH streams): one MP4 of both.
         if let Some(audio) = options.audio_source.as_deref() {
             let client = client::build_as(options, &ua::preferred(options, &url))?;
-            return hls::probe_pair(&client, &url, audio).await;
+            return hls::probe_pair(&client, &with_account, audio).await;
         }
         if hls::is_playlist_url(&url) {
             let client = client::build_as(options, &ua::preferred(options, &url))?;
-            return playlist(&client, &url, options).await;
+            return playlist(&client, &with_account).await;
         }
+        let auth = std::sync::Arc::new(auth::Auth::new(options, &mut url));
         // Another user agent when the server refuses this one.
         let (client, p) = ua::probe_with(options, &url, |c| {
-            let url = url.clone();
-            async move { probe::probe(&c, &url).await }
+            let (url, auth) = (url.clone(), auth.clone());
+            async move { probe::probe(&c, &auth, &url).await }
         })
         .await?;
         if hls::is_playlist_type(p.content_type.as_deref()) {
-            return playlist(&client, &url, options).await;
+            return playlist(&client, &with_account).await;
         }
         Ok(ProbeInfo {
             file_name: p.file_name(&url),
@@ -91,12 +96,11 @@ impl DownloadEngine for HttpEngine {
 }
 
 /// A playlist: its video file's name; the size is learned while downloading.
-async fn playlist(client: &reqwest::Client, url: &Url, o: &JobOptions) -> Result<ProbeInfo> {
+async fn playlist(client: &reqwest::Client, url: &Url) -> Result<ProbeInfo> {
     let (_, file_name) = hls::probe(client, url, None).await?;
-    let _ = o;
     Ok(ProbeInfo {
         file_name,
-        final_url: url.to_string(),
+        final_url: auth::without_account(url.clone()).to_string(),
         total: None,
         resumable: true,
         content_type: Some("application/vnd.apple.mpegurl".into()),

@@ -12,10 +12,11 @@ import { ContextMenu, type MenuItem } from '../../components/ui';
 import i18n from '../../i18n';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
+import { dropTarget, edgeTarget, stepTarget, type Place } from '../../lib/reorder';
 import { ROW_HEIGHT } from '../../lib/theme';
 import type { Task } from '../../lib/types';
 import { STATUS_COLOR, checksumFailed, errorText, nameParts, statusText, textColor } from '../../lib/words';
-import { progressOf, useApp, visibleIds, type SortKey } from '../../store/app';
+import { canReorder, progressOf, questionFor, useApp, visibleIds, type SortKey } from '../../store/app';
 import { EmptyTasks } from './EmptyTasks';
 
 /** Header cells: sort key, label (a translation key), class (numbers align right; c-* drop in narrow panes). */
@@ -30,9 +31,9 @@ const COLUMNS: [SortKey, string, string][] = [
 
 const PROTO: Record<Task['kind'], string> = { http: 'HTTP', ftp: 'FTP', torrent: 'BT' };
 
-/** The menu for the selected tasks. */
-export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[] {
-  const { run, openDialog, openDetail, openTask, missing } = useApp.getState();
+/** The menu for the selected tasks. `visible`: the list as shown, when its rows can be moved. */
+export function taskMenu(ids: string[], tasks: Record<string, Task>, visible?: string[]): MenuItem[] {
+  const { run, openDialog, openDetail, openTask, moveTasks, missing } = useApp.getState();
   const list = ids.map((id) => tasks[id]).filter(Boolean);
   if (!list.length) return [];
   const one = list.length === 1 ? list[0] : null;
@@ -51,6 +52,10 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
   // The remote file changed, the finished file was deleted or failed its checksum: download it again.
   const changed = list.filter((t) => t.error?.code === 'remote_changed' || checksumFailed(t) || (t.status === 'completed' && missing[t.id])).map((t) => t.id);
   const items: MenuItem[] = [];
+  // It waits for an answer: an account, or what to do about a file of the same name.
+  const question = one ? questionFor(one) : null;
+  if (question?.kind === 'auth') items.push({ label: i18n.t('table.menu.account'), icon: 'key', run: () => openDialog(question) });
+  if (question?.kind === 'conflict') items.push({ label: i18n.t('table.menu.conflict'), icon: 'edit', run: () => openDialog(question) });
   if ((one?.status === 'completed' && !missing[one.id]) || one?.status === 'seeding') items.push({ label: i18n.t('table.menu.open'), icon: 'external', kbd: 'Enter', run: () => void openTask(one.id) });
   if (canResume) items.push({ label: i18n.t('table.menu.start'), icon: 'play', run: () => void run(() => api.resume(ids)) });
   if (canPause) items.push({ label: i18n.t('table.menu.pause'), icon: 'pause', run: () => void run(() => api.pause(ids)) });
@@ -68,6 +73,19 @@ export function taskMenu(ids: string[], tasks: Record<string, Task>): MenuItem[]
           .writeText(list.map((t) => t.source).join('\n'))
           .then(() => useApp.getState().toast('success', list.length > 1 ? i18n.t('table.menu.copiedMany', { count: list.length }) : i18n.t('table.menu.copied'))),
     },
+  );
+  if (visible) {
+    const inOrder = visible.filter((id) => ids.includes(id));
+    const go = (place: Place | null) => () => place && void moveTasks(inOrder, place.anchor, place.after);
+    const top = edgeTarget(visible, inOrder, false);
+    const bottom = edgeTarget(visible, inOrder, true);
+    items.push(
+      { separator: true },
+      { label: i18n.t('table.menu.moveTop'), icon: 'arrowUp', disabled: !top, run: go(top) },
+      { label: i18n.t('table.menu.moveBottom'), icon: 'arrowDown', disabled: !bottom, run: go(bottom) },
+    );
+  }
+  items.push(
     { separator: true },
     { label: i18n.t('table.menu.delete'), icon: 'trash', kbd: 'Del', run: () => void useApp.getState().removeTasks(ids) },
     // Past the recycle bin; the dialog asks whether the downloaded files go too.
@@ -85,7 +103,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('mousedown', () => (lastInput = 'mouse'), true);
 }
 
-const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: number; cols: string; cursor: boolean }) {
+const Row = memo(function Row({ id, start, cols, cursor, grip, dragging }: { id: string; start: number; cols: string; cursor: boolean; grip: boolean; dragging: boolean }) {
   const t = useApp((s) => s.tasks[id]);
   const selected = useApp((s) => s.selection.includes(id));
   const gone = useApp((s) => !!s.missing[id]);
@@ -93,7 +111,9 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
   // Finished, but the file was deleted or moved since.
   const fileGone = gone && t.status === 'completed';
   const badSum = checksumFailed(t);
-  const color = fileGone ? 'var(--warning)' : badSum ? 'var(--danger)' : STATUS_COLOR[t.status];
+  // Not a failure so much as a question: an account to give, a taken name to decide about.
+  const question = questionFor(t)?.kind;
+  const color = fileGone || question ? 'var(--warning)' : badSum ? 'var(--danger)' : STATUS_COLOR[t.status];
   const running = t.status === 'downloading' || t.status === 'probing';
   const p = progressOf(t);
   const seeding = t.status === 'seeding';
@@ -108,12 +128,14 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
     <div
       role="row"
       id={`task-${id}`}
-      className={`trow task-row${cursor ? ' cursor' : ''}`}
+      className={`trow task-row${cursor ? ' cursor' : ''}${dragging ? ' dragging' : ''}`}
       aria-selected={selected}
       data-id={id}
       style={{ transform: `translateY(${start}px)`, gridTemplateColumns: cols }}
     >
       <span className="nm" role="gridcell">
+        {/* The handle to drag the row by (the row itself starts a drag selection). */}
+        {grip && <span className="grip" title={i18n.t('table.grip')} aria-hidden="true" />}
         <FileIcon category={t.category} />
         <span className="nm-txt">
           {/* Cut short, the name keeps its extension: `ubuntu-24.04….iso`. */}
@@ -142,7 +164,15 @@ const Row = memo(function Row({ id, start, cols, cursor }: { id: string; start: 
       <span className="st" role="gridcell" style={{ color: textColor(color) }} title={title}>
         <i className="sdot" style={{ background: color }} />
         {/* The reason is in the tooltip and the details panel; the column only says the state. */}
-        {fileGone ? i18n.t('status.fileMissing') : badSum ? i18n.t('status.checksumMismatch') : statusText(t)}
+        {fileGone
+          ? i18n.t('status.fileMissing')
+          : badSum
+            ? i18n.t('status.checksumMismatch')
+            : question === 'auth'
+              ? i18n.t('status.needsLogin')
+              : question === 'conflict'
+                ? i18n.t('status.nameTaken')
+                : statusText(t)}
       </span>
     </div>
   );
@@ -154,6 +184,8 @@ export function TaskTable() {
   const setSort = useApp((s) => s.setSort);
   const density = useApp((s) => s.settings.appearance.density);
   const filter = useApp((s) => s.filter);
+  // The list shows its own order: rows can be dragged to another place in it.
+  const reorder = canReorder({ sort, filter });
   const rowH = ROW_HEIGHT[density];
   const scroller = useRef<HTMLDivElement>(null);
   // Keyboard focus is on the grid itself; the row it is at is `aria-activedescendant`.
@@ -183,6 +215,17 @@ export function TaskTable() {
     // Only when asked: not again when the list changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal]);
+
+  // Rows moved with the keyboard stay in view.
+  const [scrollTo, setScrollTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scrollTo) return;
+    const i = ids.indexOf(scrollTo);
+    if (i >= 0) v.scrollToIndex(i, { align: 'auto' });
+    setScrollTo(null);
+    // Only when asked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollTo]);
 
   // The columns follow the pane's width (container queries in app.css).
   const cols = 'var(--task-cols)';
@@ -252,10 +295,69 @@ export function TaskTable() {
     window.addEventListener('mouseup', up);
   };
 
+  // Moving rows: dragged by their handle, a line shows the gap they will go to.
+  const [drop, setDrop] = useState<{ moving: string[]; index: number } | null>(null);
+  const startReorder = (e: MouseEvent, id: string) => {
+    const el = scroller.current;
+    const body = el?.querySelector<HTMLElement>('.tbody');
+    if (!el || !body) return;
+    const { selection, select, moveTasks } = useApp.getState();
+    // The row alone, or with the rest of the selection it is part of.
+    const picked = selection.includes(id) ? new Set(selection) : new Set([id]);
+    if (!selection.includes(id)) select([id], id);
+    const moving = ids.filter((x) => picked.has(x));
+    let pointer = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    const gap = () => Math.max(0, Math.min(ids.length, Math.round((pointer.y - body.getBoundingClientRect().top) / rowH)));
+    const scroll = setInterval(() => {
+      if (!moved) return;
+      const r = el.getBoundingClientRect();
+      const edge = 28;
+      const dy = pointer.y < r.top + edge ? -Math.min(40, r.top + edge - pointer.y) : pointer.y > r.bottom - edge ? Math.min(40, pointer.y - (r.bottom - edge)) : 0;
+      if (dy) {
+        el.scrollTop += dy;
+        setDrop({ moving, index: gap() });
+      }
+    }, 30);
+    const move = (m: globalThis.MouseEvent) => {
+      pointer = { x: m.clientX, y: m.clientY };
+      if (!moved && Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) < 4) return;
+      moved = true;
+      setDrop({ moving, index: gap() });
+    };
+    const finish = (commit: boolean) => {
+      clearInterval(scroll);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('keydown', key, true);
+      setDrop(null);
+      const place = commit && moved ? dropTarget(ids, moving, gap()) : null;
+      if (place) void moveTasks(moving, place.anchor, place.after);
+    };
+    const up = () => finish(true);
+    // Esc puts them back.
+    const key = (k: globalThis.KeyboardEvent) => {
+      if (k.key !== 'Escape') return;
+      k.preventDefault();
+      k.stopPropagation();
+      finish(false);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('keydown', key, true);
+  };
+
   const onMouseDown = (e: MouseEvent) => {
     setByKeyboard(false);
     if (e.button !== 0 && e.button !== 2) return;
     const id = rowAt(e);
+    if (id && e.button === 0 && reorder && (e.target as HTMLElement).closest('.grip')) {
+      e.preventDefault();
+      table.current?.focus({ preventScroll: true });
+      setFocus(id);
+      startReorder(e, id);
+      return;
+    }
     const { selection, anchor, select } = useApp.getState();
     // A left press (not Shift's range) may become a drag selection.
     if (e.button === 0 && !e.shiftKey && (e.target as HTMLElement).closest('.tscroll')) {
@@ -286,8 +388,11 @@ export function TaskTable() {
     const id = rowAt(e);
     const t = id ? useApp.getState().tasks[id] : null;
     if (!t) return;
-    const { run, openTask } = useApp.getState();
-    if (t.status === 'completed' || t.status === 'seeding') void openTask(t.id);
+    if ((e.target as HTMLElement).closest('.grip')) return;
+    const { run, openTask, openDialog } = useApp.getState();
+    const question = questionFor(t);
+    if (question) openDialog(question);
+    else if (t.status === 'completed' || t.status === 'seeding') void openTask(t.id);
     else if (t.status === 'paused' || t.status === 'failed') void run(() => api.resume([t.id]));
     else if (t.status === 'removed') void run(() => api.restore([t.id]));
   };
@@ -295,7 +400,7 @@ export function TaskTable() {
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     const { selection, tasks } = useApp.getState();
-    const items = taskMenu(selection, tasks);
+    const items = taskMenu(selection, tasks, reorder ? ids : undefined);
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items });
   };
 
@@ -317,6 +422,22 @@ export function TaskTable() {
       } else if (!e.ctrlKey && !e.metaKey) select([id], id);
     };
     const cur = focus ? ids.indexOf(focus) : -1;
+    // Alt+arrows move the selected rows one place (when the list shows its own order).
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const moving = ids.filter((id) => selection.includes(id));
+      const down = e.key === 'ArrowDown';
+      const place = reorder ? stepTarget(ids, moving, down) : null;
+      if (place) {
+        const lead = down ? moving[moving.length - 1] : moving[0];
+        void useApp
+          .getState()
+          .moveTasks(moving, place.anchor, place.after)
+          // The new order arrives as an event, a moment after the command returns.
+          .then(() => setTimeout(() => setScrollTo(lead), 60));
+      }
+      return;
+    }
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
@@ -367,7 +488,7 @@ export function TaskTable() {
         // The menu key (or Shift+F10): the menu of the selection, at the row the cursor is on.
         if (e.key === 'F10' && !e.shiftKey) break;
         e.preventDefault();
-        const items = taskMenu(selection, tasks);
+        const items = taskMenu(selection, tasks, reorder ? ids : undefined);
         if (!items.length) break;
         const row = (focus && document.getElementById(`task-${focus}`)) || table.current?.querySelector('.task-row[aria-selected="true"]');
         const r = (row ?? e.currentTarget).getBoundingClientRect();
@@ -424,8 +545,9 @@ export function TaskTable() {
       <div className="tscroll" role="rowgroup" ref={scroller} onMouseDown={onMouseDown} onDoubleClick={onDoubleClick} onContextMenu={onContextMenu}>
         <div className="tbody" role="presentation" style={{ height: v.getTotalSize() }}>
           {items.map((vi) => (
-            <Row key={ids[vi.index]} id={ids[vi.index]} start={vi.start} cols={cols} cursor={focus === ids[vi.index]} />
+            <Row key={ids[vi.index]} id={ids[vi.index]} start={vi.start} cols={cols} cursor={focus === ids[vi.index]} grip={reorder} dragging={!!drop && drop.moving.includes(ids[vi.index])} />
           ))}
+          {drop && dropTarget(ids, drop.moving, drop.index) && <div className="drop-line" style={{ top: drop.index * rowH }} aria-hidden="true" />}
           {band && band.h + band.w > 0 && <div className="sel-band" style={{ left: band.x, top: band.y, width: band.w, height: band.h }} aria-hidden="true" />}
         </div>
       </div>

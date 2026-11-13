@@ -616,3 +616,262 @@ async fn changes_the_connections_of_a_running_task() {
     );
     m.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn moves_tasks_in_the_list_and_the_queue() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(300, 100, 2), db.clone(), 1).await;
+    let ids: Vec<TaskId> = m
+        .add(
+            (0..5)
+                .map(|i| new_task(&format!("https://e.com/{i}.bin"), false))
+                .collect(),
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    let order = |m: &TaskManager| -> Vec<usize> {
+        m.list()
+            .iter()
+            .map(|t| ids.iter().position(|id| *id == t.id).unwrap())
+            .collect()
+    };
+    let mut events = m.subscribe();
+    // The last two (given out of order) before the first: they keep their own order.
+    m.reorder(&[ids[4], ids[3]], ids[0], false).await.unwrap();
+    assert_eq!(order(&m), [3, 4, 0, 1, 2]);
+    // One after another.
+    m.reorder(&[ids[3]], ids[1], true).await.unwrap();
+    assert_eq!(order(&m), [4, 0, 1, 3, 2]);
+    // Each move is published once, with the whole order.
+    let mut published = Vec::new();
+    while let Ok(e) = events.try_recv() {
+        if let TaskEvent::Reordered { ids } = e {
+            published.push(ids);
+        }
+    }
+    assert_eq!(published.len(), 2);
+    assert_eq!(
+        published[1],
+        m.list().iter().map(|t| t.id).collect::<Vec<_>>()
+    );
+    // Next to itself, or to a task that is not there: refused, nothing changes.
+    assert!(m.reorder(&[ids[0]], ids[0], true).await.is_err());
+    assert!(m.reorder(&[ids[0]], Uuid::new_v4(), true).await.is_err());
+    assert_eq!(order(&m), [4, 0, 1, 3, 2]);
+    // New tasks still go to the end.
+    let late = m
+        .add(vec![new_task("https://e.com/late.bin", false)])
+        .await
+        .unwrap()[0]
+        .id;
+    assert_eq!(m.list().last().unwrap().id, late);
+    // The queue follows the list: with one slot, the tasks run in the new order.
+    m.resume(&ids).await.unwrap();
+    let mut started: Vec<TaskId> = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while started.len() < ids.len() {
+        for t in m.list() {
+            if t.started_at.is_some() && !started.contains(&t.id) {
+                started.push(t.id);
+            }
+        }
+        assert!(Instant::now() < deadline);
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    assert_eq!(started, [ids[4], ids[0], ids[1], ids[3], ids[2]]);
+    // And it is kept across a restart.
+    m.shutdown().await;
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(300, 100, 2), db.clone(), 1).await;
+    let ids: Vec<TaskId> = m
+        .add(
+            (0..3)
+                .map(|i| new_task(&format!("https://e.com/{i}.bin"), false))
+                .collect(),
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    m.reorder(&[ids[2]], ids[0], false).await.unwrap();
+    let rows = db.list_tasks().await.unwrap();
+    let saved = |id: TaskId| {
+        rows.iter()
+            .find(|r| r.id == id.to_string())
+            .unwrap()
+            .sort_order
+    };
+    assert_eq!([saved(ids[2]), saved(ids[0]), saved(ids[1])], [0, 1, 2]);
+    m.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_an_account_and_an_answer_about_a_taken_name() {
+    let db = Db::memory().await.unwrap();
+    let m = manager(FakeEngine::new(300, 100, 2), db.clone(), 1).await;
+    // A password in the link moves into the options: the link shown is without it.
+    let t = m
+        .add(vec![new_task("https://bob:s%40cret@e.com/a.bin", false)])
+        .await
+        .unwrap()
+        .remove(0);
+    assert_eq!(t.source, "https://e.com/a.bin");
+    assert_eq!(t.options.username.as_deref(), Some("bob"));
+    assert_eq!(t.options.password.as_deref(), Some("s@cret"));
+    m.set_credentials(t.id, Some(" alice ".into()), Some("pw".into()))
+        .await
+        .unwrap();
+    let o = m.get(t.id).unwrap().options;
+    assert_eq!(
+        (o.username.as_deref(), o.password.as_deref()),
+        (Some("alice"), Some("pw"))
+    );
+    // No name: no password either.
+    m.set_credentials(t.id, Some("  ".into()), Some("pw".into()))
+        .await
+        .unwrap();
+    let o = m.get(t.id).unwrap().options;
+    assert_eq!((o.username, o.password), (None, None));
+
+    m.set_conflict(t.id, crate::ConflictPolicy::Overwrite)
+        .await
+        .unwrap();
+    assert_eq!(
+        m.get(t.id).unwrap().options.conflict,
+        Some(crate::ConflictPolicy::Overwrite)
+    );
+    assert!(
+        m.set_conflict(t.id, crate::ConflictPolicy::Ask)
+            .await
+            .is_err()
+    );
+    // The task's answer wins over the settings.
+    let config = EngineConfig {
+        conflict: crate::ConflictPolicy::Ask,
+        ..Default::default()
+    };
+    let o = JobOptions::resolve(&m.get(t.id).unwrap().options, &config);
+    assert_eq!(o.conflict, crate::ConflictPolicy::Overwrite);
+    let o = JobOptions::resolve(&TaskOptions::default(), &config);
+    assert_eq!(o.conflict, crate::ConflictPolicy::Ask);
+    m.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exports_the_list_and_imports_it_elsewhere() {
+    let m = manager(FakeEngine::new(300, 100, 1), Db::memory().await.unwrap(), 3).await;
+    let done = m
+        .add(vec![new_task("https://e.com/done.iso", true)])
+        .await
+        .unwrap()[0]
+        .id;
+    wait_for(&m, done, |t| t.status == TaskStatus::Completed).await;
+    let mut secret = new_task("https://e.com/secret.zip", false);
+    secret.options.cookies = Some("session=abc".into());
+    secret.options.headers.insert("X-Token".into(), "t".into());
+    secret.options.username = Some("bob".into());
+    secret.options.password = Some("pw".into());
+    secret.options.connections = Some(4);
+    secret.options.proxy = Some(crate::ProxyConfig::Custom {
+        url: "socks5://u:p@proxy.example:1080".into(),
+    });
+    let waiting = m.add(vec![secret]).await.unwrap()[0].id;
+    let binned = m
+        .add(vec![new_task("https://e.com/binned.bin", false)])
+        .await
+        .unwrap()[0]
+        .id;
+    m.remove(&[binned], false).await.unwrap();
+
+    // The recycle bin stays behind; secrets too, unless asked for.
+    let plain = m.export(None, false).await;
+    assert_eq!((plain.app.as_str(), plain.version), ("omni-download", 1));
+    let names: Vec<&str> = plain.tasks.iter().map(|t| t.file_name.as_str()).collect();
+    assert_eq!(names, ["done.iso", "secret.zip"]);
+    assert!(plain.tasks[0].completed && !plain.tasks[1].completed);
+    let o = &plain.tasks[1].options;
+    assert_eq!(
+        (&o.cookies, &o.password, o.headers.len()),
+        (&None, &None, 0)
+    );
+    assert_eq!(o.username.as_deref(), Some("bob"));
+    assert_eq!(o.connections, Some(4));
+    assert_eq!(
+        o.proxy,
+        Some(crate::ProxyConfig::Custom {
+            url: "socks5://proxy.example:1080".into()
+        })
+    );
+    let json = serde_json::to_string(&plain).unwrap();
+    assert!(!json.contains("abc") && !json.contains("\"pw\""), "{json}");
+    let full = m.export(Some(&[waiting]), true).await;
+    assert_eq!(full.tasks.len(), 1);
+    assert_eq!(
+        full.tasks[0].options.cookies.as_deref(),
+        Some("session=abc")
+    );
+    assert_eq!(full.tasks[0].options.password.as_deref(), Some("pw"));
+
+    // Into another list: finished stays finished, the rest waits paused from the first byte.
+    let other = manager(FakeEngine::new(300, 100, 1), Db::memory().await.unwrap(), 3).await;
+    let file: TaskExport = serde_json::from_str(&json).unwrap();
+    assert_eq!(file, plain);
+    let mut events = other.subscribe();
+    let summary = other.import(file.clone()).await.unwrap();
+    assert_eq!((summary.added, summary.skipped), (2, 0));
+    let list = other.list();
+    assert_eq!(list.len(), 2);
+    assert_eq!(
+        (
+            list[0].status,
+            list[0].downloaded_bytes,
+            list[0].total_bytes
+        ),
+        (TaskStatus::Completed, 300, Some(300))
+    );
+    assert!(list[0].completed_at.is_some());
+    assert_eq!(
+        (list[1].status, list[1].downloaded_bytes, list[1].started_at),
+        (TaskStatus::Paused, 0, None)
+    );
+    assert_eq!(list[1].options.connections, Some(4));
+    let mut added = 0;
+    while let Ok(e) = events.try_recv() {
+        added += u32::from(matches!(e, TaskEvent::Added { .. }));
+    }
+    assert_eq!(added, 2);
+    // Again: all there already. A link nothing fetches is skipped too.
+    let mut again = file;
+    again.tasks.push(ExportedTask {
+        source: "gopher://e.com/x".into(),
+        save_dir: "/downloads".into(),
+        file_name: "x".into(),
+        completed: false,
+        total_bytes: None,
+        created_at: 0,
+        completed_at: None,
+        options: TaskOptions::default(),
+    });
+    let summary = other.import(again.clone()).await.unwrap();
+    assert_eq!((summary.added, summary.skipped), (0, 3));
+    assert_eq!(other.list().len(), 2);
+    // Not our file, or a newer format: refused whole.
+    again.app = "something-else".into();
+    assert!(other.import(again.clone()).await.is_err());
+    again.app = "omni-download".into();
+    again.version = 99;
+    assert!(other.import(again).await.is_err());
+    // A hand-written file needs only the link, the folder and the name.
+    let minimal: TaskExport = serde_json::from_str(
+        r#"{"app":"omni-download","version":1,"exportedAt":0,
+            "tasks":[{"source":"https://e.com/min.bin","saveDir":"/d","fileName":"min.bin"}]}"#,
+    )
+    .unwrap();
+    assert_eq!(other.import(minimal).await.unwrap().added, 1);
+    m.shutdown().await;
+    other.shutdown().await;
+}

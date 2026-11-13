@@ -147,6 +147,19 @@ pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&percent_decode_bytes(s)).into_owned()
 }
 
+/// `%XX`-escapes everything but letters, digits and `-._~` (a value of a query string).
+pub fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 /// Decodes `%XX` escapes to bytes.
 pub fn percent_decode_bytes(s: &str) -> Vec<u8> {
     let b = s.as_bytes();

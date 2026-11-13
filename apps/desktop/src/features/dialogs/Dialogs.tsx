@@ -1,9 +1,10 @@
 // The dialog host: renders the open dialog (one at a time).
 
+import { save } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '../../components/ui';
+import { Modal, PasswordInput } from '../../components/ui';
 import { UpdateDialog } from './UpdateDialog';
 import { Welcome } from './Welcome';
 import { api } from '../../lib/api';
@@ -141,6 +142,148 @@ function SpeedDialog() {
   );
 }
 
+/** The server asks for an account: its name and password, then the download is tried again. */
+function AuthDialog({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const task = useApp((s) => s.tasks[id]);
+  const { closeDialog, run } = useApp.getState();
+  const [username, setUsername] = useState(task?.options.username ?? '');
+  const [password, setPassword] = useState('');
+  if (!task) return null;
+  // It already had an account: that one was refused.
+  const refused = Boolean(task.options.username);
+  let host = '';
+  try {
+    host = new URL(task.finalUrl ?? task.source).host;
+  } catch {
+    // Shown without the host.
+  }
+  const confirm = async () => {
+    if (!username.trim()) return;
+    closeDialog();
+    await run(() => api.setCredentials(id, username.trim(), password || null));
+  };
+  return (
+    <Modal
+      title={t('dialogs.auth.title')}
+      onClose={closeDialog}
+      width={440}
+      closeLabel={t('dialogs.close')}
+      footer={
+        <>
+          <button type="button" className="btn outline" onClick={closeDialog}>
+            {t('dialogs.cancel')}
+          </button>
+          <button type="button" className="btn primary" disabled={!username.trim()} onClick={() => void confirm()}>
+            {t('dialogs.auth.confirm')}
+          </button>
+        </>
+      }
+    >
+      <p className="dlg-text">{refused ? t('dialogs.auth.textRefused', { host, name: task.fileName }) : t('dialogs.auth.text', { host, name: task.fileName })}</p>
+      <form
+        className="auth-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void confirm();
+        }}
+      >
+        <div className="field">
+          <label htmlFor="auth-user">{t('dialogs.auth.username')}</label>
+          <input id="auth-user" className="inp" value={username} autoComplete="off" spellCheck={false} data-autofocus onChange={(e) => setUsername(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="auth-pass">{t('dialogs.auth.password')}</label>
+          <PasswordInput id="auth-pass" label={t('dialogs.auth.password')} toggleLabel={t('newTask.showPassword')} value={password} onChange={setPassword} />
+        </div>
+        {/* Enter in either field. */}
+        <button type="submit" hidden />
+      </form>
+      <small className="muted">{task.kind === 'http' && !task.source.toLowerCase().startsWith('https:') ? t('dialogs.auth.plainHint') : t('dialogs.auth.hint')}</small>
+    </Modal>
+  );
+}
+
+/** A file of the download's name is in its folder: keep both, replace the old one, or leave the
+ *  download as it is (it can be answered later from its menu). */
+function ConflictDialog({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const task = useApp((s) => s.tasks[id]);
+  const { closeDialog, run } = useApp.getState();
+  if (!task) return null;
+  const answer = (policy: 'rename' | 'overwrite') => {
+    closeDialog();
+    void run(() => api.resolveConflict(id, policy));
+  };
+  return (
+    <Modal
+      title={t('dialogs.conflict.title')}
+      onClose={closeDialog}
+      width={460}
+      closeLabel={t('dialogs.close')}
+      footer={
+        <>
+          <button type="button" className="btn outline" onClick={closeDialog}>
+            {t('dialogs.conflict.later')}
+          </button>
+          <button type="button" className="btn outline" onClick={() => answer('overwrite')}>
+            {t('dialogs.conflict.overwrite')}
+          </button>
+          <button type="button" className="btn primary" data-autofocus onClick={() => answer('rename')}>
+            {t('dialogs.conflict.rename')}
+          </button>
+        </>
+      }
+    >
+      <p className="dlg-text">{t('dialogs.conflict.text', { name: task.fileName })}</p>
+      <p className="dlg-text mono muted">{task.saveDir}</p>
+      <small className="muted">{t('dialogs.conflict.hint')}</small>
+    </Modal>
+  );
+}
+
+/** Exporting the task list to a file: with or without what the tasks log in with. */
+function ExportDialog() {
+  const { t } = useTranslation();
+  const { closeDialog, run, toast } = useApp.getState();
+  const [secrets, setSecrets] = useState(false);
+  const confirm = async () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const path = await save({ title: t('dialogs.export.title'), defaultPath: `omni-download-tasks-${day}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] }).catch(() => null);
+    if (!path) return;
+    closeDialog();
+    const count = await run(() => api.exportTasks(path, null, secrets));
+    if (count !== undefined) toast('success', t('dialogs.export.done', { count }));
+  };
+  return (
+    <Modal
+      title={t('dialogs.export.title')}
+      onClose={closeDialog}
+      width={460}
+      closeLabel={t('dialogs.close')}
+      footer={
+        <>
+          <button type="button" className="btn outline" onClick={closeDialog}>
+            {t('dialogs.cancel')}
+          </button>
+          <button type="button" className="btn primary" data-autofocus onClick={() => void confirm()}>
+            {t('dialogs.export.confirm')}
+          </button>
+        </>
+      }
+    >
+      <p className="dlg-text">{t('dialogs.export.text')}</p>
+      <label className="chk">
+        <input type="checkbox" checked={secrets} onChange={(e) => setSecrets(e.target.checked)} />
+        <span>
+          {t('dialogs.export.secrets')}
+          <small className="muted chk-hint">{t('dialogs.export.secretsHint')}</small>
+        </span>
+      </label>
+    </Modal>
+  );
+}
+
 /** Everything downloaded: the computer sleeps or shuts down when the count reaches zero (the app
  *  does it; this only shows the count and can stop it). */
 function PowerDialog({ action, seconds }: { action: WhenDone; seconds: number }) {
@@ -196,6 +339,12 @@ export function Dialogs() {
       return <RemoveDialog ids={dialog.ids} />;
     case 'speed':
       return <SpeedDialog />;
+    case 'auth':
+      return <AuthDialog key={dialog.id} id={dialog.id} />;
+    case 'conflict':
+      return <ConflictDialog id={dialog.id} />;
+    case 'export':
+      return <ExportDialog />;
     case 'update':
       return <UpdateDialog />;
     case 'welcome':

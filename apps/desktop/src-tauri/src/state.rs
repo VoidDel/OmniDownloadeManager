@@ -23,6 +23,8 @@ pub struct AppState {
     pub bt: Arc<BtEngine>,
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
+    /// Where the app keeps its data (the system's folder for it, or `OMNIDL_DATA_DIR`).
+    pub data_dir: PathBuf,
     /// The system Downloads folder.
     pub default_dir: String,
     pub log_dir: String,

@@ -32,7 +32,7 @@ pub(crate) fn build_as(o: &JobOptions, ua: &str) -> Result<Client> {
         .default_headers(headers)
         .connect_timeout(o.connect_timeout)
         .read_timeout(o.read_timeout)
-        .redirect(reqwest::redirect::Policy::limited(10))
+        .redirect(redirects(o.allow_insecure_redirect))
         .pool_max_idle_per_host(o.connections as usize)
         .tcp_nodelay(true)
         .http1_only();
@@ -49,6 +49,43 @@ pub(crate) fn build_as(o: &JobOptions, ua: &str) -> Result<Client> {
         .map_err(|e| Error::internal(format!("HTTP client: {}", chain(&e))))
 }
 
+/// A redirect that was not followed: from `https://` to `http://`.
+#[derive(Debug)]
+struct InsecureRedirect(String);
+
+impl std::fmt::Display for InsecureRedirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "redirected from https to {}", self.0)
+    }
+}
+
+impl std::error::Error for InsecureRedirect {}
+
+/// Whether a redirect from a page of scheme `from` to one of scheme `to` is followed: not from
+/// an encrypted connection to a plain one (what was asked for over TLS would arrive, and
+/// cookies go out, in the clear), unless the settings allow it.
+fn redirect_allowed(from: &str, to: &str, allow_insecure: bool) -> bool {
+    allow_insecure || !(from == "https" && to == "http")
+}
+
+/// Up to ten redirects, each checked by `redirect_allowed`.
+fn redirects(allow_insecure: bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() > 10 {
+            return attempt.error("too many redirects");
+        }
+        let from = attempt.previous().last().map_or("", |u| u.scheme());
+        if redirect_allowed(from, attempt.url().scheme(), allow_insecure) {
+            attempt.follow()
+        } else {
+            // The address without its query, which may carry a token.
+            let mut to = attempt.url().clone();
+            to.set_query(None);
+            attempt.error(InsecureRedirect(to.to_string()))
+        }
+    })
+}
+
 fn header_value(name: &str, value: &str) -> Result<HeaderValue> {
     HeaderValue::from_str(value.trim())
         .map_err(|_| Error::invalid(format!("invalid value for header {name}")))
@@ -57,7 +94,9 @@ fn header_value(name: &str, value: &str) -> Result<HeaderValue> {
 /// A failed request or body read.
 pub(crate) fn request_error(e: &reqwest::Error) -> Error {
     let message = chain(e);
-    let code = if e.is_timeout() {
+    let code = if insecure_redirect(e) {
+        ErrorCode::InsecureRedirect
+    } else if e.is_timeout() {
         ErrorCode::Timeout
     } else if e.is_builder() {
         ErrorCode::InvalidUrl
@@ -69,6 +108,17 @@ pub(crate) fn request_error(e: &reqwest::Error) -> Error {
         ErrorCode::Network
     };
     Error::new(code, message)
+}
+
+fn insecure_redirect(e: &reqwest::Error) -> bool {
+    let mut source = e.source();
+    while let Some(c) = source {
+        if c.is::<InsecureRedirect>() {
+            return true;
+        }
+        source = c.source();
+    }
+    false
 }
 
 /// An error status from the server.
@@ -104,4 +154,21 @@ fn chain(e: &reqwest::Error) -> String {
 fn is_tls(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
     m.contains("certificate") || m.contains("tls") || m.contains("handshake")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refuses_to_leave_https_for_http() {
+        assert!(!redirect_allowed("https", "http", false));
+        assert!(redirect_allowed("https", "http", true));
+        for (from, to) in [("https", "https"), ("http", "https"), ("http", "http")] {
+            assert!(redirect_allowed(from, to, false), "{from} to {to}");
+        }
+        // The error is told apart from any other redirect error.
+        let e = Error::new(ErrorCode::InsecureRedirect, "x");
+        assert!(!e.is_transient());
+    }
 }

@@ -57,6 +57,7 @@ pub fn spawn(app: AppHandle, manager: &TaskManager) {
                     float(&app, &taskbar, None);
                     app.emit("task:deleted", ids)
                 }
+                Ok(TaskEvent::Reordered { ids }) => app.emit("task:reordered", ids),
                 Ok(TaskEvent::Progress { items, stats }) => {
                     crate::tray::activity(&app, &stats);
                     taskbar.progress(&items);

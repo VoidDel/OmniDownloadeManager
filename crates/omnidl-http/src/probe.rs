@@ -10,7 +10,7 @@
 
 use omnidl_core::{Error, ErrorCode, Result, filename};
 use reqwest::{
-    Client, Response, StatusCode,
+    Client, Method, Response, StatusCode,
     header::{
         ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG,
         HeaderMap, LAST_MODIFIED, RANGE,
@@ -18,7 +18,10 @@ use reqwest::{
 };
 use url::Url;
 
-use crate::client::{request_error, status_error};
+use crate::{
+    auth::Auth,
+    client::{request_error, status_error},
+};
 
 /// What the server says about a URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,8 +57,8 @@ impl Probe {
     }
 }
 
-pub(crate) async fn probe(client: &Client, url: &Url) -> Result<Probe> {
-    let head = match client.head(url.clone()).send().await {
+pub(crate) async fn probe(client: &Client, auth: &Auth, url: &Url) -> Result<Probe> {
+    let head = match auth.send(client, Method::HEAD, url, |r| r).await {
         Ok(r) => Some(r),
         // A network failure fails the GET too; a server that mishandles HEAD may not.
         Err(e) if e.is_timeout() || e.is_connect() => return Err(request_error(&e)),
@@ -73,10 +76,8 @@ pub(crate) async fn probe(client: &Client, url: &Url) -> Result<Probe> {
         return Ok(p.clone());
     }
     // Ask for one byte to learn the length and whether ranges work.
-    let r = match client
-        .get(url.clone())
-        .header(RANGE, "bytes=0-0")
-        .send()
+    let r = match auth
+        .send(client, Method::GET, url, |r| r.header(RANGE, "bytes=0-0"))
         .await
     {
         Ok(r) => r,

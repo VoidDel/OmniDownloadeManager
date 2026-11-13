@@ -10,6 +10,10 @@ dist/
 *.tsbuildinfo
 coverage/
 
+# The desktop app's end-to-end tests (apps/desktop/e2e).
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+
 # Tauri
 apps/desktop/src-tauri/gen/schemas/
 # The Native Messaging host built for bundling (scripts/sidecar.mjs).

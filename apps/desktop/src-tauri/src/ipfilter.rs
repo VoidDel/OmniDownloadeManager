@@ -21,7 +21,7 @@ pub fn path(data_dir: &Path) -> PathBuf {
 }
 
 fn current(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|d| path(&d))
+    app.try_state::<AppState>().map(|s| path(&s.data_dir))
 }
 
 #[derive(Debug, Clone, Serialize)]

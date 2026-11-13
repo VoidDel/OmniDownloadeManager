@@ -152,6 +152,16 @@ pub fn digests(file: &Path, algos: &[HashAlgo]) -> std::io::Result<Vec<(HashAlgo
     Ok(out)
 }
 
+/// The value of `data` (HTTP Digest authentication hashes short strings).
+pub fn hex_of(algo: HashAlgo, data: &[u8]) -> String {
+    match algo {
+        HashAlgo::Md5 => hex(&Md5::digest(data)),
+        HashAlgo::Sha1 => hex(&Sha1::digest(data)),
+        HashAlgo::Sha256 => hex(&Sha256::digest(data)),
+        HashAlgo::Sha512 => hex(&Sha512::digest(data)),
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes

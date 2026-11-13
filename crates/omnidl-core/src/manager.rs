@@ -59,6 +59,66 @@ fn yes() -> bool {
     true
 }
 
+/// The task list as a file (`TaskManager::export`): JSON, to move the list to another computer
+/// or keep a copy of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskExport {
+    /// `omni-download`: what tells this file from any other JSON.
+    pub app: String,
+    pub version: u32,
+    pub exported_at: i64,
+    pub tasks: Vec<ExportedTask>,
+}
+
+impl TaskExport {
+    pub const APP: &str = "omni-download";
+    /// The format this version writes, and the newest it reads.
+    pub const VERSION: u32 = 1;
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportedTask {
+    pub source: String,
+    pub save_dir: String,
+    pub file_name: String,
+    /// Finished when exported: imported as finished, not downloaded again.
+    #[serde(default)]
+    pub completed: bool,
+    #[serde(default)]
+    pub total_bytes: Option<u64>,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub completed_at: Option<i64>,
+    #[serde(default)]
+    pub options: TaskOptions,
+}
+
+/// What an import did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSummary {
+    pub added: u32,
+    /// In the list already, or not a link any engine fetches.
+    pub skipped: u32,
+}
+
+/// The magnet link of a torrent: its hash, name and trackers.
+fn magnet(d: &TorrentDetail) -> String {
+    let mut s = format!("magnet:?xt=urn:btih:{}", d.info_hash);
+    if !d.name.is_empty() {
+        s.push_str("&dn=");
+        s.push_str(&filename::percent_encode(&d.name));
+    }
+    for t in &d.trackers {
+        s.push_str("&tr=");
+        s.push_str(&filename::percent_encode(t));
+    }
+    s
+}
+
 /// A task with its segments, for the details panel.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -318,7 +378,7 @@ impl TaskManager {
             let mut source = item.source.trim().to_owned();
             let engine = self.inner.engine_for(&source)?;
             let mut options = item.options;
-            if engine.kind() == TaskKind::Ftp
+            if matches!(engine.kind(), TaskKind::Ftp | TaskKind::Http)
                 && let Some((clean, user, password)) = filename::split_credentials(&source)
             {
                 // The link stays visible (list, details, copy link): the password goes sealed
@@ -627,6 +687,244 @@ impl TaskManager {
         }
         self.inner.changed(id).await;
         Ok(())
+    }
+
+    /// Moves tasks in the list, and so in the queue: `ids`, in the order they have now, go next
+    /// to `anchor`, after it or before it.
+    pub async fn reorder(&self, ids: &[TaskId], anchor: TaskId, after: bool) -> Result<()> {
+        let moving: std::collections::HashSet<TaskId> = ids.iter().copied().collect();
+        if moving.contains(&anchor) {
+            return Err(Error::invalid("a task cannot be moved next to itself"));
+        }
+        // Held over the change and its write: two moves land in the order they were made.
+        let _order = self.inner.persist.lock().await;
+        let order: Vec<TaskId> = {
+            let mut st = self.inner.state.lock();
+            if !st.tasks.contains_key(&anchor) {
+                return Err(missing(anchor));
+            }
+            let mut all: Vec<&Task> = st.tasks.values().collect();
+            all.sort_by_key(|t| (t.sort_order, t.created_at));
+            let (moved, mut order): (Vec<TaskId>, Vec<TaskId>) =
+                all.iter().map(|t| t.id).partition(|id| moving.contains(id));
+            if moved.is_empty() {
+                return Ok(());
+            }
+            let at = order.iter().position(|id| *id == anchor).unwrap_or(0) + usize::from(after);
+            order.splice(at..at, moved);
+            for (i, id) in order.iter().enumerate() {
+                if let Some(t) = st.tasks.get_mut(id) {
+                    t.sort_order = i as i64;
+                }
+            }
+            st.next_order = order.len() as i64;
+            order
+        };
+        let keys: Vec<String> = order.iter().map(|id| id.to_string()).collect();
+        self.inner.db.reorder(&keys).await?;
+        self.inner.bus.emit(TaskEvent::Reordered { ids: order });
+        Ok(())
+    }
+
+    /// The account a download logs in with (HTTP: when the server asks for one; FTP). `None`
+    /// or an empty name clears it. Takes effect when the task next starts.
+    pub async fn set_credentials(
+        &self,
+        id: TaskId,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Result<()> {
+        let username = username
+            .map(|u| u.trim().to_owned())
+            .filter(|u| !u.is_empty());
+        {
+            let mut st = self.inner.state.lock();
+            let t = st.tasks.get_mut(&id).ok_or_else(|| missing(id))?;
+            if t.kind == TaskKind::Torrent {
+                return Err(Error::invalid("a torrent has no account"));
+            }
+            t.options.password = password.filter(|p| username.is_some() && !p.is_empty());
+            t.options.username = username;
+        }
+        self.inner.changed(id).await;
+        Ok(())
+    }
+
+    /// The answer to "a file of this name exists" for one task (`ErrorCode::FileExists`):
+    /// number the new file or replace the old one. The task then needs resuming.
+    pub async fn set_conflict(&self, id: TaskId, policy: crate::ConflictPolicy) -> Result<()> {
+        if policy == crate::ConflictPolicy::Ask {
+            return Err(Error::invalid("the answer is to rename or to overwrite"));
+        }
+        {
+            let mut st = self.inner.state.lock();
+            let t = st.tasks.get_mut(&id).ok_or_else(|| missing(id))?;
+            t.options.conflict = Some(policy);
+        }
+        self.inner.changed(id).await;
+        Ok(())
+    }
+
+    /// The task list as a file can hold it: every task outside the recycle bin (or those in
+    /// `ids`), in list order, without progress. Cookies, extra headers and passwords are left
+    /// out unless `with_secrets`: the file is plain text.
+    pub async fn export(&self, ids: Option<&[TaskId]>, with_secrets: bool) -> TaskExport {
+        let mut tasks: Vec<Task> = {
+            let st = self.inner.state.lock();
+            match ids {
+                Some(ids) => ids
+                    .iter()
+                    .filter_map(|id| st.tasks.get(id))
+                    .cloned()
+                    .collect(),
+                None => st
+                    .tasks
+                    .values()
+                    .filter(|t| t.status != TaskStatus::Removed)
+                    .cloned()
+                    .collect(),
+            }
+        };
+        tasks.sort_by_key(|t| (t.sort_order, t.created_at));
+        let mut out = Vec::with_capacity(tasks.len());
+        for t in tasks {
+            let mut source = t.source.clone();
+            // A torrent added from a file: the file is this computer's. Its magnet link works
+            // anywhere.
+            if t.kind == TaskKind::Torrent
+                && !source
+                    .trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("magnet:")
+                && let Some(engine) = self.inner.engine(t.kind)
+                && let Some(d) = engine.torrent_detail(&t).await
+                && !d.info_hash.is_empty()
+            {
+                source = magnet(&d);
+            }
+            let mut options = t.options.clone();
+            if !with_secrets {
+                options.cookies = None;
+                options.headers.clear();
+                options.password = None;
+                if let Some(crate::ProxyConfig::Custom { url }) = &mut options.proxy
+                    && let Some((clean, ..)) = filename::split_credentials(url)
+                {
+                    *url = clean;
+                }
+            }
+            let finished = matches!(t.status, TaskStatus::Completed | TaskStatus::Seeding)
+                || t.prev_status == Some(TaskStatus::Completed);
+            out.push(ExportedTask {
+                source,
+                save_dir: t.save_dir,
+                file_name: t.file_name,
+                completed: finished,
+                total_bytes: t.total_bytes,
+                created_at: t.created_at,
+                completed_at: t.completed_at,
+                options,
+            });
+        }
+        TaskExport {
+            app: TaskExport::APP.into(),
+            version: TaskExport::VERSION,
+            exported_at: now_ms(),
+            tasks: out,
+        }
+    }
+
+    /// Adds the tasks of an exported list: unfinished ones paused, from the first byte; finished
+    /// ones as finished (their files are where they were, or shown as missing). One that is in
+    /// the list already (same link, folder and name), or that no engine can fetch, is skipped.
+    pub async fn import(&self, file: TaskExport) -> Result<ImportSummary> {
+        if file.app != TaskExport::APP {
+            return Err(Error::invalid("not a task list of Omni Download"));
+        }
+        if file.version > TaskExport::VERSION {
+            return Err(Error::invalid(format!(
+                "a task list of a newer version (format {})",
+                file.version
+            )));
+        }
+        let mut summary = ImportSummary::default();
+        for item in file.tasks {
+            let source = item.source.trim().to_owned();
+            let save_dir = item.save_dir.trim().to_owned();
+            let Ok(engine) = self.inner.engine_for(&source) else {
+                summary.skipped += 1;
+                continue;
+            };
+            let kind = engine.kind();
+            let file_name = Some(filename::sanitize(&item.file_name))
+                .filter(|n| !n.trim().is_empty())
+                .or_else(|| match kind {
+                    TaskKind::Torrent => filename::for_torrent(&source),
+                    _ => filename::from_url(&source),
+                })
+                .unwrap_or_else(|| "download".into());
+            let task = {
+                let mut st = self.inner.state.lock();
+                let known = st.tasks.values().any(|t| {
+                    t.source == source && t.save_dir == save_dir && t.file_name == file_name
+                });
+                if known || save_dir.is_empty() {
+                    summary.skipped += 1;
+                    continue;
+                }
+                let sort_order = st.next_order;
+                st.next_order += 1;
+                let total = item.total_bytes.filter(|_| item.completed);
+                let task = Task {
+                    id: Uuid::new_v4(),
+                    kind,
+                    source,
+                    final_url: None,
+                    save_dir,
+                    category: filename::category(&file_name),
+                    file_name,
+                    status: if item.completed {
+                        TaskStatus::Completed
+                    } else {
+                        TaskStatus::Paused
+                    },
+                    total_bytes: item.total_bytes,
+                    downloaded_bytes: total.unwrap_or(0),
+                    uploaded_bytes: 0,
+                    speed_bps: 0,
+                    upload_speed_bps: 0,
+                    eta_secs: None,
+                    connections: 0,
+                    priority: Priority::Normal,
+                    resumable: false,
+                    options: item.options,
+                    error: None,
+                    created_at: item.created_at,
+                    started_at: None,
+                    completed_at: item.completed_at.filter(|_| item.completed),
+                    active_ms: 0,
+                    peak_bps: 0,
+                    prev_status: None,
+                    sort_order,
+                    etag: None,
+                    last_modified: None,
+                };
+                st.tasks.insert(task.id, task.clone());
+                task
+            };
+            if let Err(e) = self
+                .inner
+                .db
+                .insert_task(&task.to_record(&*self.inner.secrets))
+                .await
+            {
+                self.inner.state.lock().tasks.remove(&task.id);
+                return Err(e.into());
+            }
+            self.inner.bus.emit(TaskEvent::Added { task });
+            summary.added += 1;
+        }
+        Ok(summary)
     }
 
     /// Sets (or with `None` clears) the checksum a download should meet. A finished download is

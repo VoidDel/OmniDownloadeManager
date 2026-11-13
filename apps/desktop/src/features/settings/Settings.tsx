@@ -257,9 +257,16 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const run = useApp((st) => st.run);
   const platform = useApp((st) => st.platform);
   const autostart = useApp((st) => st.autostart);
-  const { setAutostart, toast } = useApp.getState();
+  const { setAutostart, toast, openDialog } = useApp.getState();
   const { t } = useTranslation();
   const g = s.general;
+  const importTasks = async () => {
+    const picked = await open({ title: t('settings.general.tasksImport'), filters: [{ name: 'JSON', extensions: ['json'] }] }).catch(() => null);
+    if (typeof picked !== 'string') return;
+    const done = await run(() => api.importTasks(picked));
+    if (!done) return;
+    toast(done.added ? 'success' : 'info', t(done.skipped ? 'settings.general.tasksImportedSkipped' : 'settings.general.tasksImported', { count: done.added, skipped: done.skipped }));
+  };
   /** Sets one shortcut, unless the other one already has those keys. */
   const shortcut = (which: 'shortcutShow' | 'shortcutNew', other: string) => (v: string) => {
     if (v && v === other) toast('error', t('settings.general.shortcutDuplicate'));
@@ -333,6 +340,16 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
             {t('settings.general.openFolder')}
           </button>
         </Row>
+        <Row label={t('settings.general.tasks')} hint={t('settings.general.tasksHint')}>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => openDialog({ kind: 'export' })}>
+            <Icon name="upload" />
+            {t('settings.general.tasksExport')}
+          </button>
+          <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void importTasks()}>
+            <Icon name="download" />
+            {t('settings.general.tasksImport')}
+          </button>
+        </Row>
         <Row label={t('settings.general.help')} hint={t('settings.general.helpHint')}>
           <button type="button" className="btn outline" disabled={!isTauri()} onClick={() => void run(() => api.helpOpen('guide'))}>
             <Icon name="external" />
@@ -383,6 +400,7 @@ function CategoryFolder({ category, value, fallback, set }: { category: Category
 
 function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const defaultDir = useApp((st) => st.defaultDir);
+  const platform = useApp((st) => st.platform);
   const run = useApp((st) => st.run);
   const { t } = useTranslation();
   const e = s.engine;
@@ -429,13 +447,14 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
           </Row>
         )}
         <Row label={t('settings.download.conflict')}>
-          <Segmented<'rename' | 'overwrite'>
+          <Segmented<'rename' | 'overwrite' | 'ask'>
             value={e.conflict}
             label={t('settings.download.conflict')}
             onChange={(v) => set((x) => (x.engine.conflict = v))}
             options={[
               ['rename', t('settings.download.conflictRename')],
               ['overwrite', t('settings.download.conflictOverwrite')],
+              ['ask', t('settings.download.conflictAsk')],
             ]}
           />
         </Row>
@@ -459,6 +478,12 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         <Row label={t('settings.download.syncWrites')} hint={t('settings.download.syncWritesHint')}>
           <Switch label={t('settings.download.syncWrites')} checked={e.syncWrites} onChange={(v) => set((x) => (x.engine.syncWrites = v))} />
         </Row>
+        {/* Linux has no such mark. */}
+        {platform !== 'linux' && (
+          <Row label={t('settings.download.markDownloads')} hint={t(platform === 'mac' ? 'settings.download.markDownloadsHintMac' : 'settings.download.markDownloadsHint')}>
+            <Switch label={t('settings.download.markDownloads')} checked={e.markDownloads} onChange={(v) => set((x) => (x.engine.markDownloads = v))} />
+          </Row>
+        )}
       </div>
       <ScheduleSettings s={s} set={set} />
     </>
@@ -589,6 +614,9 @@ function Network({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         </Row>
         <Row label={t('settings.network.retries')} hint={t('settings.network.retriesHint')}>
           <NumberSelect label={t('settings.network.retries')} format={(n) => t('settings.network.times', { n })} value={e.maxRetries} options={[0, 3, 5, 10, 20]} onChange={(v) => set((x) => (x.engine.maxRetries = v))} />
+        </Row>
+        <Row label={t('settings.network.insecureRedirect')} hint={t('settings.network.insecureRedirectHint')}>
+          <Switch label={t('settings.network.insecureRedirect')} checked={e.allowInsecureRedirect} onChange={(v) => set((x) => (x.engine.allowInsecureRedirect = v))} />
         </Row>
       </div>
       <div className="set-group">
