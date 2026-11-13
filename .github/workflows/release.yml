@@ -6,7 +6,9 @@
 #
 # with the Native Messaging host bundled, each update package signed with the minisign key
 # (secret TAURI_SIGNING_PRIVATE_KEY, and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) and
-# latest.json for the in-app updater. Publishing the draft makes it the update.
+# latest.json for the in-app updater. Publishing the draft makes it the update. A second job adds
+# the software bill of materials (CycloneDX: every Rust crate built into the app and into the
+# Native Messaging host, with versions and licences).
 # Code signing and notarisation are not part of this yet.
 name: Release
 
@@ -93,3 +95,27 @@ jobs:
           releaseDraft: true
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+
+  # What the release is made of (docs/development-plan.md §8.4), attached to the same draft.
+  sbom:
+    needs: bundle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+      # One file per crate of the workspace, beside its Cargo.toml; the app's and the host's are
+      # the two that are shipped. For every platform at once (the installers of all three are in
+      # this release), read from Cargo.lock alone: nothing is built.
+      - name: Bill of materials
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --target all
+          mkdir sbom
+          cp apps/desktop/src-tauri/omnidl-desktop.cdx.json "sbom/omni-download-${GITHUB_REF_NAME}-sbom.cdx.json"
+          cp crates/omnidl-nm-host/omnidl-nm-host.cdx.json "sbom/omni-download-${GITHUB_REF_NAME}-nm-host-sbom.cdx.json"
+      - name: Attach to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" sbom/*.cdx.json --clobber

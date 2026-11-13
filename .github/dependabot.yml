@@ -1,0 +1,42 @@
+# Weekly dependency updates (docs/development-plan.md §8.4). Minor and patch versions arrive in
+# one pull request per ecosystem; a major version gets its own, to be read before merging.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      rust:
+        update-types: [minor, patch]
+
+  # The pnpm workspace (the desktop window and the browser extension).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    ignore:
+      # A git dependency that follows its own main branch (`pnpm sync:omni-ui`).
+      - dependency-name: omni-ui
+    groups:
+      javascript:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

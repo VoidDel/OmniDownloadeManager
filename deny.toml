@@ -1,0 +1,63 @@
+# What the Rust dependencies have to meet (docs/development-plan.md §8.4), checked by cargo-deny:
+#
+#   cargo deny check bans licenses sources    every CI run
+#   cargo deny check advisories               the Audit workflow (weekly, and when Cargo.lock changes)
+
+[graph]
+# The platforms Omni Download is built for; crates for others are left out.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+# "No longer maintained" is acted on for the crates this workspace depends on directly. Deeper
+# ones (the GTK 3 bindings and D-Bus crates Tauri uses on Linux) are Tauri's to replace.
+unmaintained = "workspace"
+# Known vulnerabilities that do not reach Omni Download, each with why and when to look again.
+# Anything not listed here fails the check.
+ignore = [
+    # The bundled SQLite (before 3.54.0) can return uninitialised memory when it opens a database
+    # with a crafted `-wal` file beside it. The only database opened is the app's own task list
+    # in the user's data folder, written by the app alone. sqlx-sqlite 0.9.0 does not accept the
+    # fixed libsqlite3-sys (0.39) yet: remove this entry when a sqlx release does.
+    { id = "RUSTSEC-2026-0459", reason = "only the app's own database is opened; no sqlx release takes the fixed libsqlite3-sys yet" },
+    # ringbuf's `Consumer::skip` frees elements twice if one's destructor panics. librqbit-utp
+    # (BitTorrent over uTP) keeps bytes in it, which have no destructor. Fixed in ringbuf 0.5.2,
+    # which librqbit-utp 0.7.0 does not accept: remove this entry when librqbit moves on.
+    { id = "RUSTSEC-2026-0293", reason = "the buffer holds u8, which has no destructor; librqbit-utp pins ringbuf 0.4" },
+]
+
+[licenses]
+version = 2
+# Licences Omni Download (MIT) can be distributed with.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Several versions of a crate are a matter of size, not of safety.
+multiple-versions = "allow"
+# A dependency without a version requirement would take whatever is newest.
+wildcards = "deny"
+# The crates of this workspace name each other by path.
+allow-wildcard-paths = true
+
+[sources]
+# Everything comes from crates.io.
+unknown-registry = "deny"
+unknown-git = "deny"

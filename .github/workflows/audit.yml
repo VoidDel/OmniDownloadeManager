@@ -1,0 +1,44 @@
+# Known vulnerabilities in the dependencies (docs/development-plan.md §8.4): the RustSec advisory
+# database against Cargo.lock (cargo-deny, which reads the same database as cargo-audit) and
+# `pnpm audit` against pnpm-lock.yaml.
+#
+# On its own schedule rather than in CI: an advisory published today says nothing about the
+# change being tested today, and should not turn that red. It also runs when a lock file or the
+# rules change.
+name: Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  push:
+    branches: [main]
+    paths: [Cargo.lock, pnpm-lock.yaml, deny.toml, .github/workflows/audit.yml]
+  pull_request:
+    paths: [Cargo.lock, pnpm-lock.yaml, deny.toml, .github/workflows/audit.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+
+  javascript:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # What ships (the window's and the extension's dependencies), from the lock file alone:
+      # nothing is installed.
+      - run: pnpm audit --prod
