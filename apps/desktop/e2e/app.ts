@@ -80,7 +80,8 @@ export async function launch(engine = ''): Promise<App> {
       OMNIDL_DATA_DIR: data,
       OMNIDL_IPC_ENDPOINT: `\\\\.\\pipe\\omnidl-e2e-${process.pid}-${port}`,
       WEBVIEW2_USER_DATA_FOLDER: path.join(work, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      // `--enable-logging`: WebView2 writes chrome_debug.log in its folder, read when it does not come up.
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --enable-logging --v=0`,
     },
   });
   let browser: Browser | undefined;
@@ -110,6 +111,20 @@ export async function launch(engine = ''): Promise<App> {
     const logs = path.join(data, 'logs');
     for (const f of fs.existsSync(logs) ? fs.readdirSync(logs) : []) lines.push(`--- ${f}\n${tail(path.join(logs, f))}`);
     lines.push(`--- output\n${tail(path.join(work, 'output.txt'))}`);
+    // WebView2: its processes, its version, and its own log.
+    const ps = (script: string) => {
+      try {
+        return execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 20_000 }).trim();
+      } catch (e) {
+        return `(${e instanceof Error ? e.message.split('\n')[0] : e})`;
+      }
+    };
+    lines.push(`--- WebView2 processes\n${ps("Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.CommandLine.Substring(0, [Math]::Min(300, $_.CommandLine.Length)) }") || 'none'}`);
+    lines.push(`--- WebView2 runtime\n${ps("foreach ($k in 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}','HKCU:\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}') { if (Test-Path $k) { $k + ' ' + (Get-ItemProperty $k).pv } }") || 'not found'}`);
+    const webview = path.join(work, 'webview');
+    const files = fs.existsSync(webview) ? fs.readdirSync(webview, { recursive: true }).map(String) : [];
+    lines.push(`--- WebView2 folder: ${files.length} entries ${files.slice(0, 15).join(', ')}`);
+    for (const f of files.filter((f) => f.endsWith('chrome_debug.log'))) lines.push(`--- ${f}\n${tail(path.join(webview, f))}`);
     return lines.join('\n');
   };
   try {
