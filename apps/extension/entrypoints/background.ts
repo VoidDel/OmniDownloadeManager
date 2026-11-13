@@ -14,7 +14,7 @@ import { t } from '../lib/i18n';
 import { classify, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
-import { basename, handOver, notify, payloadFor, type Download } from '../lib/takeover';
+import { basename, handOver, notify, payloadFor, storeOf, type Download } from '../lib/takeover';
 
 /** Links the user asked the browser to keep (Alt+click), and our own re-downloads. */
 const bypass = new Map<string, number>();
@@ -56,7 +56,7 @@ async function explicit(d: Download) {
   if (out.kind === 'unreachable') void notify(t('notifyUnreachable'));
 }
 
-async function downloadAllLinks(tabId: number, pageUrl?: string) {
+async function downloadAllLinks(tabId: number, pageUrl?: string, storeId?: string | null) {
   let links: string[];
   try {
     const [res] = await browser.scripting.executeScript({
@@ -73,7 +73,7 @@ async function downloadAllLinks(tabId: number, pageUrl?: string) {
     void notify(t('notifyNoFileLinks'));
     return;
   }
-  const items = await Promise.all(files.map((url) => payloadFor({ url, pageUrl }, false)));
+  const items = await Promise.all(files.map((url) => payloadFor({ url, pageUrl, storeId }, false)));
   try {
     await send({ type: 'add_batch', payload: { items } });
   } catch {
@@ -104,7 +104,7 @@ async function takeStarted(item: DownloadItem) {
   if (!ping?.ok) return;
   await browser.downloads.cancel(item.id).catch(() => undefined);
   await browser.downloads.erase({ id: item.id }).catch(() => undefined);
-  const out = await handOver({ url, filename, size, mime: item.mime, referer: item.referrer, pageUrl: item.referrer });
+  const out = await handOver({ url, filename, size, mime: item.mime, referer: item.referrer, pageUrl: item.referrer, storeId: storeOf(item) });
   if (out.kind !== 'taken') {
     mark(bypass, url);
     await browser.downloads.download({ url }).catch(() => undefined);
@@ -158,6 +158,8 @@ interface HeadersDetails {
   type: string;
   originUrl?: string;
   documentUrl?: string;
+  /** Firefox: the cookie store of the tab the request comes from. */
+  cookieStoreId?: string;
   responseHeaders?: Header[];
 }
 
@@ -171,7 +173,7 @@ function firefoxTakeover() {
     const { rules } = await load();
     if (!decide({ url: d.url, filename, size, pageUrl }, rules).take) return {};
     const mime = header(d.responseHeaders, 'content-type')?.split(';')[0] ?? null;
-    const out = await handOver({ url: d.url, filename, size, mime, referer: pageUrl, pageUrl });
+    const out = await handOver({ url: d.url, filename, size, mime, referer: pageUrl, pageUrl, storeId: storeOf(d) });
     if (out.kind === 'taken') {
       mark(handled, d.url);
       return { cancel: true };
@@ -211,7 +213,7 @@ function sniffMedia() {
     if (!c) return;
     inTab(d.tabId, async () => {
       const tab = await browser.tabs.get(d.tabId).catch(() => null);
-      const m: Media = { ...c, url: d.url, title: tab?.title ?? null, pageUrl: tab?.url ?? d.documentUrl ?? null, at: Date.now() };
+      const m: Media = { ...c, url: d.url, title: tab?.title ?? null, pageUrl: tab?.url ?? d.documentUrl ?? null, storeId: storeOf(d), at: Date.now() };
       const list = withMedia(await mediaOf(d.tabId), m);
       await saveMedia(d.tabId, list);
       await badge(d.tabId, offers(list).length);
@@ -235,7 +237,7 @@ function sniffMedia() {
  *  sound, which the app joins into one MP4. */
 function downloadMedia(m: Media, audio?: Media | null, name?: string) {
   const size = m.size != null && audio?.size != null ? m.size + audio.size : m.size;
-  void explicit({ url: m.url, audioUrl: audio?.url ?? null, pageUrl: m.pageUrl, referer: m.pageUrl, filename: name || mediaName(m), size, mime: m.mime });
+  void explicit({ url: m.url, audioUrl: audio?.url ?? null, pageUrl: m.pageUrl, referer: m.pageUrl, filename: name || mediaName(m), size, mime: m.mime, storeId: m.storeId });
 }
 
 export default defineBackground(() => {
@@ -248,13 +250,14 @@ export default defineBackground(() => {
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
     const pageUrl = info.pageUrl ?? tab?.url;
-    if (info.menuItemId === 'omni-link' && info.linkUrl) void explicit({ url: info.linkUrl, pageUrl });
-    else if (info.menuItemId === 'omni-media' && info.srcUrl) void explicit({ url: info.srcUrl, pageUrl });
-    else if (info.menuItemId === 'omni-all' && tab?.id !== undefined) void downloadAllLinks(tab.id, pageUrl);
+    const storeId = storeOf(tab);
+    if (info.menuItemId === 'omni-link' && info.linkUrl) void explicit({ url: info.linkUrl, pageUrl, storeId });
+    else if (info.menuItemId === 'omni-media' && info.srcUrl) void explicit({ url: info.srcUrl, pageUrl, storeId });
+    else if (info.menuItemId === 'omni-all' && tab?.id !== undefined) void downloadAllLinks(tab.id, pageUrl, storeId);
   });
 
   browser.commands.onCommand.addListener((command, tab) => {
-    if (command === 'download-page' && tab?.url && /^https?:/i.test(tab.url)) void explicit({ url: tab.url, pageUrl: tab.url });
+    if (command === 'download-page' && tab?.url && /^https?:/i.test(tab.url)) void explicit({ url: tab.url, pageUrl: tab.url, storeId: storeOf(tab) });
   });
 
   // Alt+click from the content script: the browser keeps that link. The popup's media list:

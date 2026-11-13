@@ -17,19 +17,33 @@ export interface Download {
   pageUrl?: string | null;
   /** The sound of a video whose `url` has only the picture (DASH): the app joins them. */
   audioUrl?: string | null;
+  /** The cookie store of the tab it comes from (see `storeOf`); the default one when not given. */
+  storeId?: string | null;
 }
 
 /** `taken`: the app has it (or the user dropped it there). `browser`: the browser should go on. */
 export type Outcome = { kind: 'taken'; result: AddResult } | { kind: 'browser' } | { kind: 'unreachable'; reason: string };
 
-/** The `Cookie` header the browser would send to `url` (none when there are none). */
-export async function cookiesFor(url: string): Promise<string | null> {
+/**
+ * The cookie store a tab, a request or a download item of Firefox belongs to: a container tab and
+ * a private window each have cookies of their own, and `cookies.getAll` reads the default store
+ * unless told. Chromium's objects do not say (null: the default store).
+ */
+export function storeOf(o: unknown): string | null {
+  const id = (o as { cookieStoreId?: unknown } | null | undefined)?.cookieStoreId;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/** The `Cookie` header the browser would send to `url` from a tab of that cookie store (none
+ *  when there are no cookies). */
+export async function cookiesFor(url: string, storeId?: string | null): Promise<string | null> {
+  const store = storeId ? { storeId } : {};
   try {
-    return cookieHeader(await browser.cookies.getAll({ url })) || null;
+    return cookieHeader(await browser.cookies.getAll({ url, ...store })) || null;
   } catch {
     try {
       // Firefox with first-party isolation wants the partition named.
-      const all = await browser.cookies.getAll({ url, firstPartyDomain: null } as Parameters<typeof browser.cookies.getAll>[0]);
+      const all = await browser.cookies.getAll({ url, firstPartyDomain: null, ...store } as unknown as Parameters<typeof browser.cookies.getAll>[0]);
       return cookieHeader(all) || null;
     } catch {
       return null;
@@ -51,7 +65,7 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
     referer: d.referer || d.pageUrl || null,
     tab_url: d.pageUrl ?? null,
     user_agent: navigator.userAgent,
-    cookies: await cookiesFor(d.url),
+    cookies: await cookiesFor(d.url, d.storeId),
     silent,
     ...(d.audioUrl ? { audio_url: d.audioUrl } : {}),
   };

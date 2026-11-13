@@ -24,6 +24,8 @@ export interface Media {
   title: string | null;
   /** The page it plays on. */
   pageUrl: string | null;
+  /** The cookie store of its tab (Firefox: a container tab, a private window). */
+  storeId?: string | null;
   at: number;
 }
 

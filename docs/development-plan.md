@@ -1020,7 +1020,12 @@ OmniDownloadManager/
 
 - Edge 157（真实浏览器，加载未打包扩展）→ Native Messaging → host → 应用未运行时自动拉起（后台，不显示主窗口）→ 快捷下载框显示文件名、40 MB、支持断点续传、已附带 Cookie 与 Referer → 开始后 Edge 放弃自己的下载，应用带登录 Cookie 下载 40 MB 文件（无 Cookie 时服务器返回 403），内容逐字节核对一致（`OMNIDL_APP=… pnpm --filter omnidl-extension exec playwright test native`）。
 - Chromium 内核的接管、改用浏览器、小文件放行、备用路径与 popup 均由 Playwright 测试覆盖。
-- 本机没有安装 Chrome 与 Firefox，未在这两个浏览器中实测：Chrome 与 Edge 走同一套 Chromium 代码；Firefox 的阻塞式 `webRequest` 路径只经过构建与单元测试，需要在装有 Firefox 的机器上确认。
+- Firefox 160（真实浏览器，2026-11-13 手动测试）：点击下载链接（`linux.weixin.qq.com` 的 221 MB 安装包）→ 应用弹出快捷下载框，标题为“来自 Firefox 的下载”，显示文件名、大小、支持断点续传、已附带 Referer。同日用无头模式的 Firefox 160（独立配置目录，经 WebDriver BiDi 临时安装扩展）、本机已注册的 host 和应用的测试构建跑了三个场景，站点只给带登录 Cookie 的请求发文件：
+  - 登录态下载：快捷下载框显示 40 MB、支持断点续传、已附带 Cookie 与 Referer；开始后应用的请求全部带着该标签页的 Cookie，40 MB 内容抽样核对一致，Firefox 没有留下自己的副本。
+  - “改用浏览器下载”：Firefox 继续同一个请求把文件下完，没有向服务器重新请求，应用也没有再次询问。
+  - 容器标签页：扩展原来读的是默认 Cookie 库，交给应用的是另一个登录身份的 Cookie；现在按请求、下载项或标签页所属的 Cookie 库读取（隐私窗口走同一处，未单独测试）。
+  - 应用未运行时由 host 拉起这一步没有在 Firefox 中测：它在 host 里，与浏览器无关，已由 Edge 的测试覆盖。
+- 未在 Chrome 中实测：Chrome 与 Edge 走同一套 Chromium 代码。
 
 ### Phase 3 — BitTorrent / 磁力（2–3 周）
 
