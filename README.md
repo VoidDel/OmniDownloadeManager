@@ -39,6 +39,8 @@ pnpm bundle           # 本平台的安装包（含 omnidl-nm-host），输出�
 2. 推送标签 `v<版本>`（如 `v0.2.0`）。Release 工作流在三个平台构建安装包，放进同名的草稿 Release，并生成应用内更新用的 `latest.json`。
 3. 在 GitHub 上检查并发布草稿；发布之后，已安装的应用就能检查到这个版本。
 
+标签的流水线还会把软件物料清单（SBOM，CycloneDX 格式，列出应用和 Native Messaging host 用到的每个 Rust 依赖及其版本、许可证）附到同一个草稿 Release 上。
+
 仓库需要两个 Secret：`TAURI_SIGNING_PRIVATE_KEY`（更新签名私钥，对应 `tauri.conf.json` 里的公钥；私钥丢失后旧版本将无法再更新）与 `OMNI_UI_TOKEN`（与 CI 相同）。私钥有密码时再加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。代码签名与 macOS 公证尚未接入。
 
 检查（与 CI 相同）：
@@ -89,6 +91,26 @@ pnpm ext:e2e          # Playwright：在 Chromium 中加载扩展，对本地网
 # 完整链路（Windows，可选）：真实 Edge → Native Messaging → host → 应用。应用需先构建且未在运行
 OMNIDL_APP=<omnidl-desktop.exe 的路径> pnpm --filter omnidl-extension exec playwright test native
 ```
+
+### 桌面应用的端到端测试
+
+`apps/desktop/e2e` 用 Playwright 驱动真实的应用窗口（Windows：WebView2 支持 DevTools 协议），对本地网站测试新建下载、调整顺序、登录、重名询问和任务列表的导出导入。应用用环境变量 `OMNIDL_DATA_DIR` 指定的独立数据目录，不动已安装版本的任务和设置：
+
+```bash
+pnpm --filter omnidl-desktop tauri build --debug --no-bundle
+OMNIDL_APP=<target/debug/omnidl-desktop.exe 的路径> pnpm e2e
+```
+
+本机正在运行已安装的 Omni Download 时，测试用的构建要换一个标识，否则第二次启动会转交给正在运行的那个：构建时加 `--config '{"identifier":"app.omnidownload.e2e"}'`。CI 在 Windows 上跑这组测试；macOS 与 Linux 的窗口没有这样的调试接口，靠手动检查。
+
+### 依赖检查
+
+```bash
+cargo deny check      # 许可证、来源与已知漏洞（规则在 deny.toml；需要先 cargo install cargo-deny）
+pnpm audit --prod     # 前端与扩展的依赖
+```
+
+CI 每次检查许可证与来源；已知漏洞由单独的 Audit 流水线每周检查一次，锁文件变动时也检查。Dependabot 每周为 Rust、npm 依赖和 GitHub Actions 各开一个更新 PR（`.github/dependabot.yml`）。
 
 数据位置：数据库 `omni.db` 与 `settings.toml` 在系统的应用数据目录（Windows 为 `%APPDATA%\app.omnidownload.desktop`），日志按天写在应用日志目录（设置 › 常规 › 日志）。
 

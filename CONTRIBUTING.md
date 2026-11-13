@@ -58,7 +58,10 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 pnpm ext:build && pnpm ext:e2e                       # 改了扩展时
+cargo deny check bans licenses sources               # 加了或升级了 Rust 依赖时（cargo install cargo-deny）
 ```
+
+改了界面上的流程时，再跑一遍桌面应用的端到端测试（Windows），做法见 [README 的“桌面应用的端到端测试”](README.md#桌面应用的端到端测试)。
 
 ## 约定
 

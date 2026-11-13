@@ -1081,6 +1081,17 @@ OmniDownloadManager/
 
 **验收**：满足 1.3 节非功能指标，发布 v1.0。
 
+**方案内小项补齐**（2026-11-13，此前写在方案里但没有实现的）：
+
+- [x] 任务拖拽排序（§4.5、§6.2）：行左端的拖动手柄、`Alt+↑` / `Alt+↓`、右键“移到最前 / 移到最后”；顺序即队列顺序，写入 `sort_order`。没有用 dnd-kit：列表是虚拟滚动的，拖动只需要一条插入线，几十行代码即可，少一个依赖。
+- [x] HTTP 认证（§4.2）：Basic 与 Digest（MD5、MD5-sess、SHA-256、SHA-256-sess，`qop=auth` 及不带 `qop` 的旧式），手写（`crates/omnidl-http/src/auth.rs`），没有用 `diqwest`。链接里的 `user:pass@` 在添加时移入任务选项加密保存。账号只发给链接所在的主机；HTTP 明文连接上等服务器质询后才发送（服务器支持 Digest 时密码不上线），HTTPS 上首个请求即带 Basic。401 时任务停在“需要登录”并弹窗询问。HLS 的播放列表与分片仍只支持 Basic。快捷下载框里还不能填账号（任务加入后在主窗口里询问）。
+- [x] 重名时询问（§4.2.2）：引擎不能弹窗，改为任务以 `file_exists` 停下，界面询问后把答案（重命名 / 覆盖）记在任务上再继续；下载完成时才出现的同名文件不再询问，直接编号。
+- [x] 任务导出 / 导入（§6.2、§8.2）：JSON；默认不含 Cookie、请求头与密码；不含进度；从种子文件添加的任务导出为磁力链接。入口在“设置 › 常规”（没有单独的“高级”页）。
+- [x] 拒绝 https → http 的重定向（§8.2），可在“设置 › 网络”放行。
+- [x] 下载来源标记（§7.1）：Windows 直接写 `Zone.Identifier` 流（ZoneId=3，带来源链接与引用页，账号从链接里去掉），macOS 写 `com.apple.quarantine`；本机与局域网地址不标记；种子任务不标记。可在“设置 › 下载”关闭。macOS 的实现只经过 CI 的单元测试，未在真机上看过 Gatekeeper 的提示。
+- [x] 供应链（§8.4）：`cargo deny`（许可证、来源每次 CI 检查；漏洞由单独的 Audit 流水线每周及锁文件变动时检查，同时跑 `pnpm audit`）、Dependabot 每周更新、发布时生成 CycloneDX SBOM 并附到 Release。没有单独跑 `cargo audit`：`cargo deny check advisories` 用的是同一个 RustSec 数据库。
+- [x] 桌面端 E2E（§11）：见上表。没有用 `tauri-driver`：Windows 上它需要与 WebView2 版本配套的 msedgedriver，而 WebView2 自带 DevTools 端口，扩展的测试已经在用 Playwright；Linux 仍无自动化的窗口测试。应用新增环境变量 `OMNIDL_DATA_DIR`，把设置、任务库和日志放到指定目录，供测试使用。
+
 **性能实测**（Windows 11，release 构建，独立标识的测试副本，WebView2 调试端口打开）：
 
 | 指标 | 目标 | 实测 | 结论 |
@@ -1148,9 +1159,9 @@ OmniDownloadManager/
 | 性能基准 | `criterion` | 分片调度、Writer 吞吐 |
 | 前端单元 | Vitest + React Testing Library | store 逻辑、格式化函数、URL 解析 |
 | 前端组件 | Storybook（可选） | 深浅主题下的组件快照 |
-| 桌面 E2E | `tauri-driver`（WebDriver，Windows / Linux） + 手动 macOS 冒烟 | 新建 → 下载 → 完成 → 打开目录 |
+| 桌面 E2E | Playwright 经 WebView2 的 DevTools 端口驱动真实应用（Windows，`apps/desktop/e2e`）+ 手动 macOS / Linux 冒烟 | 新建 → 下载 → 完成；调整顺序、登录、重名询问、导出导入 |
 | 扩展 E2E | Playwright（Chromium 加载 unpacked 扩展）+ Firefox `web-ext run` | 拦截、右键菜单、NM 往返 |
-| 静态检查 | clippy（`-D warnings`）、rustfmt、eslint、tsc `strict`、`cargo deny` | 每次 PR |
+| 静态检查 | clippy（`-D warnings`）、rustfmt、eslint、tsc `strict`、`cargo deny`（许可证与来源） | 每次 PR |
 | CI 矩阵 | `windows-latest`、`macos-14`、`ubuntu-22.04` | 构建 + 测试 + 产物上传 |
 
 发布前人工检查清单：三平台干净虚拟机安装、卸载残留、防火墙弹窗文案、HiDPI 缩放、深浅主题切换、NM 在五个浏览器的连接状态。
