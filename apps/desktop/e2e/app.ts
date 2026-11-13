@@ -71,8 +71,10 @@ export async function launch(engine = ''): Promise<App> {
     ].join('\n'),
   );
   const port = await freePort();
+  // What the app prints, for when it does not come up.
+  const output = fs.openSync(path.join(work, 'output.txt'), 'w');
   const child = spawn(APP, [], {
-    stdio: 'ignore',
+    stdio: ['ignore', output, output],
     env: {
       ...process.env,
       OMNIDL_DATA_DIR: data,
@@ -94,12 +96,28 @@ export async function launch(engine = ''): Promise<App> {
     }
     fs.rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   };
+  /** What can be learned of a start that went wrong: the DevTools port's pages, the app's log. */
+  const why = async () => {
+    const lines: string[] = [];
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/json/list`);
+      const pages = (await r.json()) as { type: string; url: string; title: string }[];
+      lines.push(`DevTools port: ${pages.map((p) => `${p.type} ${p.url} "${p.title}"`).join('; ') || 'no pages'}`);
+    } catch (e) {
+      lines.push(`DevTools port ${port}: ${e instanceof Error ? e.message : e}`);
+    }
+    const tail = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-40).join('\n') : '');
+    const logs = path.join(data, 'logs');
+    for (const f of fs.existsSync(logs) ? fs.readdirSync(logs) : []) lines.push(`--- ${f}\n${tail(path.join(logs, f))}`);
+    lines.push(`--- output\n${tail(path.join(work, 'output.txt'))}`);
+    return lines.join('\n');
+  };
   try {
     let page: Page | undefined;
     const deadline = Date.now() + 60_000;
     while (!page) {
-      if (child.exitCode !== null) throw new Error(`the app exited with code ${child.exitCode}`);
-      if (Date.now() > deadline) throw new Error('the app window did not open');
+      if (child.exitCode !== null) throw new Error(`the app exited with code ${child.exitCode}\n${await why()}`);
+      if (Date.now() > deadline) throw new Error(`the app window did not open\n${await why()}`);
       try {
         browser ??= await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
         for (const p of browser.contexts().flatMap((c) => c.pages())) {
