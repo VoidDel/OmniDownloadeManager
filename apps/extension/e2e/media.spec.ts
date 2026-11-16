@@ -276,17 +276,22 @@ test.describe('media sniffing', () => {
     const rows = popup.locator('.pmedia li');
     await expect(rows).toHaveCount(3);
     // Tabs with counts: all, video (the file and the stream), audio.
-    const tabs = popup.locator('.pmhead [role="radio"]');
+    const tabs = popup.locator('.pshead [role="radio"]');
     await expect(tabs).toHaveCount(3);
     await expect(tabs.nth(0)).toContainText('3');
     await expect(tabs.nth(1)).toContainText('2');
     await expect(tabs.nth(2)).toContainText('1');
     await tabs.nth(2).click();
     await expect(rows).toHaveCount(1);
-    await expect(rows.first().locator('small')).toContainText('MP3 · 127.0.0.1 · 1');
+    await expect(rows.first().locator('.mtile')).toHaveText('MP3');
+    await expect(rows.first().locator('.mmeta')).toContainText(['127.0.0.1']);
+    await expect(rows.first().locator('.mmeta .size')).toHaveText('1.0 MB');
     await tabs.nth(0).click();
     await expect(rows).toHaveCount(3);
-    await expect(popup.locator('.pmedia li small')).toContainText(['HLS · 127.0.0.1', 'MP3 · 127.0.0.1', 'MP4 · 127.0.0.1 · 2']);
+    await expect(popup.locator('.pmedia li .mtile')).toHaveText(['HLS', 'MP3', 'MP4']);
+    await expect(popup.locator('.pmedia li .mmeta .src')).toHaveText(['127.0.0.1', '127.0.0.1', '127.0.0.1']);
+    // A stream's size is not known; the files' are.
+    await expect(popup.locator('.pmedia li .mmeta .size')).toHaveText(['1.0 MB', '2.0 MB']);
 
     // Copy a link (what the clipboard is given: a page opened by a test may not read it back).
     await popup.evaluate(() => {
@@ -294,26 +299,31 @@ test.describe('media sniffing', () => {
       w.copied = [];
       navigator.clipboard.writeText = async (text: string) => void w.copied.push(text);
     });
-    await rows.nth(0).locator('.pmcopy').click();
+    await rows.nth(0).locator('.mcopy').click();
     await expect.poll(() => popup.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual([`${siteUrl}/hls/index.m3u8`]);
-    await expect(rows.nth(0).locator('.pmcopy')).toHaveAttribute('title', /Copied|已复制|已複製|コピーしました/);
+    await expect(rows.nth(0).locator('.mcopy')).toHaveAttribute('title', /Copied|已复制|已複製|コピーしました/);
 
-    // Choose all, download them together: each starts without the quick-download window.
+    // Choose one by its tile, then all; download them together: each starts without the
+    // quick-download window.
     const before = received.filter((r) => r.type === 'add_download').length;
-    const go = popup.locator('.pmfoot .btn');
-    await expect(go).toBeDisabled();
-    await popup.locator('.pmall input').check();
-    await expect(go).toBeEnabled();
-    await expect(go).toContainText('3');
-    await go.click();
+    const bar = popup.locator('.mbar');
+    await expect(bar).toHaveCount(0);
+    await rows.nth(1).locator('.mtile').click();
+    await expect(rows.nth(1).locator('.mtile')).toHaveAttribute('aria-pressed', 'true');
+    await expect(bar.locator('.n')).toContainText('1');
+    await bar.locator('.link').first().click();
+    await expect(bar.locator('.n')).toContainText('3');
+    await expect(bar.locator('.link')).toHaveCount(1);
+    await bar.locator('.btn').click();
     await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(before + 3);
     const sent = received.filter((r) => r.type === 'add_download').slice(-3);
     expect(sent.map((r) => r.payload?.silent)).toEqual([true, true, true]);
     expect(sent.map((r) => new URL(String(r.payload?.url)).pathname).sort()).toEqual(['/hls/index.m3u8', '/media/clip.mp4', '/media/song.mp3']);
     expect(sent.find((r) => String(r.payload?.url).endsWith('.m3u8'))?.payload?.filename).toBe('Mixed.mp4');
-    // They show as sent; nothing is left to choose.
+    // They show as sent; nothing is left chosen.
     await expect(popup.locator('.pmedia li.sent')).toHaveCount(3);
-    await expect(go).toBeDisabled();
+    await expect(bar).toHaveCount(0);
+    await expect(popup.locator('.pmedia li .mtile:disabled')).toHaveCount(3);
     await popup.close();
     await page.close();
   });
@@ -352,12 +362,12 @@ test.describe('media sniffing', () => {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
     await expect(popup.locator('.pmedia li')).toHaveCount(1);
-    const select = popup.locator('.pmedia li .pmq');
+    const select = popup.locator('.pmedia li .mq');
     await expect(select.locator('option')).toHaveText(['720p', '360p']);
     await expect(select).toHaveValue(`${siteUrl}/q/720p.m3u8`);
     await select.selectOption(`${siteUrl}/q/360p.m3u8`);
     const before = received.filter((r) => r.type === 'add_download').length;
-    await popup.locator('.pmedia li .pmget').click();
+    await popup.locator('.pmedia li .mget').click();
     await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(before + 1);
     expect(received.filter((r) => r.type === 'add_download').at(-1)?.payload).toMatchObject({
       url: `${siteUrl}/q/master.m3u8`,
@@ -375,13 +385,14 @@ test.describe('media sniffing', () => {
     await expect.poll(async () => (await listOf(tab)).map((m) => `${m.kind} ${new URL(m.url).pathname}`)).toEqual(['mpd /d/manifest.mpd']);
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
-    await expect(popup.locator('.pmedia li small')).toContainText('DASH · 127.0.0.1');
+    await expect(popup.locator('.pmedia li .mtile')).toHaveText('DASH');
+    await expect(popup.locator('.pmedia li .mmeta .src')).toHaveText('127.0.0.1');
     const adds = () => received.filter((r) => r.type === 'add_download');
     // An app that does not say it downloads DASH would save the manifest: not given it.
     capabilities = ['post'];
     try {
       const before = adds().length;
-      await popup.locator('.pmedia li .pmget').click();
+      await popup.locator('.pmedia li .mget').click();
       await popup.waitForTimeout(500);
       expect(adds().length).toBe(before);
     } finally {
@@ -389,7 +400,7 @@ test.describe('media sniffing', () => {
     }
     await popup.reload();
     const before = adds().length;
-    await popup.locator('.pmedia li .pmget').click();
+    await popup.locator('.pmedia li .mget').click();
     await expect.poll(() => adds().length).toBe(before + 1);
     expect(adds().at(-1)?.payload).toMatchObject({ url: `${siteUrl}/d/manifest.mpd`, filename: 'Dash show.mp4' });
     await popup.close();

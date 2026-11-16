@@ -110,9 +110,6 @@
   "sectionConnect": {
     "message": "Connection to Omni Download"
   },
-  "connState": {
-    "message": "Connection"
-  },
   "connStateHint": {
     "message": "Check that the extension can reach Omni Download"
   },
@@ -278,15 +275,6 @@
   "mediaSelectAll": {
     "message": "Select all"
   },
-  "mediaDownloadNone": {
-    "message": "Download selected"
-  },
-  "mediaDownloadSomeOne": {
-    "message": "Download $1 item"
-  },
-  "mediaDownloadSomeOther": {
-    "message": "Download $1 items"
-  },
   "notifyBatchOne": {
     "message": "Sent $1 item to Omni Download"
   },
@@ -298,5 +286,35 @@
   },
   "notifyDashNeedsApp": {
     "message": "Update Omni Download to download DASH video streams."
+  },
+  "mediaChoose": {
+    "message": "Select"
+  },
+  "mediaChosen": {
+    "message": "Selected media"
+  },
+  "mediaChosenCountOne": {
+    "message": "$1 selected"
+  },
+  "mediaChosenCountOther": {
+    "message": "$1 selected"
+  },
+  "mediaClear": {
+    "message": "Clear"
+  },
+  "mediaDownloadChosen": {
+    "message": "Download"
+  },
+  "optionsVersion": {
+    "message": "Extension version $1"
+  },
+  "footGuide": {
+    "message": "User guide"
+  },
+  "footPrivacy": {
+    "message": "Privacy policy"
+  },
+  "footGetApp": {
+    "message": "Get the desktop app"
   }
 }

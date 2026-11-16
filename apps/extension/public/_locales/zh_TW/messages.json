@@ -110,9 +110,6 @@
   "sectionConnect": {
     "message": "連線到 Omni Download"
   },
-  "connState": {
-    "message": "連線狀態"
-  },
   "connStateHint": {
     "message": "檢查擴充功能能否連線到 Omni Download"
   },
@@ -278,15 +275,6 @@
   "mediaSelectAll": {
     "message": "全選"
   },
-  "mediaDownloadNone": {
-    "message": "下載所選"
-  },
-  "mediaDownloadSomeOne": {
-    "message": "下載 $1 個"
-  },
-  "mediaDownloadSomeOther": {
-    "message": "下載 $1 個"
-  },
   "notifyBatchOne": {
     "message": "已交給 Omni Download：$1 個媒體"
   },
@@ -298,5 +286,35 @@
   },
   "notifyDashNeedsApp": {
     "message": "要下載 DASH 影片串流，請先將 Omni Download 更新至最新版本。"
+  },
+  "mediaChoose": {
+    "message": "選擇"
+  },
+  "mediaChosen": {
+    "message": "已選的媒體"
+  },
+  "mediaChosenCountOne": {
+    "message": "已選 $1 個"
+  },
+  "mediaChosenCountOther": {
+    "message": "已選 $1 個"
+  },
+  "mediaClear": {
+    "message": "取消"
+  },
+  "mediaDownloadChosen": {
+    "message": "下載"
+  },
+  "optionsVersion": {
+    "message": "擴充功能版本 $1"
+  },
+  "footGuide": {
+    "message": "使用手冊"
+  },
+  "footPrivacy": {
+    "message": "隱私權政策"
+  },
+  "footGetApp": {
+    "message": "下載桌面應用程式"
   }
 }

@@ -1,36 +1,13 @@
-// The extension's pages (popup, options) look like the app: omni-ui's tokens, components and
-// default theme pair, following the system's light / dark setting.
-
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, builtinTheme, onSystemThemeChange, resolveTheme, systemPrefersDark, writeTheme, type Platform } from 'omni-ui';
+// The extension's pages (popup, options): their language, and how they show states, speeds and
+// sizes. Their look is their own (`pages.css`), light or dark as the system is.
 
 import { t } from './i18n';
 
-function platform(): Platform {
-  const ua = navigator.userAgent;
-  if (/Windows/.test(ua)) return 'win';
-  if (/Macintosh|Mac OS X/.test(ua)) return 'mac';
-  return 'linux';
-}
-
-function apply() {
-  const theme = builtinTheme(systemPrefersDark() ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME);
-  if (!theme) return;
-  writeTheme(resolveTheme(theme, { accent: 'theme', material: false }), {
-    platform: platform(),
-    density: 'comfortable',
-    iconStyle: 'duotone',
-    material: false,
-    fontSize: 14,
-  });
-}
-
-/** Sets a page up: the theme, and the language (the font stacks follow it). */
+/** Sets a page up: the language, which the font stacks follow (`zh-TW` for traditional
+ *  Chinese, `ja-JP`). */
 export function themePage(): void {
-  // As omni-ui's font stacks name the languages: `zh-TW` for traditional Chinese, `ja-JP`.
   const ui = browser.i18n.getUILanguage();
-  document.documentElement.lang = /^zh-(TW|HK|MO|Hant)/i.test(ui) ? 'zh-TW' : /^ja/i.test(ui) ? 'ja-JP' : ui;
-  apply();
-  onSystemThemeChange(apply);
+  document.documentElement.lang = /^zh-(TW|HK|MO|Hant)/i.test(ui) ? 'zh-TW' : /^ja/i.test(ui) ? 'ja-JP' : /^zh/i.test(ui) ? 'zh-CN' : ui;
 }
 
 const STATUS_KEY: Record<string, string> = {

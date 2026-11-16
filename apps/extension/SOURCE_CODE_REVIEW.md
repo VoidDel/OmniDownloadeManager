@@ -32,10 +32,11 @@ The add-on is then in `apps/extension/.output/firefox-mv3/` (unpacked) and
 `apps/extension/.output/omni-download-<version>-firefox.zip`. Its files are identical to the
 submitted package's.
 
-All dependencies come from the npm registry through pnpm, except `omni-ui`, the project's own
-component library, which pnpm fetches from its public repository
-(<https://github.com/VoidDel/omni-ui>) at the commit pinned in the lock file. It is plain
-TypeScript and CSS source, compiled by this build.
+The add-on's dependencies all come from the npm registry through pnpm. The lock file also
+lists `omni-ui` (<https://github.com/VoidDel/omni-ui>, plain TypeScript and CSS source, fetched
+from its public repository at the pinned commit) for the desktop application of the same
+workspace, whose `package.json` is included so that `pnpm install` matches the lock file; the
+add-on does not use it.
 
 ## What the add-on does with data
 

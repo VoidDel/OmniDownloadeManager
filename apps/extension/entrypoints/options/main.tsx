@@ -1,4 +1,3 @@
-import 'omni-ui/styles.css';
 import '../../lib/pages.css';
 
 import { StrictMode } from 'react';

@@ -89,9 +89,6 @@ importers:
 
   apps/extension:
     dependencies:
-      omni-ui:
-        specifier: github:VoidDel/omni-ui#main
-        version: https://codeload.github.com/VoidDel/omni-ui/tar.gz/1f79e818764fc0b8fe799196b158040f111611f8(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1

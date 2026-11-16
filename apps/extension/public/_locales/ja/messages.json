@@ -110,9 +110,6 @@
   "sectionConnect": {
     "message": "Omni Download との接続"
   },
-  "connState": {
-    "message": "接続状態"
-  },
   "connStateHint": {
     "message": "拡張機能が Omni Download に接続できるか確認します"
   },
@@ -278,15 +275,6 @@
   "mediaSelectAll": {
     "message": "すべて選択"
   },
-  "mediaDownloadNone": {
-    "message": "選択項目をダウンロード"
-  },
-  "mediaDownloadSomeOne": {
-    "message": "$1 件をダウンロード"
-  },
-  "mediaDownloadSomeOther": {
-    "message": "$1 件をダウンロード"
-  },
   "notifyBatchOne": {
     "message": "Omni Download に $1 件のメディアを渡しました"
   },
@@ -298,5 +286,35 @@
   },
   "notifyDashNeedsApp": {
     "message": "DASH 動画ストリームをダウンロードするには、Omni Download を最新版に更新してください。"
+  },
+  "mediaChoose": {
+    "message": "選択"
+  },
+  "mediaChosen": {
+    "message": "選択したメディア"
+  },
+  "mediaChosenCountOne": {
+    "message": "$1 件を選択"
+  },
+  "mediaChosenCountOther": {
+    "message": "$1 件を選択"
+  },
+  "mediaClear": {
+    "message": "解除"
+  },
+  "mediaDownloadChosen": {
+    "message": "ダウンロード"
+  },
+  "optionsVersion": {
+    "message": "拡張機能のバージョン $1"
+  },
+  "footGuide": {
+    "message": "使い方"
+  },
+  "footPrivacy": {
+    "message": "プライバシーポリシー"
+  },
+  "footGetApp": {
+    "message": "デスクトップアプリを入手"
   }
 }

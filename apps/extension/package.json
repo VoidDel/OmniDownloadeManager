@@ -17,7 +17,6 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "omni-ui": "github:VoidDel/omni-ui#main",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
