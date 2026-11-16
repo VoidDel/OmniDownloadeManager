@@ -14,7 +14,7 @@
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, sentWith, type Header, type Sent } from '../lib/headers';
 import { t } from '../lib/i18n';
-import { classify, mediaKey, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
+import { classify, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
 import { postBody, type RequestBody } from '../lib/post';
 import type { PostBody } from '../lib/protocol';
 import { decide, extensionOf } from '../lib/rules';
@@ -198,6 +198,11 @@ interface HeadersDetails {
   url: string;
   method: string;
   requestHeaders?: Header[];
+  frameId?: number;
+  /** Firefox: the frames the request's frame is in, the top one last. */
+  frameAncestors?: { url: string }[];
+  /** Chromium: `active`, `prerender`, `cached` or `pending_deletion`. */
+  documentLifecycle?: string;
   statusCode: number;
   tabId: number;
   type: string;
@@ -323,6 +328,10 @@ function watchPosts() {
 const mediaQueue = new Map<number, Promise<void>>();
 /** Requests that may be media, while under way: what they went out with. */
 const mediaSending = new Map<string, Sent>();
+/** The address each tab shows, as `tabs.onUpdated` said last (read when a response arrives, so
+ *  that media go with the page they were loaded for, not the one the tab has moved on to by the
+ *  time the list is written). Lost when the background sleeps: then the tab is asked. */
+const tabUrls = new Map<number, string>();
 /** The `Cookie` header listed media went out with, by `mediaKey`: in memory only, never in
  *  storage (lost when the background sleeps; the download then reads the cookies). */
 const mediaCookies = new Map<string, { at: number; cookies: string }>();
@@ -371,16 +380,21 @@ function sniffMedia() {
     const sent = mediaSending.get(d.requestId);
     mediaSending.delete(d.requestId);
     if (d.tabId < 0 || d.method !== 'GET' || d.statusCode < 200 || d.statusCode >= 300) return;
+    // A page being prerendered, or one the tab has left.
+    if (!fromShownDocument(d)) return;
     const c = classify(d.url, d.responseHeaders);
     if (!c) return;
     if (sent?.cookies) keepCookies(d.url, sent.cookies);
+    const page = topPageOf(d) ?? tabUrls.get(d.tabId) ?? null;
     inTab(d.tabId, async () => {
       const tab = await browser.tabs.get(d.tabId).catch(() => null);
+      // The tab has gone to another page since.
+      if (page && tab?.url && pageKey(page) !== pageKey(tab.url)) return;
       const m: Media = {
         ...c,
         url: d.url,
         title: tab?.title ?? null,
-        pageUrl: tab?.url ?? d.documentUrl ?? null,
+        pageUrl: page ?? tab?.url ?? d.documentUrl ?? null,
         storeId: storeOf(d),
         referer: sent?.referer ?? null,
         origin: sent?.headers.Origin ?? null,
@@ -406,14 +420,24 @@ function sniffMedia() {
   }
   webRequest.onHeadersReceived.addListener(seen, media, ['responseHeaders']);
   webRequest.onErrorOccurred.addListener((d) => void mediaSending.delete(d.requestId), media);
-  // Another page in the tab: a new list. A closed tab: none.
+  // Another page in the tab (a site's own navigation too): the media of that page only. A closed
+  // tab: none.
   browser.tabs.onUpdated.addListener((tabId, info) => {
-    if (info.status === 'loading' && info.url) inTab(tabId, async () => {
-      await saveMedia(tabId, []);
-      await badge(tabId, 0);
+    if (!info.url) return;
+    const url = info.url;
+    tabUrls.set(tabId, url);
+    inTab(tabId, async () => {
+      const list = await mediaOf(tabId);
+      const kept = onPage(list, url);
+      if (kept.length === list.length) return;
+      await saveMedia(tabId, kept);
+      await badge(tabId, offers(kept).length);
     });
   });
-  browser.tabs.onRemoved.addListener((tabId) => inTab(tabId, () => saveMedia(tabId, [])));
+  browser.tabs.onRemoved.addListener((tabId) => {
+    tabUrls.delete(tabId);
+    inTab(tabId, () => saveMedia(tabId, []));
+  });
 }
 
 /** A media item the popup asked for, under the name the list shows; a DASH picture with its

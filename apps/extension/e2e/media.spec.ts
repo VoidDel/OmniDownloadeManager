@@ -56,6 +56,16 @@ test.beforeAll(async () => {
         return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
       case '/media/cors.mp4':
         return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
+      // A site that moves to another video itself (history.pushState), then to an anchor.
+      case '/spa':
+        return send(
+          'text/html; charset=utf-8',
+          `<!doctype html><title>First</title><script>
+             fetch('/media/clip.mp4')
+               .then(() => { history.pushState({}, '', '/spa/next'); document.title = 'Next'; return fetch('/media/cors.mp4'); })
+               .then(() => { location.hash = 'comments'; document.body.dataset.done = '1'; });
+           </script>`,
+        );
       case '/other':
         return send('text/html; charset=utf-8', '<!doctype html><title>Other</title>');
       case '/media/clip.mp4':
@@ -178,6 +188,20 @@ test.describe('media sniffing', () => {
     await page.goto(`${siteUrl}/other`);
     await expect.poll(async () => (await listOf(tab)).length).toBe(0);
     await expect.poll(() => badgeOf(tab)).toBe('');
+  });
+
+  test("keeps the media of the page the site moved to, not the one it left", async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/spa`);
+    const tab = await tabOf(page);
+    await page.waitForSelector('body[data-done]', { state: 'attached' });
+    await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/cors.mp4']);
+    // The anchor is the same page: the list stays.
+    await page.waitForTimeout(300);
+    const list = (await listOf(tab)) as { url: string; pageUrl?: string }[];
+    expect(list.map((m) => [new URL(m.url).pathname, m.pageUrl])).toEqual([['/media/cors.mp4', `${siteUrl}/spa/next`]]);
+    await expect.poll(() => badgeOf(tab)).toBe('1');
+    await page.close();
   });
 
   test("sends a player's media as its request went out", async () => {

@@ -112,6 +112,39 @@ export function mediaKey(url: string): string {
   }
 }
 
+/** A page's address as media go with it: without its fragment (an anchor, a player's `#t=`),
+ *  so that moving within the page keeps its list and going to another page (a site's own
+ *  navigation, `history.pushState`, included) starts a new one. */
+export function pageKey(url: string | null | undefined): string {
+  try {
+    const u = new URL(url ?? '');
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return url ?? '';
+  }
+}
+
+/** The items of `list` that belong to the page at `url`. */
+export function onPage(list: Media[], url: string): Media[] {
+  const key = pageKey(url);
+  return list.filter((m) => !m.pageUrl || pageKey(m.pageUrl) === key);
+}
+
+/** Whether a request comes from a document the tab shows: not one being prerendered for a
+ *  later visit, nor one the tab has left (Chromium says, `documentLifecycle`; elsewhere: yes). */
+export function fromShownDocument(d: { documentLifecycle?: string }): boolean {
+  return d.documentLifecycle === undefined || d.documentLifecycle === 'active';
+}
+
+/** The address of the top page a request was made for, when the request says (Firefox: its
+ *  frame's ancestors, the last being the top; a top frame's own document). */
+export function topPageOf(d: { frameId?: number; documentUrl?: string; frameAncestors?: { url: string }[] }): string | null {
+  const top = d.frameAncestors?.at(-1)?.url;
+  if (top) return top;
+  return d.frameId === 0 && d.documentUrl ? d.documentUrl : null;
+}
+
 /** `list` with `m` in it: an item seen before keeps its place and gains what it lacked. */
 export function withMedia(list: Media[], m: Media): Media[] {
   const key = mediaKey(m.url);

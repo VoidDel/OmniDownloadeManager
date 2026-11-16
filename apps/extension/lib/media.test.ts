@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classify, cleanTitle, mediaKey, mediaName, offers, withMedia, MEDIA_MAX, type Media } from './media';
+import { classify, cleanTitle, fromShownDocument, mediaKey, mediaName, offers, onPage, pageKey, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
 
 const h = (pairs: Record<string, string>) => Object.entries(pairs).map(([name, value]) => ({ name, value }));
 const MB = 1024 * 1024;
@@ -56,6 +56,33 @@ describe('the list of a tab', () => {
     expect(mediaName(item('https://cdn.example.com/stream', { kind: 'audio', mime: 'audio/mpeg', title: 'Song | Radio One', pageUrl: 'https://radio.example.com/r' }))).toBe('Song - Radio One.mp3');
     // Nothing to go by: the address's words.
     expect(mediaName(item('https://cdn.example.com/1234567890.mp4', { pageUrl: 'https://films.example.com/' }))).toBe('films.example.com.mp4');
+  });
+});
+
+describe('pages', () => {
+  const at = (url: string, pageUrl: string | null) => ({ url, kind: 'video' as const, mime: null, size: null, title: null, pageUrl, at: 0 });
+
+  it('keeps the media of the page the tab shows', () => {
+    const list = [at('https://cdn.e.com/a.mp4', 'https://e.com/v/1'), at('https://cdn.e.com/b.mp4', 'https://e.com/v/1#t=30'), at('https://cdn.e.com/c.mp4', 'https://e.com/v/2'), at('https://cdn.e.com/d.mp4', null)];
+    // An anchor or a player's time is the same page; another path or query is another one.
+    expect(onPage(list, 'https://e.com/v/1#comments').map((m) => m.url.slice(-5))).toEqual(['a.mp4', 'b.mp4', 'd.mp4']);
+    expect(onPage(list, 'https://e.com/v/2').map((m) => m.url.slice(-5))).toEqual(['c.mp4', 'd.mp4']);
+    expect(onPage(list, 'https://e.com/v/1?p=2').map((m) => m.url.slice(-5))).toEqual(['d.mp4']);
+    expect(pageKey('not a url')).toBe('not a url');
+  });
+
+  it('takes the page from the request when it says', () => {
+    expect(topPageOf({ frameId: 0, documentUrl: 'https://e.com/v/1' })).toBe('https://e.com/v/1');
+    expect(topPageOf({ frameId: 3, documentUrl: 'https://player.net/embed', frameAncestors: [{ url: 'https://blog.e.com/post' }, { url: 'https://e.com/v/1' }] })).toBe('https://e.com/v/1');
+    // A frame that does not say its ancestors; Chromium, which says neither.
+    expect(topPageOf({ frameId: 3, documentUrl: 'https://player.net/embed' })).toBeNull();
+    expect(topPageOf({ frameId: 0 })).toBeNull();
+  });
+
+  it('leaves out documents the tab does not show', () => {
+    expect(fromShownDocument({})).toBe(true);
+    expect(fromShownDocument({ documentLifecycle: 'active' })).toBe(true);
+    for (const l of ['prerender', 'cached', 'pending_deletion']) expect(fromShownDocument({ documentLifecycle: l })).toBe(false);
   });
 });
 
