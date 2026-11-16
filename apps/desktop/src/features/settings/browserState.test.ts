@@ -12,6 +12,10 @@ describe('browserState', () => {
     expect(browserState(b({ detected: false }))).toEqual(['off', '未安装']);
   });
 
+  it('is not installed once uninstalled, though its extension was in touch before', () => {
+    expect(browserState(b({ detected: false }), undefined, earlier)).toEqual(['off', '未安装']);
+  });
+
   it('waits for the extension until it is heard from', () => {
     expect(browserState(b({}))).toEqual(['off', '等待扩展连接']);
   });

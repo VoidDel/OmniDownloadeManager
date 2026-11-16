@@ -39,8 +39,9 @@ export function Welcome() {
   };
   const seen = new Map(info?.seen ?? []);
   const before = new Map(info?.seenBefore ?? []);
-  // The installed ones (every browser is registered, installed or not).
-  const browsers = (info?.browsers ?? []).filter((b) => b.detected || before.has(b.id));
+  // The installed ones (every browser is registered, installed or not), and a portable one whose
+  // extension is in touch.
+  const browsers = (info?.browsers ?? []).filter((b) => b.detected || seen.has(b.id));
 
   return (
     <Modal

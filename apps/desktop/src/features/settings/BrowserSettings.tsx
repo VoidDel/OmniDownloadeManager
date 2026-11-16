@@ -34,10 +34,12 @@ function Row({ label, hint, children, col }: { label: ReactNode; hint?: ReactNod
 /** A browser's row: whether it is installed, registered for this installation, and whether its
  *  extension has been in touch (`seen` in this run, `before` in any). The app registers every
  *  browser, installed or not, so that one installed later works at once: registration alone
- *  says nothing about the browser or the extension. */
+ *  says nothing about the browser or the extension. A browser the system does not know is not
+ *  installed (uninstalled since its extension was in touch, too), unless its extension is in
+ *  touch in this run: a portable one, which says so each time it starts. */
 export function browserState(b: BrowserState, seen?: number, before?: number): [string, string] {
   if (b.ours && seen) return ['ok', i18n.t('settings.browser.state.connected', { when: fmt.when(seen) })];
-  if (!b.detected && !before) return ['off', i18n.t('settings.browser.state.notInstalled')];
+  if (!b.detected) return ['off', i18n.t('settings.browser.state.notInstalled')];
   if (b.registered && !b.ours) return ['warn', i18n.t('settings.browser.state.otherInstall')];
   if (!b.registered) return ['warn', i18n.t('settings.browser.state.unregistered')];
   if (before) return ['ok', i18n.t('settings.browser.state.lastConnected', { when: fmt.when(before) })];
