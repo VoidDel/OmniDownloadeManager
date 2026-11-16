@@ -427,11 +427,13 @@ function sniffMedia() {
       const tab = await browser.tabs.get(d.tabId).catch(() => null);
       // The tab has gone to another page since.
       if (page && tab?.url && pageKey(page) !== pageKey(tab.url)) return;
+      // Without its anchor: the page is the same, and a referer never carries one.
+      const where = page ?? tab?.url ?? d.documentUrl;
       const m: Media = {
         ...c,
         url: d.url,
         title: tab?.title ?? null,
-        pageUrl: page ?? tab?.url ?? d.documentUrl ?? null,
+        pageUrl: where ? pageKey(where) : null,
         storeId: storeOf(d),
         referer: sent?.referer ?? null,
         origin: sent?.headers.Origin ?? null,
@@ -520,7 +522,7 @@ async function scanTab(tabId: number) {
       const c = classifyFound(f);
       if (!c) continue;
       // A frame's media went out with that frame as the referrer (or its origin, across sites).
-      const m: Media = { ...c, url: f.url, title: tab.title ?? null, pageUrl: tab.url, storeId: storeOf(tab), referer: f.top ? null : f.frameUrl, at: Date.now() };
+      const m: Media = { ...c, url: f.url, title: tab.title ?? null, pageUrl: pageKey(tab.url), storeId: storeOf(tab), referer: f.top ? null : f.frameUrl, at: Date.now() };
       list = withMedia(list, m);
     }
     if (list.length === before) return;
