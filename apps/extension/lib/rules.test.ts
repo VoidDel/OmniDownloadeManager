@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { contentLength, dispositionName, isDownload } from './headers';
-import { DEFAULT_RULES, cookieHeader, decide, extensionOf, parseList, siteMatches } from './rules';
+import { DEFAULT_RULES, cookieHeader, decide, extensionOf, parseList, sendableCookies, siteMatches } from './rules';
 import { parsePairing } from './settings';
 
 const MB = 1024 * 1024;
@@ -33,6 +33,27 @@ describe('decide', () => {
     expect(siteMatches('notexample.com', 'example.com')).toBe(false);
     expect(parseList(' .ZIP, 7z；iso ')).toEqual(['zip', '7z', 'iso']);
     expect(cookieHeader([{ name: 's', value: '1' }, { name: 't', value: 'x=y' }])).toBe('s=1; t=x=y');
+  });
+});
+
+describe('sendableCookies', () => {
+  const cookie = (name: string, topLevelSite?: string) => ({ name, value: '1', partitionKey: topLevelSite ? { topLevelSite, hasCrossSiteAncestor: false } : undefined });
+  const names = (url: string, pageUrl?: string | null) =>
+    sendableCookies(
+      [cookie('plain'), cookie('clearance', 'https://alldatasheetcn.com'), cookie('embedded', 'https://other.com'), cookie('plainish', '')],
+      url,
+      pageUrl,
+    ).map((c) => c.name);
+
+  it('keeps the partition of the top-level page and drops the others', () => {
+    // A navigation: its own site is the top level (Cloudflare's cf_clearance is partitioned).
+    expect(names('https://www.alldatasheetcn.com/datasheet-pdf/download/1.html')).toEqual(['plain', 'clearance', 'plainish']);
+    // Started from a page: that page's partition.
+    expect(names('https://cdn.example.net/a.pdf', 'https://alldatasheetcn.com/x')).toEqual(['plain', 'clearance', 'plainish']);
+    expect(names('https://cdn.example.net/a.pdf', 'https://www.example.com/')).toEqual(['plain', 'plainish']);
+    // Another scheme is another site; a look-alike host is not under it.
+    expect(names('http://www.alldatasheetcn.com/a.pdf')).toEqual(['plain', 'plainish']);
+    expect(names('https://evil-alldatasheetcn.com/a.pdf', 'not a url')).toEqual(['plain', 'plainish']);
   });
 });
 

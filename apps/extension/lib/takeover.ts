@@ -4,7 +4,7 @@
 import { BridgeError, send } from './bridge';
 import { t } from './i18n';
 import type { AddDownload, AddResult, Response } from './protocol';
-import { cookieHeader } from './rules';
+import { cookieHeader, sendableCookies } from './rules';
 import { load } from './settings';
 
 export interface Download {
@@ -34,16 +34,26 @@ export function storeOf(o: unknown): string | null {
   return typeof id === 'string' && id ? id : null;
 }
 
-/** The `Cookie` header the browser would send to `url` from a tab of that cookie store (none
- *  when there are no cookies). */
-export async function cookiesFor(url: string, storeId?: string | null): Promise<string | null> {
+type GetAll = Parameters<typeof browser.cookies.getAll>[0];
+
+/** The `Cookie` header the browser would send to `url`, from `pageUrl` in a tab of that cookie
+ *  store (none when there are no cookies). */
+export async function cookiesFor(url: string, storeId?: string | null, pageUrl?: string | null): Promise<string | null> {
   const store = storeId ? { storeId } : {};
+  try {
+    // Without a partition key only unpartitioned cookies come back; an empty one brings those
+    // of every partition too, and `sendableCookies` keeps the ones this request would carry.
+    const all = await browser.cookies.getAll({ url, partitionKey: {}, ...store } as GetAll);
+    return cookieHeader(sendableCookies(all, url, pageUrl)) || null;
+  } catch {
+    // A browser without partitioned cookies.
+  }
   try {
     return cookieHeader(await browser.cookies.getAll({ url, ...store })) || null;
   } catch {
     try {
       // Firefox with first-party isolation wants the partition named.
-      const all = await browser.cookies.getAll({ url, firstPartyDomain: null, ...store } as unknown as Parameters<typeof browser.cookies.getAll>[0]);
+      const all = await browser.cookies.getAll({ url, firstPartyDomain: null, ...store } as unknown as GetAll);
       return cookieHeader(all) || null;
     } catch {
       return null;
@@ -65,7 +75,7 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
     referer: d.referer || d.pageUrl || null,
     tab_url: d.pageUrl ?? null,
     user_agent: navigator.userAgent,
-    cookies: await cookiesFor(d.url, d.storeId),
+    cookies: await cookiesFor(d.url, d.storeId, d.pageUrl ?? d.referer),
     silent,
     ...(d.audioUrl ? { audio_url: d.audioUrl } : {}),
   };

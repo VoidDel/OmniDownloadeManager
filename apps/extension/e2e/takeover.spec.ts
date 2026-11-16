@@ -42,9 +42,24 @@ function listen(server: http.Server): Promise<number> {
 test.beforeAll(async () => {
   site = http.createServer((req, res) => {
     if (req.url === '/') {
-      res.setHeader('Set-Cookie', 'session=abc123; Path=/');
+      // A partitioned cookie as Cloudflare sets its clearance: the app needs it too.
+      res.setHeader('Set-Cookie', ['session=abc123; Path=/', 'clearance=ok; Path=/; Secure; SameSite=None; Partitioned']);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end('<!doctype html><a id="big" href="/files/big.bin">big</a> <a id="small" href="/files/small.txt">small</a>');
+      res.end(
+        '<!doctype html><a id="big" href="/files/big.bin">big</a> <a id="small" href="/files/small.txt">small</a>' +
+          '<form method="post" action="/files/posted.bin"><input name="code" value="26554"><button id="post">download</button></form>',
+      );
+      return;
+    }
+    // A file that only the form's answer brings (a download behind a security code).
+    if (req.url === '/files/posted.bin') {
+      if (req.method !== 'POST') {
+        res.statusCode = 403;
+        res.end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': String(3 * MB), 'Content-Disposition': 'attachment; filename="posted.bin"' });
+      res.end(Buffer.alloc(3 * MB, 9));
       return;
     }
     const big = req.url === '/files/big.bin';
@@ -162,7 +177,7 @@ test.describe('Chromium asks the extension', () => {
       filename: 'big.bin',
       size: 3 * MB,
       referer: `${siteUrl}/`,
-      cookies: 'session=abc123',
+      cookies: 'session=abc123; clearance=ok',
       silent: false,
     });
     expect(String(msg.payload?.user_agent)).toContain('Chrome');
@@ -189,6 +204,17 @@ test.describe('Chromium asks the extension', () => {
     const before = adds().length;
     await page.click('#small');
     await expect.poll(() => downloads(worker), { timeout: 15_000 }).toContainEqual({ name: 'small.txt', state: 'complete' });
+    expect(adds().length).toBe(before);
+    await page.close();
+  });
+
+  test('leaves the answer to a form (POST) to the browser', async () => {
+    nextAction = 'started';
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/`);
+    const before = adds().length;
+    await page.click('#post');
+    await expect.poll(() => downloads(worker), { timeout: 15_000 }).toContainEqual({ name: 'posted.bin', state: 'complete' });
     expect(adds().length).toBe(before);
     await page.close();
   });
@@ -222,8 +248,14 @@ test.describe('another party names the download', () => {
       const before = adds().length;
       await page.click('#big');
       await expect.poll(() => adds().length).toBe(before + 1);
-      expect(adds().at(-1)!.payload).toMatchObject({ url: `${siteUrl}/files/big.bin`, cookies: 'session=abc123', filename: null });
+      expect(adds().at(-1)!.payload).toMatchObject({ url: `${siteUrl}/files/big.bin`, cookies: 'session=abc123; clearance=ok', filename: null });
       await expect.poll(() => downloads(worker)).toEqual([]);
+      // The answer to a form stays with the browser here too.
+      const posts = adds().length;
+      const [download] = await Promise.all([page.waitForEvent('download'), page.click('#post')]);
+      expect(await download.failure()).toBeNull();
+      expect(download.suggestedFilename()).toBe('posted.bin');
+      expect(adds().length).toBe(posts);
     } finally {
       await context.close();
     }

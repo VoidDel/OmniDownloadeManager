@@ -89,3 +89,37 @@ export function decide(c: Candidate, r: Rules): { take: true } | { take: false; 
 export function cookieHeader(cookies: { name: string; value: string }[]): string {
   return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 }
+
+export interface StoredCookie {
+  name: string;
+  value: string;
+  /** Set for a cookie with the `Partitioned` attribute (CHIPS): it goes only to requests whose
+   *  top-level page is on `topLevelSite` (`https://example.com`). */
+  partitionKey?: { topLevelSite?: string } | null;
+}
+
+/** `host` (and its scheme) is on `site`, a scheme and registrable domain. */
+function onSite(url: string | null | undefined, site: string): boolean {
+  try {
+    const u = new URL(url ?? '');
+    const s = new URL(site);
+    const host = u.hostname.toLowerCase();
+    const top = s.hostname.toLowerCase();
+    return u.protocol === s.protocol && (host === top || host.endsWith(`.${top}`));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The cookies, of all partitions, that a download of `url` started from `pageUrl` carries:
+ * those without a partition, and the partitioned ones of the site of its top-level page — the
+ * download's own when it is a navigation, the page's when the page started it. Cloudflare's
+ * clearance (`cf_clearance`) is one of the partitioned ones.
+ */
+export function sendableCookies<T extends StoredCookie>(cookies: T[], url: string, pageUrl?: string | null): T[] {
+  return cookies.filter((c) => {
+    const site = c.partitionKey?.topLevelSite;
+    return !site || onSite(url, site) || onSite(pageUrl, site);
+  });
+}

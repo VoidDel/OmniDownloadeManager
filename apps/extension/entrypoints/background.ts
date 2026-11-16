@@ -20,6 +20,12 @@ import { basename, handOver, notify, payloadFor, storeOf, type Download } from '
 const bypass = new Map<string, number>();
 /** URLs Firefox handed over in webRequest (their download item is not ours to judge again). */
 const handled = new Map<string, number>();
+/**
+ * Answers to a form sent with POST (a download behind a security code, a search export): the
+ * file comes only with what the form sent, and the app, which asks for the address again with
+ * GET, would get a page or a refusal instead. The browser keeps those downloads.
+ */
+const posted = new Map<string, number>();
 
 function mark(map: Map<string, number>, url: string | undefined, ms = 10_000) {
   if (url) map.set(url, Date.now() + ms);
@@ -31,6 +37,14 @@ function take(map: Map<string, number>, url: string | undefined): boolean {
   if (until === undefined) return false;
   map.delete(url);
   return until > Date.now();
+}
+
+/** The download is the answer to a POST (see `posted`). */
+function fromPost(item: { url?: string; finalUrl?: string }): boolean {
+  // Both read, so that neither is left behind.
+  const a = take(posted, item.url);
+  const b = item.finalUrl !== item.url && take(posted, item.finalUrl);
+  return a || b;
 }
 
 /** Extensions offered by "download all links on this page". */
@@ -91,7 +105,7 @@ type DownloadItem = Browser.downloads.DownloadItem;
  * downloads it again.
  */
 async function takeStarted(item: DownloadItem) {
-  if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(handled, item.url)) return;
+  if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(handled, item.url) || fromPost(item)) return;
   const url = /^https?:/i.test(item.finalUrl ?? '') ? item.finalUrl : item.url;
   if (!/^https?:/i.test(url)) return;
   const size = item.totalBytes > 0 ? item.totalBytes : null;
@@ -125,7 +139,7 @@ function chromiumTakeover() {
 
   browser.downloads.onDeterminingFilename.addListener((item: DownloadItem, suggest: (s?: { filename: string }) => void) => {
     asked.add(item.id);
-    if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(bypass, item.finalUrl)) return;
+    if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(bypass, item.finalUrl) || fromPost(item)) return;
     void (async () => {
       const url = /^https?:/i.test(item.finalUrl) ? item.finalUrl : item.url;
       const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : null;
@@ -189,6 +203,20 @@ function firefoxTakeover() {
 
   // Downloads that did not go through a navigation (a download API call, `<a download>`).
   browser.downloads.onCreated.addListener((item: DownloadItem) => void takeStarted(item));
+}
+
+// ---------------------------------------------------------------------------------- POST
+
+/** Notes the pages and frames that came as the answer to a POST (`posted`). Their response
+ *  headers arrive before the browser makes a download of them. */
+function watchPosts() {
+  const seen = (d: HeadersDetails) => {
+    if (d.method !== 'GET' && d.method !== 'HEAD' && d.statusCode >= 200 && d.statusCode < 300) mark(posted, d.url, 60_000);
+  };
+  const webRequest = browser.webRequest as unknown as {
+    onHeadersReceived: { addListener(f: (d: HeadersDetails) => void, filter: object): void };
+  };
+  webRequest.onHeadersReceived.addListener(seen, { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame'] });
 }
 
 // ---------------------------------------------------------------------------------- media
@@ -269,6 +297,7 @@ export default defineBackground(() => {
   });
 
   sniffMedia();
+  watchPosts();
 
   if (import.meta.env.FIREFOX) firefoxTakeover();
   else chromiumTakeover();
