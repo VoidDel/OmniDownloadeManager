@@ -22,7 +22,7 @@ pnpm ext:zip
 
 版本号取自 `apps/extension/package.json`，每次提交新版本前先改它。
 
-上架素材在 `apps/extension/store/`：`logo-300.png`（Edge 的商店徽标），以及每种语言一个文件夹（`zh-CN`、`zh-TW`、`en`、`ja`），里面是该语言的两张截图 `screenshot-1-options.png` 和 `screenshot-2-popup.png`（1280×800）。128×128 的图标已在扩展包里。建议再补一两张桌面应用接管下载时的截图。
+上架素材在 `apps/extension/store/`：`logo-300.png`（Edge 的商店徽标），以及每种语言一个文件夹（`zh-CN`、`zh-TW`、`en`、`ja`），里面是该语言的三张截图（1280×800）：`screenshot-1-media.png`（此页的媒体）、`screenshot-2-downloads.png`（最近的下载）、`screenshot-3-options.png`（选项）。界面改动后用 `pnpm ext:build && node scripts/ext-store-shots.mjs` 重新生成，四种语言一次完成。128×128 的图标已在扩展包里。建议再补一两张桌面应用接管下载时的截图。
 
 扩展的界面有四种语言（简体中文、繁體中文、English、日本語），跟随浏览器语言，其他语言显示英文。文字在 `apps/extension/public/_locales/<语言>/messages.json`，`pnpm check:locales` 会检查四种语言的键是否一致。商店会按包里的语言列出扩展，每种语言各填一份说明（第 5 节）。
 

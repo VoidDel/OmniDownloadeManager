@@ -287,7 +287,7 @@ test.describe('Chromium asks the extension', () => {
   test('shows the app status in the popup', async () => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${EXTENSION_ID}/popup.html`);
-    await expect(page.locator('.pstate.ok')).toContainText('9.9.9');
+    await expect(page.locator('.pstate.ok')).toHaveAttribute('title', 'Omni Download 9.9.9');
     // In the browser's language (English on CI, Chinese on a Chinese system).
     await expect(page.locator('.pline')).toContainText(/1 个任务下载中|1 task downloading/);
     await expect(page.locator('.precent')).toContainText('big.bin');

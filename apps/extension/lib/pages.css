@@ -104,12 +104,13 @@ button:disabled { cursor: default; }
 .popup > header img { width: 22px; height: 22px; }
 .ptitle { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ptitle b { font-size: 14px; font-weight: 650; letter-spacing: -0.005em; }
-.pline { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pline { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pline > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pline .spd { flex: none; }
 .pline .spd { color: var(--brand); font-weight: 600; }
 .pstate { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .pstate.ok { color: var(--ok); }
 .pstate.warn { color: var(--warn); border-color: transparent; background: var(--warn-soft); }
-.pver { color: var(--ink-3); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .pbanner { margin: 0 12px 6px; padding: 10px 12px; display: flex; gap: 10px; border-radius: 10px; background: var(--warn-soft); }
 .pbanner .ic { color: var(--warn); width: 18px; height: 18px; margin-top: 1px; }

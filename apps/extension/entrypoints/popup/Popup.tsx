@@ -95,7 +95,6 @@ export function Popup() {
           <span className="pstate ok" title={`Omni Download ${status.app_version}`}>
             <i className="dot" aria-hidden="true" />
             {t('connected')}
-            <span className="pver">{status.app_version}</span>
           </span>
         )}
         {state.kind === 'down' && (
