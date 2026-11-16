@@ -848,14 +848,24 @@ async fn settles_where_the_server_bandwidth_runs_out() {
     let (name, total) = completed(o);
     assert_eq!(total, size);
     assert_content(&dir.path().join(&name), size);
-    // It tried more (8, 16), went back, and spent the second half near 6, not at 16 or 32.
+    // It tried more (8, 16), went back at least to half of the most it tried, and kept enough
+    // to fill the line. Where exactly it settles (6 here) is the tuner's own tests' business
+    // (`omnidl_core::conns`, fed exact speeds): half-second windows on a busy runner are noisy
+    // enough that a step down may miss and leave it at 8 or, after a lucky step up, at 16.
+    // The median of the second half: probes and the connections ending at the finish are
+    // brief.
     assert!(
         server.stats.max_open.load(Ordering::SeqCst) >= 8,
         "{seen:?}"
     );
-    let late = &seen[seen.len() / 2..];
-    let avg = late.iter().sum::<u32>() as f64 / late.len() as f64;
-    assert!((4.5..=9.0).contains(&avg), "{avg:.1}: {seen:?}");
+    let most = *seen.iter().max().unwrap();
+    let mut late = seen[seen.len() / 2..].to_vec();
+    late.sort_unstable();
+    let settled = late[late.len() / 2];
+    assert!(
+        (5..=most / 2).contains(&settled),
+        "{settled} of {most}: {seen:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
