@@ -769,6 +769,7 @@
     "probing": "正在取得檔案資訊…",
     "resumable": "支援斷點續傳",
     "notResumable": "不支援斷點續傳",
+    "form": "表單下載",
     "connectionsUsed": "將使用 {count} 個連線",
     "attached": {
       "both": "已附帶 Cookie 與 Referer",

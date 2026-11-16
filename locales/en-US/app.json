@@ -769,6 +769,7 @@
     "probing": "Fetching file information…",
     "resumable": "Can resume",
     "notResumable": "Cannot resume",
+    "form": "Form download",
     "connectionsUsed": "Will use {count, plural, one {# connection} other {# connections}}",
     "attached": {
       "both": "Cookie and Referer included",

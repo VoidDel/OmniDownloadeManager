@@ -114,6 +114,11 @@ pub(crate) async fn probe(client: &Client, auth: &Auth, url: &Url) -> Result<Pro
     // closes that connection.
 }
 
+/// An answer that is the whole file (to a form): its length, and no ranges.
+pub(crate) fn of_whole(r: &Response) -> Probe {
+    describe(r, length(r.headers(), CONTENT_LENGTH), false)
+}
+
 fn describe(r: &Response, total: Option<u64>, resumable: bool) -> Probe {
     let h = r.headers();
     Probe {

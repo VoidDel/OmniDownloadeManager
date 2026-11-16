@@ -33,6 +33,9 @@ pub struct QuickRequest {
     /// Where the link came from: the browser, the clipboard or the floating ball (the window
     /// words its title by it, and offers "let the browser download it" for the browser only).
     pub origin: Origin,
+    /// What the server already said (the answer to a form, which is not sent again to ask):
+    /// the window shows it instead of asking.
+    pub probe: Option<ProbeInfo>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

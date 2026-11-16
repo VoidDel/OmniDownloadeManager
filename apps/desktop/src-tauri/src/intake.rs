@@ -159,6 +159,7 @@ async fn ask(app: &AppHandle, url: String, origin: Origin) {
         connections: settings.engine.connections,
         options: TaskOptions::default(),
         origin,
+        probe: None,
     };
     let decision = quick::ask(app, request).await;
     if !matches!(decision.action, QuickAction::Start | QuickAction::Later) {

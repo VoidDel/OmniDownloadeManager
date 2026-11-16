@@ -3,7 +3,7 @@
 
 import { BridgeError, send } from './bridge';
 import { t } from './i18n';
-import type { AddDownload, AddResult, Response } from './protocol';
+import type { AddDownload, AddResult, Pong, PostBody, Response } from './protocol';
 import { cookieHeader, sendableCookies } from './rules';
 import { load } from './settings';
 
@@ -19,6 +19,12 @@ export interface Download {
   audioUrl?: string | null;
   /** The cookie store of the tab it comes from (see `storeOf`); the default one when not given. */
   storeId?: string | null;
+  /** The download is the answer to a form: what the form sent (see `post.ts`). */
+  post?: PostBody | null;
+  /** The `Cookie` header the form went out with: used instead of the cookies read now. */
+  sentCookies?: string | null;
+  /** Headers to send as the browser did (a form's `Origin`). */
+  headers?: Record<string, string>;
 }
 
 /** `taken`: the app has it (or the user dropped it there). `browser`: the browser should go on. */
@@ -75,10 +81,26 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
     referer: d.referer || d.pageUrl || null,
     tab_url: d.pageUrl ?? null,
     user_agent: navigator.userAgent,
-    cookies: await cookiesFor(d.url, d.storeId, d.pageUrl ?? d.referer),
+    cookies: d.sentCookies ?? (await cookiesFor(d.url, d.storeId, d.pageUrl ?? d.referer)),
     silent,
     ...(d.audioUrl ? { audio_url: d.audioUrl } : {}),
+    ...(d.post ? { post: d.post } : {}),
+    ...(d.headers && Object.keys(d.headers).length ? { headers: d.headers } : {}),
   };
+}
+
+/**
+ * The app that is running sends forms again (`AddDownload.post`). An older one would ignore
+ * what the form sent, fetch the address with a GET and save the page it gets: it is not given
+ * those downloads. Neither is an app that is not running (asking does not start it).
+ */
+export async function appSendsForms(): Promise<boolean> {
+  try {
+    const r = await send<Pong>({ type: 'ping' });
+    return !!(r.ok && r.result?.capabilities?.includes('post'));
+  } catch {
+    return false;
+  }
 }
 
 export async function notify(message: string): Promise<void> {

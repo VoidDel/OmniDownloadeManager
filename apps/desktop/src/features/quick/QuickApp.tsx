@@ -46,6 +46,8 @@ export function QuickApp() {
         return;
       }
       setReq(r);
+      // What the server already said (the answer to a form, which is not sent again to ask).
+      if (r.probe) setProbe(r.probe);
       if (r.origin === 'clipboard') escape.current = 'cancel';
       setName(r.fileName ?? nameFromUrl(r.url) ?? '');
       setDir(r.saveDir);
@@ -59,9 +61,10 @@ export function QuickApp() {
     });
   }, []);
 
-  // Ask the server as the browser would (cookies, referer, user agent).
+  // Ask the server as the browser would (cookies, referer, user agent), unless it was asked
+  // already.
   useEffect(() => {
-    if (!req) return;
+    if (!req || req.probe) return;
     let live = true;
     api.probe(req.url, req.options).then(
       (p) => {
@@ -146,6 +149,7 @@ export function QuickApp() {
   const size = probe?.total ?? req.size;
   const conn = Math.max(1, Math.min(64, Number.parseInt(connections, 10) || req.connections));
   const parts: string[] = [];
+  if (req.options.post) parts.push(t('quick.form'));
   if (probe) {
     parts.push(probe.resumable ? t('quick.resumable') : t('quick.notResumable'));
     if (probe.resumable && probe.total != null) parts.push(t('quick.connectionsUsed', { count: Math.max(1, Math.min(conn, Math.floor(probe.total / 1048576) || 1)) }));

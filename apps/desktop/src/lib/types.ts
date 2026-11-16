@@ -67,6 +67,9 @@ export interface TaskOptions {
   mirrors?: string[];
   /** HTTP: the sound of a video whose link has only the picture; joined into one MP4. */
   audioSource?: string | null;
+  /** HTTP: the file is the answer to a form; the request is this POST (body in base64). One
+   *  connection, no resuming. */
+  post?: { contentType: string; body: string } | null;
 }
 
 export type HashAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512';
@@ -421,6 +424,8 @@ export interface QuickRequest {
   options: TaskOptions;
   /** Where the link came from: the browser's extension, the clipboard or the floating ball. */
   origin: 'browser' | 'clipboard' | 'float';
+  /** What the server already said (the answer to a form): shown instead of asking again. */
+  probe: ProbeInfo | null;
 }
 
 export interface QuickDecision {

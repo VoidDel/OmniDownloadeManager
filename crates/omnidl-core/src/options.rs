@@ -51,6 +51,23 @@ pub struct TaskOptions {
     /// the browser extension finds them). Both are downloaded and joined into one MP4.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_source: Option<String>,
+    /// HTTP(S): the file is the answer to a form (a download behind a security code, an
+    /// export): the request is this POST instead of a GET. One connection, no resuming (see
+    /// [`PostData`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post: Option<PostData>,
+}
+
+/// What a form sent, as the browser extension saw it. The server answers each such request
+/// with the whole file: it is asked once per run, never in ranges, and a failed transfer is not
+/// repeated on its own (that would send the form again).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PostData {
+    /// The request's `Content-Type` (`application/x-www-form-urlencoded`…).
+    pub content_type: String,
+    /// The request's body, base64.
+    pub body: String,
 }
 
 /// Where requests go.

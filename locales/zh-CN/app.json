@@ -769,6 +769,7 @@
     "probing": "正在获取文件信息…",
     "resumable": "支持断点续传",
     "notResumable": "不支持断点续传",
+    "form": "表单下载",
     "connectionsUsed": "将使用 {count} 个连接",
     "attached": {
       "both": "已附带 Cookie 与 Referer",

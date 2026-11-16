@@ -1,7 +1,7 @@
 //! Answers the extensions' requests (docs/development-plan.md §5.5), whichever channel they came
 //! by (the Native Messaging host's pipe or the HTTP fallback).
 
-use omnidl_core::{NewTask, TaskKind, TaskOptions, filename};
+use omnidl_core::{NewTask, PostData, ProbeInfo, TaskKind, TaskOptions, filename};
 use omnidl_ipc::{
     AddAction, AddBatch, AddDownload, AddResult, Body, ErrorCode, Pong, RecentTask, Request,
     Response, Status,
@@ -41,6 +41,7 @@ pub async fn handle(app: &AppHandle, req: Request) -> Response {
             id,
             Pong {
                 app_version: env!("CARGO_PKG_VERSION").into(),
+                capabilities: vec![omnidl_ipc::CAP_POST.into()],
             },
         ),
         Body::GetStatus => Response::ok(id, status(&state)),
@@ -148,7 +149,58 @@ fn options_of(d: &AddDownload) -> TaskOptions {
         // An HTTP link's sound only: anything else is not a stream to join.
         audio_source: non_empty(&d.audio_url)
             .filter(|a| TaskKind::detect(a) == Some(TaskKind::Http)),
+        // What a form sent, for an HTTP link.
+        post: d
+            .post
+            .as_ref()
+            .filter(|p| !p.content_type.trim().is_empty())
+            .filter(|_| TaskKind::detect(&d.url) == Some(TaskKind::Http))
+            .map(|p| PostData {
+                content_type: p.content_type.trim().to_owned(),
+                body: p.body.clone(),
+            }),
         ..Default::default()
+    }
+}
+
+fn is_page(mime: &str) -> bool {
+    let m = mime.split(';').next().unwrap_or_default().trim();
+    m.eq_ignore_ascii_case("text/html") || m.eq_ignore_ascii_case("application/xhtml+xml")
+}
+
+/// The answer to a form sent a second time is a page, where the browser got a file: the form
+/// works once (a security code used up, a session of the browser's own), and the page is not
+/// what the user asked for.
+fn page_instead_of_file(d: &AddDownload, probe: &ProbeInfo) -> bool {
+    let wanted_page = match non_empty(&d.mime) {
+        Some(m) => is_page(&m),
+        // The browser did not say: by the name it gave the file.
+        None => non_empty(&d.filename).is_some_and(|n| {
+            matches!(
+                filename::split_extension(&n)
+                    .1
+                    .to_ascii_lowercase()
+                    .as_str(),
+                ".html" | ".htm"
+            )
+        }),
+    };
+    !wanted_page && probe.content_type.as_deref().is_some_and(is_page)
+}
+
+/// Sends the form of a download once more, before the browser is told to give its own download
+/// up: `None` when the server does not give the file again (the browser keeps its download).
+async fn form_answer(state: &AppState, d: &AddDownload, task: &NewTask) -> Option<ProbeInfo> {
+    match state.manager.probe(&task.source, &task.options).await {
+        Ok(p) if page_instead_of_file(d, &p) => {
+            tracing::info!("a form's second answer is a page: left to the browser");
+            None
+        }
+        Ok(p) => Some(p),
+        Err(e) => {
+            tracing::info!("a form's second answer: {e}: left to the browser");
+            None
+        }
     }
 }
 
@@ -188,6 +240,20 @@ async fn add_download(
         start: true,
         probe: None,
     };
+    // The answer to a form: only taken when the server gives the file a second time. What it
+    // said then is shown as it is (the window does not ask again).
+    if task.options.post.is_some() {
+        match form_answer(&state, &d, &task).await {
+            Some(p) => task.probe = Some(p),
+            None => {
+                return Ok(AddResult {
+                    action: AddAction::Browser,
+                    asked: false,
+                    task_id: None,
+                });
+            }
+        }
+    }
     let ask = !d.silent
         && settings.browser.quick_dialog
         && !settings.browser.silent_sites.iter().any(|s| s == &site);
@@ -205,6 +271,7 @@ async fn add_download(
             connections: settings.engine.connections,
             options: task.options.clone(),
             origin: quick::Origin::Browser,
+            probe: task.probe.clone(),
         };
         let decision = quick::ask(app, request).await;
         match decision.action {
@@ -316,5 +383,79 @@ mod tests {
         assert_eq!(o.cookies.as_deref(), Some("s=1"));
         assert_eq!(o.referer.as_deref(), Some("https://e.com/page"));
         assert_eq!(o.user_agent.as_deref(), Some("UA"));
+        assert_eq!(o.post, None);
+    }
+
+    #[test]
+    fn keeps_what_a_form_sent() {
+        let post = omnidl_ipc::PostBody {
+            content_type: " application/x-www-form-urlencoded ".into(),
+            body: "aW5udW09MQ==".into(),
+        };
+        let d = AddDownload {
+            url: "https://e.com/download/1.html".into(),
+            post: Some(post.clone()),
+            ..Default::default()
+        };
+        let o = options_of(&d).post.unwrap();
+        assert_eq!(o.content_type, "application/x-www-form-urlencoded");
+        assert_eq!(o.body, "aW5udW09MQ==");
+        // Not for a link that is not HTTP, nor without a type.
+        let ftp = AddDownload {
+            url: "ftp://e.com/f".into(),
+            post: Some(post),
+            ..Default::default()
+        };
+        assert_eq!(options_of(&ftp).post, None);
+        let untyped = AddDownload {
+            url: "https://e.com/f".into(),
+            post: Some(omnidl_ipc::PostBody::default()),
+            ..Default::default()
+        };
+        assert_eq!(options_of(&untyped).post, None);
+    }
+
+    #[test]
+    fn tells_a_page_from_the_file_a_form_gave() {
+        let probe = |content_type: &str| ProbeInfo {
+            final_url: "https://e.com/download/1.html".into(),
+            file_name: "1.html".into(),
+            total: None,
+            resumable: false,
+            content_type: Some(content_type.into()),
+            etag: None,
+            last_modified: None,
+            files: Vec::new(),
+        };
+        let d = |mime: Option<&str>, filename: Option<&str>| AddDownload {
+            url: "https://e.com/download/1.html".into(),
+            mime: mime.map(str::to_owned),
+            filename: filename.map(str::to_owned),
+            ..Default::default()
+        };
+        let pdf = d(Some("application/pdf"), Some("sheet.pdf"));
+        assert!(page_instead_of_file(
+            &pdf,
+            &probe("text/html; charset=UTF-8")
+        ));
+        assert!(!page_instead_of_file(&pdf, &probe("application/pdf")));
+        assert!(!page_instead_of_file(
+            &pdf,
+            &probe("application/octet-stream")
+        ));
+        // The browser did not say what it got: by the file's name.
+        assert!(page_instead_of_file(
+            &d(None, Some("sheet.PDF")),
+            &probe("text/html")
+        ));
+        assert!(!page_instead_of_file(
+            &d(None, Some("report.html")),
+            &probe("text/html")
+        ));
+        // A page was what the form gave the browser too.
+        assert!(!page_instead_of_file(
+            &d(Some("text/html"), None),
+            &probe("text/html")
+        ));
     }
 }

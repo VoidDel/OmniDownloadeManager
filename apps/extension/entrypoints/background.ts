@@ -5,6 +5,9 @@
 // Chromium: `downloads.onDeterminingFilename` holds the download while the app is asked; the
 // browser goes on (`suggest()`) when the app cannot be reached or the user wants the browser to
 // download it, and the download is cancelled when the app takes it.
+// The answer to a form (a POST) goes to the app with what the form sent, when that can be sent
+// again (`post.ts`); the app tries, and the browser keeps the download when the server does not
+// give the file a second time.
 // Firefox: a blocking `webRequest.onHeadersReceived` decides from the response headers before a
 // download starts; `downloads.onCreated` catches the rest.
 
@@ -12,20 +15,25 @@ import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, type Header } from '../lib/headers';
 import { t } from '../lib/i18n';
 import { classify, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
+import { postBody, sentWith, type RequestBody, type Sent } from '../lib/post';
+import type { PostBody } from '../lib/protocol';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
-import { basename, handOver, notify, payloadFor, storeOf, type Download } from '../lib/takeover';
+import { appSendsForms, basename, handOver, notify, payloadFor, storeOf, type Download } from '../lib/takeover';
 
 /** Links the user asked the browser to keep (Alt+click), and our own re-downloads. */
 const bypass = new Map<string, number>();
 /** URLs Firefox handed over in webRequest (their download item is not ours to judge again). */
 const handled = new Map<string, number>();
 /**
- * Answers to a form sent with POST (a download behind a security code, a search export): the
- * file comes only with what the form sent, and the app, which asks for the address again with
- * GET, would get a page or a refusal instead. The browser keeps those downloads.
+ * Answers to a form sent with POST (a download behind a security code, a search export), by
+ * address: the file comes only with what the form sent, which the app sends again (`post`).
+ * Without it (a form that cannot be sent again, another method than POST) the browser keeps
+ * the download: asking for the address with GET would bring a page or a refusal.
  */
-const posted = new Map<string, number>();
+const posted = new Map<string, { until: number; post: PostBody | null; sent?: Sent }>();
+/** POSTs of pages and frames under way, by request: what they send. */
+const sending = new Map<string, { body?: RequestBody | null; type?: string; sent?: Sent }>();
 
 function mark(map: Map<string, number>, url: string | undefined, ms = 10_000) {
   if (url) map.set(url, Date.now() + ms);
@@ -39,12 +47,18 @@ function take(map: Map<string, number>, url: string | undefined): boolean {
   return until > Date.now();
 }
 
-/** The download is the answer to a POST (see `posted`). */
-function fromPost(item: { url?: string; finalUrl?: string }): boolean {
-  // Both read, so that neither is left behind.
-  const a = take(posted, item.url);
-  const b = item.finalUrl !== item.url && take(posted, item.finalUrl);
-  return a || b;
+/** The download is the answer to a POST (see `posted`): what was sent, null when that cannot be
+ *  sent again. Undefined for any other download. */
+function fromPost(item: { url?: string; finalUrl?: string }): { post: PostBody | null; sent?: Sent } | undefined {
+  let found: { post: PostBody | null; sent?: Sent } | undefined;
+  // Both read, so that neither is left behind; the address the answer came from first.
+  for (const url of new Set([item.finalUrl, item.url])) {
+    const p = url ? posted.get(url) : undefined;
+    if (!url || !p) continue;
+    posted.delete(url);
+    if (p.until > Date.now()) found ??= { post: p.post, sent: p.sent };
+  }
+  return found;
 }
 
 /** Extensions offered by "download all links on this page". */
@@ -105,6 +119,7 @@ type DownloadItem = Browser.downloads.DownloadItem;
  * downloads it again.
  */
 async function takeStarted(item: DownloadItem) {
+  // The answer to a form stays here: once cancelled, the browser could not be given it back.
   if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(handled, item.url) || fromPost(item)) return;
   const url = /^https?:/i.test(item.finalUrl ?? '') ? item.finalUrl : item.url;
   if (!/^https?:/i.test(url)) return;
@@ -139,17 +154,31 @@ function chromiumTakeover() {
 
   browser.downloads.onDeterminingFilename.addListener((item: DownloadItem, suggest: (s?: { filename: string }) => void) => {
     asked.add(item.id);
-    if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(bypass, item.finalUrl) || fromPost(item)) return;
+    if (item.byExtensionId === browser.runtime.id || take(bypass, item.url) || take(bypass, item.finalUrl)) return;
+    const form = fromPost(item);
+    // A form that cannot be sent again.
+    if (form && !form.post) return;
     void (async () => {
       const url = /^https?:/i.test(item.finalUrl) ? item.finalUrl : item.url;
       const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : null;
       const filename = basename(item.filename);
       const { rules } = await load();
-      if (!decide({ url, filename, size, pageUrl: item.referrer }, rules).take) {
+      // A form is for an app that sends it again.
+      if (!decide({ url, filename, size, pageUrl: item.referrer }, rules).take || (form && !(await appSendsForms()))) {
         suggest();
         return;
       }
-      const out = await handOver({ url, filename, size, mime: item.mime, referer: item.referrer, pageUrl: item.referrer });
+      const out = await handOver({
+        url,
+        filename,
+        size,
+        mime: item.mime,
+        referer: item.referrer,
+        pageUrl: item.referrer,
+        post: form?.post,
+        sentCookies: form?.sent?.cookies,
+        headers: form?.sent?.headers,
+      });
       if (out.kind === 'taken') {
         await browser.downloads.cancel(item.id).catch(() => undefined);
         await browser.downloads.erase({ id: item.id }).catch(() => undefined);
@@ -165,6 +194,7 @@ function chromiumTakeover() {
 // ---------------------------------------------------------------------------------- Firefox
 
 interface HeadersDetails {
+  requestId: string;
   url: string;
   method: string;
   statusCode: number;
@@ -179,15 +209,31 @@ interface HeadersDetails {
 
 function firefoxTakeover() {
   const onHeaders = async (d: HeadersDetails): Promise<{ cancel?: boolean }> => {
-    if (d.method !== 'GET' || d.statusCode < 200 || d.statusCode >= 300) return {};
+    if (d.statusCode < 200 || d.statusCode >= 300) return {};
+    // The answer to a form: with what the form sent, when that can be sent again.
+    const sent = sending.get(d.requestId);
+    const post = d.method === 'POST' ? postBody(sent?.body, sent?.type) : null;
+    if (d.method !== 'GET' && !post) return {};
     if (!isDownload(d.responseHeaders) || take(bypass, d.url)) return {};
     const filename = dispositionName(header(d.responseHeaders, 'content-disposition'));
     const size = contentLength(d.responseHeaders);
     const pageUrl = d.type === 'main_frame' ? d.originUrl : (d.documentUrl ?? d.originUrl);
     const { rules } = await load();
     if (!decide({ url: d.url, filename, size, pageUrl }, rules).take) return {};
+    // A form is for an app that sends it again.
+    if (post && !(await appSendsForms())) return {};
     const mime = header(d.responseHeaders, 'content-type')?.split(';')[0] ?? null;
-    const out = await handOver({ url: d.url, filename, size, mime, referer: pageUrl, pageUrl, storeId: storeOf(d) });
+    const out = await handOver({
+      url: d.url,
+      filename,
+      size,
+      mime,
+      referer: pageUrl,
+      pageUrl,
+      storeId: storeOf(d),
+      post,
+      ...(post ? { sentCookies: sent?.sent?.cookies, headers: sent?.sent?.headers } : {}),
+    });
     if (out.kind === 'taken') {
       mark(handled, d.url);
       return { cancel: true };
@@ -207,16 +253,67 @@ function firefoxTakeover() {
 
 // ---------------------------------------------------------------------------------- POST
 
-/** Notes the pages and frames that came as the answer to a POST (`posted`). Their response
- *  headers arrive before the browser makes a download of them. */
+interface RequestDetails {
+  requestId: string;
+  method: string;
+  requestBody?: RequestBody | null;
+  requestHeaders?: Header[];
+}
+
+/**
+ * Notes the pages and frames that came as the answer to a POST (`posted`), with what the POST
+ * sent (`sending`: its body, then its `Content-Type`). Their response headers arrive before the
+ * browser makes a download of them.
+ *
+ * Every form a page submits passes here, a login among them: what it sent is held while its
+ * request runs, and kept after that (a minute, for the download item) only when the answer's
+ * headers say it is a file to download. Any other answer drops it.
+ */
 function watchPosts() {
-  const seen = (d: HeadersDetails) => {
-    if (d.method !== 'GET' && d.method !== 'HEAD' && d.statusCode >= 200 && d.statusCode < 300) mark(posted, d.url, 60_000);
-  };
+  const frames = { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame'] };
   const webRequest = browser.webRequest as unknown as {
-    onHeadersReceived: { addListener(f: (d: HeadersDetails) => void, filter: object): void };
+    onBeforeRequest: { addListener(f: (d: RequestDetails) => void, filter: object, extra: string[]): void };
+    onSendHeaders: { addListener(f: (d: RequestDetails) => void, filter: object, extra: string[]): void };
+    onHeadersReceived: { addListener(f: (d: HeadersDetails) => void, filter: object, extra: string[]): void };
+    onCompleted: { addListener(f: (d: RequestDetails) => void, filter: object): void };
+    onErrorOccurred: { addListener(f: (d: RequestDetails) => void, filter: object): void };
   };
-  webRequest.onHeadersReceived.addListener(seen, { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame'] });
+  // Also where a redirect leads: a GET after a POST (303) sends nothing.
+  webRequest.onBeforeRequest.addListener(
+    (d) => {
+      if (d.method === 'POST') sending.set(d.requestId, { body: d.requestBody });
+      else sending.delete(d.requestId);
+    },
+    frames,
+    ['requestBody'],
+  );
+  // The headers as they went out; Chromium shows `Cookie` only with `extraHeaders`, which
+  // Firefox (which always shows it) does not know.
+  const onSend = (d: RequestDetails) => {
+    const s = sending.get(d.requestId);
+    if (!s) return;
+    s.type = header(d.requestHeaders, 'content-type');
+    s.sent = sentWith(d.requestHeaders);
+  };
+  try {
+    webRequest.onSendHeaders.addListener(onSend, frames, ['requestHeaders', 'extraHeaders']);
+  } catch {
+    webRequest.onSendHeaders.addListener(onSend, frames, ['requestHeaders']);
+  }
+  webRequest.onHeadersReceived.addListener(
+    (d) => {
+      if (d.method === 'GET' || d.method === 'HEAD' || d.statusCode < 200 || d.statusCode >= 300) return;
+      const s = sending.get(d.requestId);
+      // Without what was sent, the browser keeps the download (should it become one).
+      const post = d.method === 'POST' && isDownload(d.responseHeaders) ? postBody(s?.body, s?.type) : null;
+      posted.set(d.url, { until: Date.now() + 60_000, post, ...(post ? { sent: s?.sent } : {}) });
+    },
+    frames,
+    ['responseHeaders'],
+  );
+  const done = (d: RequestDetails) => void sending.delete(d.requestId);
+  webRequest.onCompleted.addListener(done, frames);
+  webRequest.onErrorOccurred.addListener(done, frames);
 }
 
 // ---------------------------------------------------------------------------------- media

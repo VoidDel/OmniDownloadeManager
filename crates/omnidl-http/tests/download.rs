@@ -874,6 +874,93 @@ async fn names_a_cloudflare_browser_check() {
     assert!(agents.iter().all(|a| a.contains("Mozilla")), "{agents:?}");
 }
 
+/// A job for the file behind `/form/{kind}`, with what the form sends.
+fn form_job(server: &common::Server, kind: &str, size: u64, dir: &Path, body: &str) -> Run {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let mut r = job(&server.url(&format!("/form/{kind}/{size}")), dir, None, 8);
+    r.job.options.post = Some(omnidl_core::PostData {
+        content_type: "application/x-www-form-urlencoded".into(),
+        body: STANDARD.encode(body),
+    });
+    r
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_the_answer_to_a_form() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 300_000;
+    let r = form_job(&server, "file", size, dir.path(), common::FORM_BODY);
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!((name.as_str(), total), ("sheet.pdf", size));
+    assert_content(&dir.path().join(&name), size);
+    // The form went out once: its answer is the file, in one connection.
+    assert_eq!(*server.stats.forms.lock(), [common::FORM_BODY]);
+    assert_eq!(server.stats.requests.load(Ordering::SeqCst), 1);
+    let state = r.recorder.started.lock().clone().unwrap();
+    assert!(!state.resumable);
+    assert_eq!(state.total, Some(size));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn probes_a_form_by_sending_it() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = form_job(&server, "file", 5000, dir.path(), common::FORM_BODY);
+    let p = engine().probe(&r.job.source, &r.job.options).await.unwrap();
+    assert_eq!(p.file_name, "sheet.pdf");
+    assert_eq!(p.total, Some(5000));
+    assert!(!p.resumable);
+    // What the server answers to other fields (a code used up) is a page: the caller sees it.
+    let r = form_job(&server, "file", 5000, dir.path(), "innum=1");
+    let p = engine().probe(&r.job.source, &r.job.options).await.unwrap();
+    assert!(p.content_type.unwrap().starts_with("text/html"));
+    assert_eq!(server.stats.forms.lock().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_the_answer_the_probe_got() {
+    // The app probes before it adds the task: the form goes out once in all.
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 200_000;
+    let r = form_job(&server, "file", size, dir.path(), common::FORM_BODY);
+    let p = engine().probe(&r.job.source, &r.job.options).await.unwrap();
+    assert_eq!(p.total, Some(size));
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!((name.as_str(), total), ("sheet.pdf", size));
+    assert_content(&dir.path().join(&name), size);
+    assert_eq!(server.stats.forms.lock().len(), 1);
+    // Once: a second run of the same form sends it again.
+    let again = form_job(&server, "file", size, dir.path(), common::FORM_BODY);
+    completed(engine().run(again.job).await);
+    assert_eq!(server.stats.forms.lock().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn does_not_send_a_form_again_on_its_own() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = form_job(&server, "broken", 100_000, dir.path(), common::FORM_BODY);
+    assert!(r.job.options.max_retries > 0);
+    let e = failed(engine().run(r.job).await);
+    assert_eq!(e.code, ErrorCode::Network, "{e}");
+    assert_eq!(server.stats.forms.lock().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn follows_a_form_to_its_file() {
+    // The form answers with a redirect (303): the file is fetched from there with a GET.
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 50_000;
+    let r = form_job(&server, "moved", size, dir.path(), common::FORM_BODY);
+    let (name, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, size);
+    assert_content(&dir.path().join(&name), size);
+    assert_eq!(server.stats.forms.lock().len(), 1);
+}
+
 fn failed(o: Outcome) -> omnidl_core::Error {
     match o {
         Outcome::Failed(e, _) => e,

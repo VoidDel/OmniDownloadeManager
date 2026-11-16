@@ -272,6 +272,8 @@ pub struct JobOptions {
     pub mirrors: Vec<String>,
     /// The sound to join to the picture (HTTP; see `TaskOptions::audio_source`).
     pub audio_source: Option<String>,
+    /// The form to send instead of a GET (HTTP; see `TaskOptions::post`).
+    pub post: Option<crate::PostData>,
 }
 
 impl JobOptions {
@@ -338,6 +340,7 @@ impl JobOptions {
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
                 .map(str::to_owned),
+            post: task.post.clone(),
         }
     }
 }

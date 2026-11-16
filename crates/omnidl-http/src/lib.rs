@@ -9,6 +9,7 @@
 mod auth;
 mod client;
 mod download;
+mod form;
 mod hls;
 mod mp4;
 mod probe;
@@ -69,10 +70,22 @@ impl DownloadEngine for HttpEngine {
             return playlist(&client, &with_account).await;
         }
         let auth = std::sync::Arc::new(auth::Auth::new(options, &mut url));
+        let form = form::Form::of(options)?.map(std::sync::Arc::new);
         // Another user agent when the server refuses this one.
         let (client, p) = ua::probe_with(options, &url, |c| {
-            let (url, auth) = (url.clone(), auth.clone());
-            async move { probe::probe(&c, &auth, &url).await }
+            let (url, auth, form) = (url.clone(), auth.clone(), form.clone());
+            async move {
+                match form {
+                    // The form is sent; its answer (the file) waits for the download.
+                    Some(f) => {
+                        let a = f.submit(&c, &auth, &url).await?;
+                        let p = a.probe.clone();
+                        form::keep(&url, &f, a);
+                        Ok(p)
+                    }
+                    None => probe::probe(&c, &auth, &url).await,
+                }
+            }
         })
         .await?;
         if hls::is_playlist_type(p.content_type.as_deref()) {

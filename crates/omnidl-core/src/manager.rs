@@ -807,6 +807,7 @@ impl TaskManager {
                 options.cookies = None;
                 options.headers.clear();
                 options.password = None;
+                options.post = None;
                 if let Some(crate::ProxyConfig::Custom { url }) = &mut options.proxy
                     && let Some((clean, ..)) = filename::split_credentials(url)
                 {

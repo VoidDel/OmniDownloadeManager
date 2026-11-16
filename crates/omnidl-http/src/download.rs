@@ -28,6 +28,7 @@ use url::Url;
 use crate::{
     auth::Auth,
     client::{request_error, status_error},
+    form::Form,
     hls, parse_url,
     probe::{self, Probe},
 };
@@ -67,10 +68,29 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
     let mut url = parse_url(&job.source)?;
     // The account, for the server that asks for one (`auth`).
     let auth = Arc::new(Auth::new(&job.options, &mut url));
+    // The answer to a form: sent once, its answer is the download (`form`).
+    let form = Form::of(&job.options)?.map(Arc::new);
     // Another user agent when the server refuses this one (`ua`).
-    let (client, probe) = crate::ua::probe_with(&job.options, &url, |c| {
-        let (job, url, auth) = (job.clone(), url.clone(), auth.clone());
-        async move { probe_retrying(retry_delay, &job, &c, &auth, &url).await }
+    let (client, (probe, answer)) = crate::ua::probe_with(&job.options, &url, |c| {
+        let (job, url, auth, form) = (job.clone(), url.clone(), auth.clone(), form.clone());
+        async move {
+            match form {
+                // The answer the probe already got (`form::keep`).
+                Some(f) if let Some(a) = crate::form::take(&url, &f) => {
+                    Ok((a.probe, Some(a.response)))
+                }
+                Some(f) => {
+                    let a = tokio::select! {
+                        a = f.submit(&c, &auth, &url) => a?,
+                        _ = job.cancel.cancelled() => return Err(Error::internal("cancelled")),
+                    };
+                    Ok((a.probe, Some(a.response)))
+                }
+                None => probe_retrying(retry_delay, &job, &c, &auth, &url)
+                    .await
+                    .map(|p| (p, None)),
+            }
+        }
     })
     .await?;
     if hls::is_playlist_type(probe.content_type.as_deref()) {
@@ -149,7 +169,14 @@ async fn prepare(retry_delay: Duration, job: &Arc<Job>) -> Result<Prepared> {
         job: job.clone(),
         client,
         auth,
-        url: probe.final_url.clone(),
+        // A form goes to its own address, wherever its answer came from.
+        url: if form.is_some() {
+            url.clone()
+        } else {
+            probe.final_url.clone()
+        },
+        form,
+        answer: Arc::new(Mutex::new(answer)),
         mirrors,
         dir,
         retry_delay,
@@ -272,6 +299,9 @@ struct Download {
     client: Client,
     auth: Arc<Auth>,
     url: Url,
+    /// The form to send instead of a GET, and the answer `prepare` already has to it.
+    form: Option<Arc<Form>>,
+    answer: Arc<Mutex<Option<reqwest::Response>>>,
     /// Other addresses of the file, checked (see `check_mirrors`).
     mirrors: Vec<Url>,
     dir: PathBuf,
@@ -323,6 +353,8 @@ impl Download {
             auth: self.auth.clone(),
             dropped: Mutex::new(vec![false; sources.len()]),
             sources,
+            form: self.form.clone(),
+            answer: self.answer.clone(),
             table: self.table.clone(),
             writer: self.writer.clone(),
             ranged: self.state.resumable,
@@ -513,6 +545,10 @@ struct Conn {
     auth: Arc<Auth>,
     /// The link, then the mirrors in use.
     sources: Vec<Url>,
+    /// The form to send instead of a GET, and the answer to it that is already there (taken
+    /// by the first request).
+    form: Option<Arc<Form>>,
+    answer: Arc<Mutex<Option<reqwest::Response>>>,
     /// Mirrors left out after they failed (the link never is).
     dropped: Mutex<Vec<bool>>,
     table: Arc<Mutex<SegmentTable>>,
@@ -609,7 +645,8 @@ impl Conn {
                 }
                 Err(FetchError::Failed(e)) => e,
             };
-            if !e.is_transient() {
+            // A form is not sent again on its own.
+            if !e.is_transient() || self.form.is_some() {
                 return Err(ConnError::Fatal(e));
             }
             if self.position(idx) > before {
@@ -665,12 +702,26 @@ impl Conn {
             Some(r) => req.header(RANGE, r),
             None => req,
         };
-        let sent = self
-            .auth
-            .send(&self.client, Method::GET, &self.sources[src], with_range);
-        let resp = tokio::select! {
-            r = sent => r.map_err(|e| FetchError::Failed(request_error(&e)))?,
-            _ = w.cancelled() => return Err(FetchError::Cancelled),
+        let answer = self.answer.lock().take();
+        let resp = match (answer, &self.form) {
+            // The answer the form already got.
+            (Some(r), _) => r,
+            (None, Some(form)) => {
+                let sent = form.submit(&self.client, &self.auth, &self.sources[src]);
+                tokio::select! {
+                    a = sent => a.map_err(FetchError::Failed)?.response,
+                    _ = w.cancelled() => return Err(FetchError::Cancelled),
+                }
+            }
+            (None, None) => {
+                let sent =
+                    self.auth
+                        .send(&self.client, Method::GET, &self.sources[src], with_range);
+                tokio::select! {
+                    r = sent => r.map_err(|e| FetchError::Failed(request_error(&e)))?,
+                    _ = w.cancelled() => return Err(FetchError::Cancelled),
+                }
+            }
         };
         match resp.status() {
             StatusCode::PARTIAL_CONTENT => {

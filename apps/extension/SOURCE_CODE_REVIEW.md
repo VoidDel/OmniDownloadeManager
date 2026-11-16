@@ -43,7 +43,9 @@ It hands downloads to the Omni Download desktop application on the same computer
 Messaging (host `app.omnidownload.host`) or, when the user pairs it in the options, through an
 HTTP interface on `127.0.0.1`. For a download it passes the file's address, the page it came
 from, the site's cookies (so the application can fetch files that need a login), the browser's
-user agent and the file name. Nothing is sent anywhere else; there is no remote server, no
+user agent and the file name; for a download that is the answer to a form the user submitted,
+also what the form sent (`lib/post.ts`; read with `webRequest`, held in memory while the request
+runs and dropped unless the answer is a file to download). Nothing is sent anywhere else; there is no remote server, no
 analytics and no remote code. This is what `data_collection_permissions` in the manifest declares.
 
 To try it, install the desktop application from

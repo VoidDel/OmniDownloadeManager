@@ -70,6 +70,21 @@ pub struct AddDownload {
     /// the media sniffer): both are downloaded and joined into one MP4.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_url: Option<String>,
+    /// The download is the answer to a form: what the form sent (the request was a POST). The
+    /// app sends it again, and answers `browser` when the server does not give the file a
+    /// second time, while the browser still holds its own download.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post: Option<PostBody>,
+}
+
+/// A POST request's body.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PostBody {
+    /// The request's `Content-Type`.
+    pub content_type: String,
+    /// base64.
+    pub body: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,7 +161,15 @@ pub enum ErrorCode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pong {
     pub app_version: String,
+    /// What this app understands beyond the first protocol ([`CAP_POST`]): an extension asks
+    /// before it sends what an older app would silently ignore.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
 }
+
+/// The app sends forms again (`AddDownload::post`). An app without it would fetch the form's
+/// address with a GET and save the page it gets.
+pub const CAP_POST: &str = "post";
 
 /// `get_status` result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

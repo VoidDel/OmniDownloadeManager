@@ -769,6 +769,7 @@
     "probing": "ファイル情報を取得しています…",
     "resumable": "レジューム対応",
     "notResumable": "レジューム非対応",
+    "form": "フォームのダウンロード",
     "connectionsUsed": "{count} 接続を使用",
     "attached": {
       "both": "Cookie と Referer を添付済み",

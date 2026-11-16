@@ -33,6 +33,10 @@ let bridgePort = 0;
 const received: Received[] = [];
 /** What the stand-in app answers to the next `add_download`. */
 let nextAction: 'started' | 'browser' = 'started';
+/** The stand-in app says it sends forms again (an older app does not say so). */
+let sendsForms = true;
+/** What the browser sent `/files/posted.bin` with. */
+const postedWith: { cookie: string; origin: string }[] = [];
 let unauthorized = 0;
 
 function listen(server: http.Server): Promise<number> {
@@ -43,22 +47,31 @@ test.beforeAll(async () => {
   site = http.createServer((req, res) => {
     if (req.url === '/') {
       // A partitioned cookie as Cloudflare sets its clearance: the app needs it too.
-      res.setHeader('Set-Cookie', ['session=abc123; Path=/', 'clearance=ok; Path=/; Secure; SameSite=None; Partitioned']);
+      res.setHeader('Set-Cookie', ['session=abc123; Path=/', 'clearance=ok; Path=/; Secure; SameSite=None; Partitioned', 'captk=first; Path=/']);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end(
         '<!doctype html><a id="big" href="/files/big.bin">big</a> <a id="small" href="/files/small.txt">small</a>' +
-          '<form method="post" action="/files/posted.bin"><input name="code" value="26554"><button id="post">download</button></form>',
+          '<form method="post" action="/files/posted.bin"><input name="code" value="26554"><input type="hidden" name="info" value="a b&c"><button id="post">download</button></form>' +
+          // A form that cannot be sent again as it was (it may carry files).
+          '<form method="post" enctype="multipart/form-data" action="/files/posted.bin"><input name="code" value="26554"><button id="multipart">download</button></form>',
       );
       return;
     }
-    // A file that only the form's answer brings (a download behind a security code).
+    // A file that only the form's answer brings (a download behind a security code). With it,
+    // a new code for the next time: its cookie changes.
     if (req.url === '/files/posted.bin') {
       if (req.method !== 'POST') {
         res.statusCode = 403;
         res.end();
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': String(3 * MB), 'Content-Disposition': 'attachment; filename="posted.bin"' });
+      postedWith.push({ cookie: req.headers.cookie ?? '', origin: req.headers.origin ?? '' });
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Length': String(3 * MB),
+        'Content-Disposition': 'attachment; filename="posted.bin"',
+        'Set-Cookie': `captk=next${postedWith.length}; Path=/`,
+      });
       res.end(Buffer.alloc(3 * MB, 9));
       return;
     }
@@ -96,7 +109,7 @@ test.beforeAll(async () => {
       } else if (msg.type === 'get_status') {
         res.end(JSON.stringify({ id: msg.id, ok: true, result: { app_version: '9.9.9', running: 1, download_speed: 5 * MB, recent: [{ id: 't', name: 'big.bin', status: 'downloading', progress: 0.4 }] } }));
       } else {
-        res.end(JSON.stringify({ id: msg.id, ok: true, result: { app_version: '9.9.9' } }));
+        res.end(JSON.stringify({ id: msg.id, ok: true, result: { app_version: '9.9.9', ...(sendsForms ? { capabilities: ['post'] } : {}) } }));
       }
     });
   });
@@ -177,7 +190,7 @@ test.describe('Chromium asks the extension', () => {
       filename: 'big.bin',
       size: 3 * MB,
       referer: `${siteUrl}/`,
-      cookies: 'session=abc123; clearance=ok',
+      cookies: 'session=abc123; clearance=ok; captk=first',
       silent: false,
     });
     expect(String(msg.payload?.user_agent)).toContain('Chrome');
@@ -208,13 +221,65 @@ test.describe('Chromium asks the extension', () => {
     await page.close();
   });
 
-  test('leaves the answer to a form (POST) to the browser', async () => {
+  test('hands the answer to a form (POST) over with what the form sent', async () => {
     nextAction = 'started';
     const page = await context.newPage();
     await page.goto(`${siteUrl}/`);
     const before = adds().length;
+    const had = (await downloads(worker)).length;
     await page.click('#post');
+    await expect.poll(() => adds().length).toBe(before + 1);
+    const msg = adds().at(-1)!;
+    // The cookies and origin the form went out with, not those its answer set.
+    const sent = postedWith.at(-1)!;
+    expect(sent.cookie).toContain('captk=first');
+    expect(msg.payload).toMatchObject({ url: `${siteUrl}/files/posted.bin`, filename: 'posted.bin', mime: 'application/pdf', cookies: sent.cookie, headers: { Origin: siteUrl } });
+    const post = msg.payload?.post as { content_type: string; body: string };
+    expect(post.content_type).toBe('application/x-www-form-urlencoded');
+    expect(Buffer.from(post.body, 'base64').toString()).toBe('code=26554&info=a+b%26c');
+    // The app took it: the browser's own download is gone.
+    await expect.poll(async () => (await downloads(worker)).length).toBe(had);
+    await page.close();
+  });
+
+  test('keeps the answer to a form when the app does not get the file again', async () => {
+    // The app answers `browser` (the server gave it a page the second time).
+    nextAction = 'browser';
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/`);
+    const before = adds().length;
+    await page.click('#post');
+    await expect.poll(() => adds().length).toBe(before + 1);
     await expect.poll(() => downloads(worker), { timeout: 15_000 }).toContainEqual({ name: 'posted.bin', state: 'complete' });
+    expect(fs.statSync(path.join(downloadDir, 'posted.bin')).size).toBe(3 * MB);
+    await page.close();
+  });
+
+  test('leaves forms to the browser when the app is an older one', async () => {
+    nextAction = 'started';
+    sendsForms = false;
+    try {
+      const page = await context.newPage();
+      await page.goto(`${siteUrl}/`);
+      const before = adds().length;
+      const had = (await downloads(worker)).filter((d) => d.state === 'complete').length;
+      await page.click('#post');
+      await expect.poll(async () => (await downloads(worker)).filter((d) => d.state === 'complete').length, { timeout: 15_000 }).toBe(had + 1);
+      expect(adds().length).toBe(before);
+      await page.close();
+    } finally {
+      sendsForms = true;
+    }
+  });
+
+  test('leaves a form it cannot send again to the browser', async () => {
+    nextAction = 'started';
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/`);
+    const before = adds().length;
+    const had = (await downloads(worker)).filter((d) => d.state === 'complete').length;
+    await page.click('#multipart');
+    await expect.poll(async () => (await downloads(worker)).filter((d) => d.state === 'complete').length, { timeout: 15_000 }).toBe(had + 1);
     expect(adds().length).toBe(before);
     await page.close();
   });
@@ -248,7 +313,7 @@ test.describe('another party names the download', () => {
       const before = adds().length;
       await page.click('#big');
       await expect.poll(() => adds().length).toBe(before + 1);
-      expect(adds().at(-1)!.payload).toMatchObject({ url: `${siteUrl}/files/big.bin`, cookies: 'session=abc123; clearance=ok', filename: null });
+      expect(adds().at(-1)!.payload).toMatchObject({ url: `${siteUrl}/files/big.bin`, cookies: 'session=abc123; clearance=ok; captk=first', filename: null });
       await expect.poll(() => downloads(worker)).toEqual([]);
       // The answer to a form stays with the browser here too.
       const posts = adds().length;

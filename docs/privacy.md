@@ -15,9 +15,12 @@ When a download starts (or when you choose "Download with Omni Download" from a 
 - the address of the file, its name and size;
 - the address of the page the download came from (the referrer);
 - the cookies your browser holds for the site of that file, so the application can fetch files that require you to be signed in;
-- your browser's user-agent string.
+- your browser's user-agent string;
+- when the file is the answer to a form you submitted (a download behind a security code, an export): what that form sent, so the application can ask for the file the same way.
 
 It passes these to the Omni Download application running on your computer, through the browser's Native Messaging channel or, if you have paired it in the extension's options, through an interface on `127.0.0.1` (your own machine). They are not sent anywhere else.
+
+To have a form's contents when its answer turns out to be a download, the extension sees what the forms on the pages you visit send. It holds this in memory only while the request is under way, and discards it unless the server answers with a file to download; it is never written to storage by the extension, and it is passed to the application only together with that download.
 
 "Download this page's file links" reads the link addresses on the current page, only when you choose that menu item, and passes them to the application in the same way.
 
@@ -29,7 +32,7 @@ The extension contains no analytics, no advertising, and loads no remote code.
 
 ### The desktop application
 
-- **What it stores, on your computer only:** the list of downloads (addresses, file names, save locations, progress), your settings, and log files. Cookies and FTP passwords that belong to a download are stored encrypted.
+- **What it stores, on your computer only:** the list of downloads (addresses, file names, save locations, progress), your settings, and log files. Cookies, FTP passwords and the form contents that belong to a download are stored encrypted.
 - **What it connects to:** the servers you download from, with the cookies and headers of that download; for BitTorrent, trackers, the DHT network and other peers, who can see your IP address, as with any BitTorrent client.
 - **Update checks:** once after starting (you can turn this off) the application asks GitHub whether a newer release exists. This is an ordinary HTTPS request to `github.com`; GitHub's own privacy policy applies to it.
 - **No telemetry:** the application sends no usage statistics, crash reports or identifiers to anyone.
@@ -55,9 +58,12 @@ Changes to this policy are published in this file, with a new date. Questions: o
 - 文件的地址、文件名和大小；
 - 发起下载的页面地址（来源页）；
 - 浏览器为该文件所在网站保存的 Cookie，这样应用才能下载需要登录的文件；
-- 浏览器的 User-Agent。
+- 浏览器的 User-Agent；
+- 文件是你提交表单后得到的（例如先填验证码再下载、导出数据）时：这个表单提交的内容，这样应用才能用同样的方式取得文件。
 
 这些信息通过浏览器的 Native Messaging 通道，或者（在扩展选项里配对后）通过本机 `127.0.0.1` 上的接口，交给在你电脑上运行的 Omni Download 应用，不会发送到别处。
+
+为了在表单的应答是一个下载时能拿到表单内容，扩展会看到你访问的网页提交表单时发送的内容。这些内容只在请求进行期间留在内存里；服务器的应答不是要下载的文件时即被丢弃。扩展不会把它写入存储，只会随那一次下载一起交给应用。
 
 “下载本页的文件链接”只在你选择这个菜单项时读取当前页面上的链接地址，并以同样的方式交给应用。
 
@@ -69,7 +75,7 @@ Changes to this policy are published in this file, with a new date. Questions: o
 
 ### 桌面应用
 
-- **只保存在你电脑上的内容：** 下载列表（地址、文件名、保存位置、进度）、设置和日志。属于某个下载的 Cookie 和 FTP 密码加密保存。
+- **只保存在你电脑上的内容：** 下载列表（地址、文件名、保存位置、进度）、设置和日志。属于某个下载的 Cookie、FTP 密码和表单内容加密保存。
 - **它会连接：** 你下载文件的服务器（带上该下载的 Cookie 和请求头）；BT 下载时连接 Tracker、DHT 网络和其他节点，对方能看到你的 IP 地址，这与任何 BT 客户端相同。
 - **检查更新：** 启动后向 GitHub 询问一次是否有新版本（可以关闭）。这是一次普通的 HTTPS 请求，适用 GitHub 自己的隐私政策。
 - **没有遥测：** 应用不向任何人发送使用统计、崩溃报告或标识符。

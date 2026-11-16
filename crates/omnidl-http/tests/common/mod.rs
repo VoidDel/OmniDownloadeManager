@@ -78,6 +78,8 @@ pub struct Stats {
     /// `/lagging`: the slow body was started, and dropped before its end.
     pub lag_started: AtomicUsize,
     pub lag_cut: AtomicUsize,
+    /// The bodies `/form` was sent (one per POST).
+    pub forms: Mutex<Vec<String>>,
     /// User agents `/picky` was asked with.
     pub agents: Mutex<Vec<String>>,
     /// Bodies dropped before their end (connections that stopped early).
@@ -129,6 +131,7 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/burst/{fast}/{slow}/{burst}/{size}", get(burst))
         .route("/picky/{size}", get(picky))
         .route("/checked/{size}", get(checked))
+        .route("/form/{kind}/{size}", get(form).post(form))
         .route("/changing/{size}", get(changing))
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
@@ -352,6 +355,46 @@ async fn checked(method: Method, headers: HeaderMap, State(s): S, UrlPath(size):
         return (StatusCode::FORBIDDEN, [("cf-mitigated", "challenge")]).into_response();
     }
     serve(&method, &headers, size, Opts::default(), &s)
+}
+
+/// What `/form` wants to be sent.
+pub const FORM_BODY: &str = "innum=26554&tmpinfo=01__W55";
+
+/// A file behind a form, as a datasheet behind a security code: a POST with the right fields
+/// gets it (`sheet.pdf`, no ranges), anything else the page with the form. `kind`: `file`;
+/// `broken`, whose body breaks off halfway; `moved`, which redirects (303) to `/file`.
+async fn form(
+    method: Method,
+    headers: HeaderMap,
+    State(s): S,
+    UrlPath((kind, size)): UrlPath<(String, u64)>,
+    body: Bytes,
+) -> Response {
+    let page = |text: &'static str| {
+        ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], text).into_response()
+    };
+    if method != Method::POST {
+        return page("<form method=post><input name=innum></form>");
+    }
+    let sent = String::from_utf8_lossy(&body).into_owned();
+    s.forms.lock().push(sent.clone());
+    let urlencoded = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("application/x-www-form-urlencoded"));
+    if !urlencoded || sent != FORM_BODY {
+        return page("wrong security code");
+    }
+    if kind == "moved" {
+        return Redirect::to(&format!("/file/{size}")).into_response();
+    }
+    let o = Opts {
+        ranges: false,
+        disposition: Some("attachment; filename=\"sheet.pdf\""),
+        break_after: (kind == "broken").then_some(size / 2),
+        ..Opts::default()
+    };
+    serve(&method, &headers, size, o, &s)
 }
 
 async fn changing(

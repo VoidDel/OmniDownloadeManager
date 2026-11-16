@@ -17,6 +17,17 @@ export interface AddDownload {
   silent?: boolean;
   /** The sound of a video whose `url` has only the picture (DASH): the app joins them. */
   audio_url?: string | null;
+  /** The download is the answer to a form: what the form sent. The app sends it again, and
+   *  answers `browser` when the server does not give the file a second time. */
+  post?: PostBody | null;
+}
+
+/** A POST request's body. */
+export interface PostBody {
+  /** The request's `Content-Type`. */
+  content_type: string;
+  /** base64. */
+  body: string;
 }
 
 export type RequestBody =
@@ -36,6 +47,13 @@ export interface Response<T = unknown> {
   ok: boolean;
   result?: T;
   error?: { code: ErrorCode; message: string };
+}
+
+/** `ping` result. */
+export interface Pong {
+  app_version: string;
+  /** What the app understands beyond the first protocol: `post` (it sends forms again). */
+  capabilities?: string[];
 }
 
 export interface RecentTask {
