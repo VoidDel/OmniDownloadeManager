@@ -301,9 +301,12 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         <Row label={t('settings.general.floatBall')} hint={t('settings.general.floatBallHint')}>
           <Switch label={t('settings.general.floatBall')} checked={g.floatBall} onChange={(v) => set((x) => (x.general.floatBall = v))} />
         </Row>
-        <Row col label={t('settings.general.floatStyle')} hint={t('settings.general.floatStyleHint')}>
-          <FloatStylePicker label={t('settings.general.floatStyle')} value={g.floatStyle ?? 'classic'} onChange={(v) => set((x) => (x.general.floatStyle = v))} />
-        </Row>
+        {/* Its looks, while it is shown. */}
+        {g.floatBall && (
+          <Row col label={t('settings.general.floatStyle')} hint={t('settings.general.floatStyleHint')}>
+            <FloatStylePicker label={t('settings.general.floatStyle')} value={g.floatStyle ?? 'classic'} onChange={(v) => set((x) => (x.general.floatStyle = v))} />
+          </Row>
+        )}
         <Row label={t('settings.general.watchClipboard')} hint={t('settings.general.watchClipboardHint')}>
           <Switch label={t('settings.general.watchClipboard')} checked={g.watchClipboard} onChange={(v) => set((x) => (x.general.watchClipboard = v))} />
         </Row>
