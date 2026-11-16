@@ -37,7 +37,7 @@ tokio-util = "0.7"
 async-trait = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 bytes = "1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 
 # HTTP: rustls with the platform verifier (system trust store). HTTP/1.1 only: HTTP/2 would carry
 # every connection of a download over one TCP stream. No decompression features, so no
