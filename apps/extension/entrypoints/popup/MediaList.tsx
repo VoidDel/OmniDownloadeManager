@@ -1,7 +1,6 @@
-// The popup's media list: the videos, audio and streams the current tab has played (found by the
+// The popup's media tab: the videos, audio and streams the current tab has played (found by the
 // background's sniffing), each to hand to Omni Download. A site's picture and sound served apart
-// (DASH) are offered as one video, which the app joins. Opening it looks at the page once more
-// (`scan.ts`) for media the sniffing missed.
+// (DASH) are offered as one video, which the app joins.
 //
 // Each row starts with its format tile, coloured by kind (video, sound, stream); the tile is
 // also how a row is chosen, for downloading several at once (they start without a window
@@ -32,22 +31,16 @@ async function currentTab(): Promise<number | null> {
   return tab?.id ?? null;
 }
 
-export function MediaList() {
+/** The media the current tab has played, kept up to date while the popup is open. Opening it
+ *  looks at the page once more (`scan.ts`) for media the sniffing missed. */
+export function usePageMedia(): Media[] {
   const [tabId, setTabId] = useState<number | null>(null);
   const [items, setItems] = useState<Media[]>([]);
-  const [sent, setSent] = useState<Set<string>>(new Set());
-  const [chosen, setChosen] = useState<Set<string>>(new Set());
-  const [copied, setCopied] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('all');
-  /** The quality chosen for each master HLS playlist (by its address); unset: the best. */
-  const [quality, setQuality] = useState<Record<string, string>>({});
-  const toSend = (o: Offer) => ({ media: o.media, audio: o.audio, name: o.name, hlsVariant: quality[o.media.url] ?? o.media.variants?.[0]?.url ?? null });
 
   useEffect(() => {
     void currentTab().then(setTabId);
   }, []);
 
-  // The list, and again whenever the background adds to it (the look at the page among others).
   useEffect(() => {
     if (tabId == null) return;
     void browser.runtime.sendMessage({ type: 'scan-media', tabId }).catch(() => undefined);
@@ -59,6 +52,18 @@ export function MediaList() {
     browser.storage.onChanged.addListener(onChanged);
     return () => browser.storage.onChanged.removeListener(onChanged);
   }, [tabId]);
+
+  return items;
+}
+
+export function MediaList({ items, id }: { items: Media[]; id: string }) {
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('all');
+  /** The quality chosen for each master HLS playlist (by its address); unset: the best. */
+  const [quality, setQuality] = useState<Record<string, string>>({});
+  const toSend = (o: Offer) => ({ media: o.media, audio: o.audio, name: o.name, hlsVariant: quality[o.media.url] ?? o.media.variants?.[0]?.url ?? null });
 
   const all = offers(items);
   const counts = { all: all.length, video: all.filter((o) => offerTab(o) === 'video').length, audio: all.filter((o) => offerTab(o) === 'audio').length };
@@ -96,13 +101,9 @@ export function MediaList() {
   };
 
   return (
-    <section className="psection pmedia" aria-label={t('mediaTitle')}>
-      <div className="pshead">
-        <span className="psec">
-          {t('mediaTitle')}
-          {!tabs && all.length > 0 && <span className="pcount">{all.length}</span>}
-        </span>
-        {tabs && (
+    <section className="ppanel pmedia" id={id} role="tabpanel" aria-labelledby={`tab-${id}`}>
+      {tabs && (
+        <div className="pshead">
           <Tabs<Tab>
             label={t('mediaTitle')}
             value={tab}
@@ -113,8 +114,8 @@ export function MediaList() {
               ['audio', `${t('mediaAudio')} ${counts.audio}`],
             ]}
           />
-        )}
-      </div>
+        </div>
+      )}
       {shown.length === 0 ? (
         <p className="pnone">{t('mediaNone')}</p>
       ) : (

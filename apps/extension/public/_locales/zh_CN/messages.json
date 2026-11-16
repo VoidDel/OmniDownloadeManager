@@ -78,7 +78,7 @@
     "message": "最小文件大小"
   },
   "minSizeHint": {
-    "message": "更小的文件留在浏览器；大小未知的文件会接管"
+    "message": "更小的文件留在浏览器；填 0 表示任意大小都接管。大小未知的文件总是接管"
   },
   "minSizeLabel": {
     "message": "最小文件大小（MB）"
@@ -224,12 +224,6 @@
   "idle": {
     "message": "没有正在下载的任务"
   },
-  "takeoverOn": {
-    "message": "$1 MB 以上的文件交给 Omni Download"
-  },
-  "takeoverOff": {
-    "message": "下载留在浏览器中"
-  },
   "recent": {
     "message": "最近的下载"
   },
@@ -316,5 +310,11 @@
   },
   "footGetApp": {
     "message": "下载桌面应用"
+  },
+  "recentNone": {
+    "message": "还没有下载任务。"
+  },
+  "recentUnreachable": {
+    "message": "连上 Omni Download 后，这里显示最近的下载。"
   }
 }

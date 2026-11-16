@@ -1,17 +1,19 @@
-// The toolbar popup (docs/development-plan.md §5.4): whether Omni Download is reachable, the
-// media the page plays (what the popup is mostly opened for), the latest downloads, the
-// takeover switch and a way to open the app.
+// The toolbar popup (docs/development-plan.md §5.4): whether Omni Download is reachable, two tabs
+// (the media the page plays, the latest downloads), and ways to open the app and the options
+// (where the takeover switch is). It opens on the page's media when there is some, else on the
+// downloads.
 
 import { useEffect, useState } from 'react';
 
 import { BridgeError, send, type Unreachable } from '../../lib/bridge';
 import { t, tn } from '../../lib/i18n';
+import { offers } from '../../lib/media';
 import { speed, statusLabel } from '../../lib/page';
 import type { Status } from '../../lib/protocol';
-import { DEFAULT_RULES, type Rules } from '../../lib/rules';
-import { load, save } from '../../lib/settings';
-import { Bar, Icon, Switch } from '../../lib/ui';
-import { MediaList } from './MediaList';
+import { Bar, Icon, ViewTabs } from '../../lib/ui';
+import { MediaList, usePageMedia } from './MediaList';
+
+type View = 'media' | 'downloads';
 
 type State = { kind: 'loading' } | { kind: 'ok'; status: Status } | { kind: 'down'; reason: Unreachable; detail: string };
 
@@ -37,10 +39,11 @@ function progressText(status: string, progress: number | null): string {
 
 export function Popup() {
   const [state, setState] = useState<State>({ kind: 'loading' });
-  const [rules, setRules] = useState<Rules>(DEFAULT_RULES);
+  const media = usePageMedia();
+  /** The tab the user chose; until then, the media when the page has some. */
+  const [view, setView] = useState<View | null>(null);
 
   useEffect(() => {
-    void load().then((s) => setRules(s.rules));
     let live = true;
     const poll = async () => {
       try {
@@ -62,14 +65,12 @@ export function Popup() {
     };
   }, []);
 
-  const setEnabled = (enabled: boolean) => {
-    const next = { ...rules, enabled };
-    setRules(next);
-    void save({ rules: next });
-  };
-
   const openApp = () => void send({ type: 'open_app' }).then(() => window.close(), () => undefined);
   const status = state.kind === 'ok' ? state.status : null;
+  const recent = status?.recent ?? [];
+  const mediaCount = offers(media).length;
+  const shown: View = view ?? (mediaCount > 0 || !recent.length ? 'media' : 'downloads');
+  const count = (n: number) => (n > 0 ? <span className="pcount">{n}</span> : null);
 
   return (
     <div className="popup">
@@ -115,35 +116,40 @@ export function Popup() {
         </div>
       )}
 
-      <MediaList />
+      <ViewTabs<View>
+        label="Omni Download"
+        value={shown}
+        onChange={setView}
+        options={[
+          ['media', <>{t('mediaTitle')}{count(mediaCount)}</>, 'panel-media'],
+          ['downloads', <>{t('recent')}{count(recent.length)}</>, 'panel-downloads'],
+        ]}
+      />
 
-      {!!status?.recent?.length && (
-        <section className="psection" aria-label={t('recent')}>
-          <div className="pshead">
-            <span className="psec">{t('recent')}</span>
-          </div>
-          <ul className="precent">
-            {status.recent.map((task) => (
-              <li key={task.id} className={`st-${tone(task.status)}`}>
-                <span className="pname" title={task.name}>
-                  {task.name}
-                </span>
-                <span className="pst">{progressText(task.status, task.progress)}</span>
-                <Bar value={task.status === 'completed' ? 1 : (task.progress ?? 0)} busy={task.progress == null && task.status === 'downloading'} />
-              </li>
-            ))}
-          </ul>
+      {shown === 'media' ? (
+        <MediaList items={media} id="panel-media" />
+      ) : (
+        <section className="ppanel" id="panel-downloads" role="tabpanel" aria-labelledby="tab-panel-downloads">
+          {recent.length ? (
+            <ul className="precent">
+              {recent.map((task) => (
+                <li key={task.id} className={`st-${tone(task.status)}`}>
+                  <span className="pname" title={task.name}>
+                    {task.name}
+                  </span>
+                  <span className="pst">{progressText(task.status, task.progress)}</span>
+                  {/* A finished one says so; a bar would only be full. */}
+                  {task.status !== 'completed' && <Bar value={task.progress ?? 0} busy={task.progress == null && task.status === 'downloading'} />}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="pnone">{t(status ? 'recentNone' : 'recentUnreachable')}</p>
+          )}
         </section>
       )}
 
       <footer className="pfoot">
-        <div className="ptake">
-          <div>
-            <b>{t('takeover')}</b>
-            <small>{rules.enabled ? t('takeoverOn', rules.minSizeMB) : t('takeoverOff')}</small>
-          </div>
-          <Switch label={t('takeover')} checked={rules.enabled} onChange={setEnabled} />
-        </div>
         <div className="pact">
           <button type="button" className="btn primary" onClick={openApp}>
             {t('openApp')}

@@ -13,6 +13,14 @@ describe('decide', () => {
     expect(decide({ url: 'https://dl.example.com/a.zip', size: null }, DEFAULT_RULES).take).toBe(true);
   });
 
+  it('takes files of any size when the minimum is 0', () => {
+    const any = { ...DEFAULT_RULES, minSizeMB: 0 };
+    expect(decide({ url: 'https://e.com/a.zip', size: 1 }, any).take).toBe(true);
+    expect(decide({ url: 'https://e.com/a.zip', size: 0 }, any).take).toBe(true);
+    // The default leaves a 10 KB file to the browser.
+    expect(decide({ url: 'https://e.com/a.zip', size: 10 * 1024 }, DEFAULT_RULES).take).toBe(false);
+  });
+
   it('leaves the rest to the browser', () => {
     const no = (r: ReturnType<typeof decide>) => (r.take ? '' : r.reason);
     expect(no(decide({ url: 'https://e.com/a.zip', size: 100 }, DEFAULT_RULES))).toBe('small');

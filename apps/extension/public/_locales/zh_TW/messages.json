@@ -78,7 +78,7 @@
     "message": "最小檔案大小"
   },
   "minSizeHint": {
-    "message": "更小的檔案留在瀏覽器；大小未知的檔案會接管"
+    "message": "更小的檔案留在瀏覽器；填 0 表示任何大小都接手。大小未知的檔案一律接手"
   },
   "minSizeLabel": {
     "message": "最小檔案大小（MB）"
@@ -224,12 +224,6 @@
   "idle": {
     "message": "沒有正在下載的任務"
   },
-  "takeoverOn": {
-    "message": "$1 MB 以上的檔案交給 Omni Download"
-  },
-  "takeoverOff": {
-    "message": "下載留在瀏覽器中"
-  },
   "recent": {
     "message": "最近的下載"
   },
@@ -316,5 +310,11 @@
   },
   "footGetApp": {
     "message": "下載桌面應用程式"
+  },
+  "recentNone": {
+    "message": "還沒有下載任務。"
+  },
+  "recentUnreachable": {
+    "message": "連上 Omni Download 後，這裡會顯示最近的下載。"
   }
 }

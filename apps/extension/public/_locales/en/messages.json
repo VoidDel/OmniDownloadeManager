@@ -78,7 +78,7 @@
     "message": "Minimum file size"
   },
   "minSizeHint": {
-    "message": "Smaller files stay with the browser; files of unknown size are taken over"
+    "message": "Smaller files stay with the browser; 0 takes over files of any size. Files of unknown size are always taken over"
   },
   "minSizeLabel": {
     "message": "Minimum file size (MB)"
@@ -224,12 +224,6 @@
   "idle": {
     "message": "Nothing is downloading"
   },
-  "takeoverOn": {
-    "message": "Files of $1 MB and more go to Omni Download"
-  },
-  "takeoverOff": {
-    "message": "Downloads stay in the browser"
-  },
   "recent": {
     "message": "Recent downloads"
   },
@@ -316,5 +310,11 @@
   },
   "footGetApp": {
     "message": "Get the desktop app"
+  },
+  "recentNone": {
+    "message": "No downloads yet."
+  },
+  "recentUnreachable": {
+    "message": "Recent downloads show here once Omni Download is connected."
   }
 }

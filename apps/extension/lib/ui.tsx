@@ -61,6 +61,30 @@ export function Tabs<T extends string>({ value, options, onChange, label, classN
   );
 }
 
+/** Tabs that switch what a page shows (a tab list: the arrow keys move between them). Each
+ *  option: its value, its label, and an id of the panel it shows. */
+export function ViewTabs<T extends string>({ value, options, onChange, label }: { value: T; options: [T, ReactNode, string][]; onChange: (v: T) => void; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onKeyDown = (e: KeyboardEvent) => {
+    const at = options.findIndex(([v]) => v === value);
+    const to = ({ ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: options.length - 1 } as Record<string, number>)[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const i = (to + options.length) % options.length;
+    onChange(options[i][0]);
+    ref.current?.querySelectorAll<HTMLElement>('[role="tab"]')[i]?.focus();
+  };
+  return (
+    <div ref={ref} className="views" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      {options.map(([v, text, panel]) => (
+        <button key={v} type="button" role="tab" id={`tab-${panel}`} aria-selected={v === value} aria-controls={panel} tabIndex={v === value ? 0 : -1} onClick={() => onChange(v)}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** A thin bar; its colour follows the row's state class. */
 export function Bar({ value, busy }: { value: number; busy?: boolean }) {
   return (

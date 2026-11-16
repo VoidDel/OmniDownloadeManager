@@ -78,7 +78,7 @@
     "message": "最小ファイルサイズ"
   },
   "minSizeHint": {
-    "message": "これより小さいファイルはブラウザーに残します。サイズ不明のファイルは引き継ぎます"
+    "message": "これより小さいファイルはブラウザーに残します。0 にするとサイズを問わず引き継ぎます。サイズ不明のファイルは常に引き継ぎます"
   },
   "minSizeLabel": {
     "message": "最小ファイルサイズ（MB）"
@@ -224,12 +224,6 @@
   "idle": {
     "message": "ダウンロード中のタスクはありません"
   },
-  "takeoverOn": {
-    "message": "$1 MB 以上のファイルを Omni Download に渡します"
-  },
-  "takeoverOff": {
-    "message": "ダウンロードはブラウザーで行います"
-  },
   "recent": {
     "message": "最近のダウンロード"
   },
@@ -316,5 +310,11 @@
   },
   "footGetApp": {
     "message": "デスクトップアプリを入手"
+  },
+  "recentNone": {
+    "message": "まだダウンロードはありません。"
+  },
+  "recentUnreachable": {
+    "message": "Omni Download に接続すると、最近のダウンロードがここに表示されます。"
   }
 }

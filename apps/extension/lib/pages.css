@@ -117,13 +117,18 @@ button:disabled { cursor: default; }
 .pbanner b { font-weight: 650; }
 .pbanner span { color: var(--ink-2); font-size: 12px; }
 
-/* A section: a heading row, then its rows. */
-.psection { padding: 10px 16px 6px; border-top: 1px solid var(--line); }
-.psection:first-of-type { border-top: 0; }
-.pshead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; margin-bottom: 4px; }
-.psec { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; font-weight: 650; color: var(--ink); }
-.pcount { color: var(--ink-3); font-weight: 600; font-variant-numeric: tabular-nums; }
-.pnone { margin: 2px 0 8px; color: var(--ink-2); font-size: 12px; }
+/* The two tabs (the page's media, the latest downloads) and the panel they show; the panel
+   keeps a height so that switching does not make the popup jump. */
+.views { display: flex; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.views button { position: relative; flex: 1; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); font-weight: 650; white-space: nowrap; }
+.views button:hover { color: var(--ink); }
+.views button[aria-selected='true'] { color: var(--ink); }
+.views button[aria-selected='true']::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: -1px; height: 2px; border-radius: 1px; background: var(--brand); }
+.pcount { min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--sunk); color: var(--ink-2); font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.views button[aria-selected='true'] .pcount { background: var(--brand-soft); color: var(--brand); }
+.ppanel { min-height: 150px; padding: 8px 16px 10px; }
+.pshead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 26px; margin-bottom: 4px; }
+.pnone { margin: 0; padding: 36px 12px; text-align: center; color: var(--ink-2); font-size: 12px; }
 
 /* The page's media: a tile, the name and where it comes from, the actions. */
 .mlist { list-style: none; margin: 0 -8px; padding: 0; max-height: 236px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
@@ -160,7 +165,7 @@ button:disabled { cursor: default; }
 .mbar .btn { height: 28px; padding: 0 12px; }
 
 /* The latest downloads, coloured by state as in the app. */
-.precent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; padding-bottom: 6px; }
+.precent { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 236px; overflow-y: auto; }
 .precent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
 .precent .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .precent .pst { color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
@@ -172,12 +177,8 @@ button:disabled { cursor: default; }
 .precent .st-failed .pst { color: var(--bad); }
 .precent .st-cancelled .bar > i { background: var(--ink-3); }
 
-/* The foot: the takeover switch, opening the app. */
-.pfoot { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--line); background: var(--surface); }
-.ptake { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ptake div { display: flex; flex-direction: column; min-width: 0; }
-.ptake b { font-weight: 600; }
-.ptake small { color: var(--ink-2); font-size: 11.5px; }
+/* The foot: opening the app, and the options. */
+.pfoot { padding: 12px 16px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .pact { display: flex; gap: 8px; }
 .pact .btn.primary { flex: 1; height: 34px; }
 
