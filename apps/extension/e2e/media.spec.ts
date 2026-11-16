@@ -56,6 +56,16 @@ test.beforeAll(async () => {
         return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
       case '/media/cors.mp4':
         return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
+      // A page that plays a video, a song and a stream.
+      case '/mixed':
+        return send(
+          'text/html; charset=utf-8',
+          `<!doctype html><title>Mixed</title><script>
+             fetch('/media/clip.mp4').then(() => fetch('/media/song.mp3')).then(() => fetch('/hls/index.m3u8'));
+           </script>`,
+        );
+      case '/media/song.mp3':
+        return send('audio/mpeg', Buffer.alloc(MB, 6));
       // A site that moves to another video itself (history.pushState), then to an anchor.
       case '/spa':
         return send(
@@ -99,7 +109,12 @@ test.beforeAll(async () => {
       const msg = JSON.parse(body) as { id: string; type: string; payload?: Record<string, unknown> };
       received.push(msg);
       res.setHeader('Content-Type', 'application/json');
-      const result = msg.type === 'add_download' ? { action: 'started', asked: true, task_id: 't' } : { app_version: '9.9.9' };
+      const result =
+        msg.type === 'add_download'
+          ? { action: 'started', asked: true, task_id: 't' }
+          : msg.type === 'get_status'
+            ? { app_version: '9.9.9', running: 0, download_speed: 0, recent: [] }
+            : { app_version: '9.9.9' };
       res.end(JSON.stringify({ id: msg.id, ok: true, result }));
     });
   });
@@ -205,6 +220,58 @@ test.describe('media sniffing', () => {
     const list = (await listOf(tab)) as { url: string; pageUrl?: string }[];
     expect(list.map((m) => [new URL(m.url).pathname, m.pageUrl])).toEqual([['/media/cors.mp4', `${siteUrl}/spa/next`]]);
     await expect.poll(() => badgeOf(tab)).toBe('1');
+    await page.close();
+  });
+
+  test('lists video and audio apart, copies a link and downloads several at once', async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/mixed`);
+    const tab = await tabOf(page);
+    await expect.poll(async () => (await listOf(tab)).length).toBe(3);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
+    const rows = popup.locator('.pmedia li');
+    await expect(rows).toHaveCount(3);
+    // Tabs with counts: all, video (the file and the stream), audio.
+    const tabs = popup.locator('.pmhead [role="radio"]');
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(0)).toContainText('3');
+    await expect(tabs.nth(1)).toContainText('2');
+    await expect(tabs.nth(2)).toContainText('1');
+    await tabs.nth(2).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first().locator('small')).toContainText('MP3 · 127.0.0.1 · 1');
+    await tabs.nth(0).click();
+    await expect(rows).toHaveCount(3);
+    await expect(popup.locator('.pmedia li small')).toContainText(['HLS · 127.0.0.1', 'MP3 · 127.0.0.1', 'MP4 · 127.0.0.1 · 2']);
+
+    // Copy a link (what the clipboard is given: a page opened by a test may not read it back).
+    await popup.evaluate(() => {
+      const w = window as unknown as { copied: string[] };
+      w.copied = [];
+      navigator.clipboard.writeText = async (text: string) => void w.copied.push(text);
+    });
+    await rows.nth(0).locator('.pmcopy').click();
+    await expect.poll(() => popup.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual([`${siteUrl}/hls/index.m3u8`]);
+    await expect(rows.nth(0).locator('.pmcopy')).toHaveAttribute('title', /Copied|已复制|已複製|コピーしました/);
+
+    // Choose all, download them together: each starts without the quick-download window.
+    const before = received.filter((r) => r.type === 'add_download').length;
+    const go = popup.locator('.pmfoot .btn');
+    await expect(go).toBeDisabled();
+    await popup.locator('.pmall input').check();
+    await expect(go).toBeEnabled();
+    await expect(go).toContainText('3');
+    await go.click();
+    await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(before + 3);
+    const sent = received.filter((r) => r.type === 'add_download').slice(-3);
+    expect(sent.map((r) => r.payload?.silent)).toEqual([true, true, true]);
+    expect(sent.map((r) => new URL(String(r.payload?.url)).pathname).sort()).toEqual(['/hls/index.m3u8', '/media/clip.mp4', '/media/song.mp3']);
+    expect(sent.find((r) => String(r.payload?.url).endsWith('.m3u8'))?.payload?.filename).toBe('Mixed.mp4');
+    // They show as sent; nothing is left to choose.
+    await expect(popup.locator('.pmedia li.sent')).toHaveCount(3);
+    await expect(go).toBeDisabled();
+    await popup.close();
     await page.close();
   });
 

@@ -254,19 +254,43 @@
   "mediaAudio": {
     "message": "音声"
   },
-  "mediaHls": {
-    "message": "HLS ストリーム"
-  },
   "mediaDash": {
-    "message": "動画（音声を自動で結合）"
+    "message": "音声を自動で結合"
   },
   "mediaDashSilent": {
-    "message": "動画（映像のみ、音声が見つかりません）"
+    "message": "映像のみ、音声が見つかりません"
   },
   "mediaDownload": {
     "message": "Omni Download でダウンロード"
   },
   "mediaSent": {
     "message": "Omni Download に渡しました"
+  },
+  "mediaAll": {
+    "message": "すべて"
+  },
+  "mediaCopy": {
+    "message": "リンクをコピー"
+  },
+  "mediaCopied": {
+    "message": "コピーしました"
+  },
+  "mediaSelectAll": {
+    "message": "すべて選択"
+  },
+  "mediaDownloadNone": {
+    "message": "選択項目をダウンロード"
+  },
+  "mediaDownloadSomeOne": {
+    "message": "$1 件をダウンロード"
+  },
+  "mediaDownloadSomeOther": {
+    "message": "$1 件をダウンロード"
+  },
+  "notifyBatchOne": {
+    "message": "Omni Download に $1 件のメディアを渡しました"
+  },
+  "notifyBatchOther": {
+    "message": "Omni Download に $1 件のメディアを渡しました"
   }
 }

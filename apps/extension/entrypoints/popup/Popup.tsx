@@ -104,7 +104,7 @@ export function Popup() {
         <Switch label={t('takeover')} checked={rules.enabled} onChange={setEnabled} />
       </div>
 
-      {state.kind === 'ok' && state.status.recent.length > 0 && (
+      {state.kind === 'ok' && !!state.status.recent?.length && (
         <ul className="precent" aria-label={t('recent')}>
           {state.status.recent.map((task) => (
             <li key={task.id}>

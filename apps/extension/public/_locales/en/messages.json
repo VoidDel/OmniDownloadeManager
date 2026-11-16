@@ -254,19 +254,43 @@
   "mediaAudio": {
     "message": "Audio"
   },
-  "mediaHls": {
-    "message": "HLS stream"
-  },
   "mediaDash": {
-    "message": "Video (sound joined automatically)"
+    "message": "sound joined automatically"
   },
   "mediaDashSilent": {
-    "message": "Video (picture only, no sound found)"
+    "message": "picture only, no sound found"
   },
   "mediaDownload": {
     "message": "Download with Omni Download"
   },
   "mediaSent": {
     "message": "Sent to Omni Download"
+  },
+  "mediaAll": {
+    "message": "All"
+  },
+  "mediaCopy": {
+    "message": "Copy link"
+  },
+  "mediaCopied": {
+    "message": "Copied"
+  },
+  "mediaSelectAll": {
+    "message": "Select all"
+  },
+  "mediaDownloadNone": {
+    "message": "Download selected"
+  },
+  "mediaDownloadSomeOne": {
+    "message": "Download $1 item"
+  },
+  "mediaDownloadSomeOther": {
+    "message": "Download $1 items"
+  },
+  "notifyBatchOne": {
+    "message": "Sent $1 item to Omni Download"
+  },
+  "notifyBatchOther": {
+    "message": "Sent $1 items to Omni Download"
   }
 }

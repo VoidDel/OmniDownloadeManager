@@ -116,8 +116,9 @@ export async function notify(message: string): Promise<void> {
   }
 }
 
-/** Gives `d` to the app. */
-export async function handOver(d: Download, silent?: boolean): Promise<Outcome> {
+/** Gives `d` to the app. `announce`: a notification says it started when the user was not
+ *  asked (off for downloads given together, which say so once). */
+export async function handOver(d: Download, silent?: boolean, announce = true): Promise<Outcome> {
   const { rules } = await load();
   let r: Response<AddResult>;
   try {
@@ -127,7 +128,7 @@ export async function handOver(d: Download, silent?: boolean): Promise<Outcome> 
   }
   if (!r.ok || !r.result) return { kind: 'unreachable', reason: r.error?.message ?? 'error' };
   if (r.result.action === 'browser') return { kind: 'browser' };
-  if (!r.result.asked && (r.result.action === 'started' || r.result.action === 'queued')) {
+  if (announce && !r.result.asked && (r.result.action === 'started' || r.result.action === 'queued')) {
     const name = basename(d.filename) ?? basename(new URL(d.url).pathname) ?? d.url;
     void notify(t(r.result.action === 'started' ? 'notifyStarted' : 'notifyQueued', name));
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classify, cleanTitle, fromShownDocument, mediaKey, mediaName, offers, onPage, pageKey, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
+import { classify, cleanTitle, formatOf, fromShownDocument, mediaKey, mediaName, offers, offerTab, onPage, pageKey, sourceOf, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
 
 const h = (pairs: Record<string, string>) => Object.entries(pairs).map(([name, value]) => ({ name, value }));
 const MB = 1024 * 1024;
@@ -11,6 +11,8 @@ describe('classify', () => {
     expect(classify('https://cdn.example.com/x?id=1', h({ 'content-type': 'audio/mpeg', 'content-length': String(5 * MB) }))?.kind).toBe('audio');
     expect(classify('https://cdn.example.com/hls/index.m3u8?t=1', h({}))?.kind).toBe('hls');
     expect(classify('https://cdn.example.com/play', h({ 'content-type': 'application/vnd.apple.mpegurl' }))?.kind).toBe('hls');
+    // The playlist's own length is not the video's.
+    expect(classify('https://cdn.example.com/hls/index.m3u8', h({ 'content-length': '42' }))?.size).toBeNull();
     // A range of a big file: its whole size.
     expect(classify('https://v.example.com/b.webm', h({ 'content-type': 'video/webm', 'content-length': '65536', 'content-range': `bytes 0-65535/${300 * MB}` }))?.size).toBe(300 * MB);
   });
@@ -123,5 +125,29 @@ describe('DASH streams', () => {
     expect(o[1]).toMatchObject({ name: '海边.mp4', size: 42, audio: { url: bili(30232) } });
     // Sound alone: offered as audio.
     expect(offers([at(bili(30280), 'audio', 3, 1)])).toMatchObject([{ kind: 'audio', name: '海边.m4a', audio: null }]);
+  });
+});
+
+describe('what the list says', () => {
+  const item = (url: string, kind: Media['kind'], mime: string | null = null, track?: 'video' | 'audio'): Media => ({ url, kind, mime, size: null, title: 'Clip', pageUrl: 'https://e.com/v', track, at: 0 });
+
+  it('names the format, by extension or type', () => {
+    const [mp4] = offers([item('https://www.cdn.e.com/a/clip.mp4?x=1', 'video')]);
+    expect([formatOf(mp4), sourceOf(mp4), offerTab(mp4)]).toEqual(['MP4', 'cdn.e.com', 'video']);
+    const [typed] = offers([item('https://e.com/stream?id=7', 'audio', 'audio/mpeg')]);
+    expect([formatOf(typed), offerTab(typed)]).toEqual(['MP3', 'audio']);
+    const [unknown] = offers([item('https://e.com/stream?id=7', 'video', 'video/x-unknown')]);
+    expect(formatOf(unknown)).toBeNull();
+    const [hls] = offers([item('https://e.com/v/index.m3u8', 'hls')]);
+    expect([formatOf(hls), offerTab(hls)]).toEqual(['HLS', 'video']);
+  });
+
+  it('puts a DASH picture under video and its sound alone under audio', () => {
+    const picture = item('https://b.e.com/1-30080.m4s', 'dash', 'video/mp4', 'video');
+    const sound = item('https://b.e.com/1-30280.m4s', 'dash', 'audio/mp4', 'audio');
+    const [joined] = offers([picture, sound]);
+    expect([formatOf(joined), offerTab(joined)]).toEqual(['DASH', 'video']);
+    const [alone] = offers([sound]);
+    expect([formatOf(alone), offerTab(alone)]).toEqual(['M4A', 'audio']);
   });
 });

@@ -82,7 +82,8 @@ export function classify(url: string, headers: Header[] | undefined): Pick<Media
   const range = header(headers, 'content-range');
   const whole = Number(range?.split('/')[1]);
   const total = Number.isFinite(whole) && whole > 0 ? whole : size;
-  if ((mime && HLS_TYPES.includes(mime)) || ext === 'm3u8') return { kind: 'hls', mime, size };
+  // A playlist's own length says nothing of the video's.
+  if ((mime && HLS_TYPES.includes(mime)) || ext === 'm3u8') return { kind: 'hls', mime, size: null };
   // A DASH file played in ranges is a whole stream; one fetched whole is a segment of one.
   if (ext === 'm4s') {
     if (!range || total == null || total < MIN_SIZE) return null;
@@ -186,6 +187,27 @@ export function offers(list: Media[]): Offer[] {
     }
   }
   return out.reverse();
+}
+
+/** The popup's tab an offer goes under: what has a picture, or sound only. */
+export function offerTab(o: Offer): 'video' | 'audio' {
+  return o.kind === 'audio' ? 'audio' : 'video';
+}
+
+/** An offer's format as the list says it (`MP4`, `M4A`, `HLS`, `DASH`): by its address's
+ *  extension, else its type. Unknown: `null`. */
+export function formatOf(o: Offer): string | null {
+  if (o.kind === 'hls') return 'HLS';
+  if (o.kind === 'dash') return 'DASH';
+  const ext = lastSegment(o.media.url)[1];
+  if (VIDEO_EXT.has(ext) || AUDIO_EXT.has(ext)) return ext.toUpperCase();
+  const typed = o.media.mime ? EXT_BY_TYPE[o.media.mime] : undefined;
+  return typed ? typed.toUpperCase() : null;
+}
+
+/** Where an offer comes from: its host, without `www.`. */
+export function sourceOf(o: Offer): string {
+  return hostOf(o.media.url).replace(/^www\./, '');
 }
 
 // ---------------------------------------------------------------------------------- names

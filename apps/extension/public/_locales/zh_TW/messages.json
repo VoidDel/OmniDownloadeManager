@@ -254,19 +254,43 @@
   "mediaAudio": {
     "message": "音訊"
   },
-  "mediaHls": {
-    "message": "HLS 影片串流"
-  },
   "mediaDash": {
-    "message": "影片（自動合併聲音）"
+    "message": "自動合併聲音"
   },
   "mediaDashSilent": {
-    "message": "影片（僅畫面，未找到聲音）"
+    "message": "僅畫面，未找到聲音"
   },
   "mediaDownload": {
     "message": "用 Omni Download 下載"
   },
   "mediaSent": {
     "message": "已交給 Omni Download"
+  },
+  "mediaAll": {
+    "message": "全部"
+  },
+  "mediaCopy": {
+    "message": "複製連結"
+  },
+  "mediaCopied": {
+    "message": "已複製"
+  },
+  "mediaSelectAll": {
+    "message": "全選"
+  },
+  "mediaDownloadNone": {
+    "message": "下載所選"
+  },
+  "mediaDownloadSomeOne": {
+    "message": "下載 $1 個"
+  },
+  "mediaDownloadSomeOther": {
+    "message": "下載 $1 個"
+  },
+  "notifyBatchOne": {
+    "message": "已交給 Omni Download：$1 個媒體"
+  },
+  "notifyBatchOther": {
+    "message": "已交給 Omni Download：$1 個媒體"
   }
 }

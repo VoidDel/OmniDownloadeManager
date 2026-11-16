@@ -13,7 +13,7 @@
 
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, sentWith, type Header, type Sent } from '../lib/headers';
-import { t } from '../lib/i18n';
+import { t, tn } from '../lib/i18n';
 import { classify, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
 import { postBody, type RequestBody } from '../lib/post';
 import type { PostBody } from '../lib/protocol';
@@ -437,9 +437,9 @@ function sniffMedia() {
 /** A media item the popup asked for, under the name the list shows; a DASH picture with its
  *  sound, which the app joins into one MP4. Sent as its request went out: its `Referer`,
  *  `Origin` and (while the background holds them) `Cookie`; else the page and its cookies. */
-function downloadMedia(m: Media, audio?: Media | null, name?: string) {
+function mediaDownload(m: Media, audio?: Media | null, name?: string): Download {
   const size = m.size != null && audio?.size != null ? m.size + audio.size : m.size;
-  void explicit({
+  return {
     url: m.url,
     audioUrl: audio?.url ?? null,
     pageUrl: m.pageUrl,
@@ -450,8 +450,32 @@ function downloadMedia(m: Media, audio?: Media | null, name?: string) {
     storeId: m.storeId,
     sentCookies: cookiesOf(m.url),
     headers: m.origin ? { Origin: m.origin } : undefined,
-  });
+  };
 }
+
+interface MediaChoice {
+  media: Media;
+  audio?: Media | null;
+  name?: string;
+}
+
+/** Several media the popup's list chose: each starts without the quick-download window, one
+ *  after the other; one notification says how many went. */
+async function downloadMediaBatch(items: MediaChoice[]) {
+  let taken = 0;
+  for (const i of items) {
+    const out = await handOver(mediaDownload(i.media, i.audio, i.name), true, false);
+    if (out.kind === 'unreachable') {
+      void notify(t('notifyUnreachable'));
+      return;
+    }
+    if (out.kind === 'taken') taken++;
+  }
+  if (taken) void notify(tn('notifyBatch', taken));
+}
+
+/** Media downloads given together, one batch after the other. */
+let mediaBatches: Promise<void> = Promise.resolve();
 
 export default defineBackground(() => {
   menus();
@@ -476,9 +500,13 @@ export default defineBackground(() => {
   // Alt+click from the content script: the browser keeps that link. The popup's media list:
   // download one (here, as the popup closes when the app's window opens).
   browser.runtime.onMessage.addListener((msg: unknown) => {
-    const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string };
+    const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string; items?: MediaChoice[] };
     if (m?.type === 'bypass' && typeof m.url === 'string') mark(bypass, m.url, 5000);
-    if (m?.type === 'download-media' && m.media) downloadMedia(m.media, m.audio, m.name);
+    if (m?.type === 'download-media' && m.media) void explicit(mediaDownload(m.media, m.audio, m.name));
+    if (m?.type === 'download-media-batch' && Array.isArray(m.items)) {
+      const items = m.items.filter((i) => i?.media?.url);
+      mediaBatches = mediaBatches.then(() => downloadMediaBatch(items)).catch(() => undefined);
+    }
   });
 
   sniffMedia();
