@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_POST, postBody, sentWith } from './post';
+import { sentWith } from './headers';
+import { MAX_POST, postBody } from './post';
 
 const URLENCODED = 'application/x-www-form-urlencoded';
 const text = (b64: string) => atob(b64);
@@ -9,13 +10,14 @@ const bytes = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
 describe('sentWith', () => {
   it('keeps the cookies and origin the form went out with', () => {
     const h = (pairs: [string, string][]) => pairs.map(([name, value]) => ({ name, value }));
-    expect(sentWith(h([['Cookie', 'captk=1; cf_clearance=x'], ['Origin', 'https://e.com'], ['Accept', '*/*']]))).toEqual({
+    expect(sentWith(h([['Cookie', 'captk=1; cf_clearance=x'], ['Origin', 'https://e.com'], ['Referer', 'https://e.com/p'], ['Accept', '*/*']]))).toEqual({
       cookies: 'captk=1; cf_clearance=x',
+      referer: 'https://e.com/p',
       headers: { Origin: 'https://e.com' },
     });
     // Lower case, an opaque origin, none at all.
-    expect(sentWith(h([['cookie', 'a=1'], ['origin', 'null']]))).toEqual({ cookies: 'a=1', headers: {} });
-    expect(sentWith(undefined)).toEqual({ cookies: null, headers: {} });
+    expect(sentWith(h([['cookie', 'a=1'], ['origin', 'null']]))).toEqual({ cookies: 'a=1', referer: null, headers: {} });
+    expect(sentWith(undefined)).toEqual({ cookies: null, referer: null, headers: {} });
   });
 });
 

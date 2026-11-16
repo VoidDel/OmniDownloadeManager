@@ -12,10 +12,10 @@
 // download starts; `downloads.onCreated` catches the rest.
 
 import { send } from '../lib/bridge';
-import { contentLength, dispositionName, header, isDownload, type Header } from '../lib/headers';
+import { contentLength, dispositionName, header, isDownload, sentWith, type Header, type Sent } from '../lib/headers';
 import { t } from '../lib/i18n';
-import { classify, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
-import { postBody, sentWith, type RequestBody, type Sent } from '../lib/post';
+import { classify, mediaKey, mediaName, mediaOf, offers, saveMedia, withMedia, type Media } from '../lib/media';
+import { postBody, type RequestBody } from '../lib/post';
 import type { PostBody } from '../lib/protocol';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
@@ -197,6 +197,7 @@ interface HeadersDetails {
   requestId: string;
   url: string;
   method: string;
+  requestHeaders?: Header[];
   statusCode: number;
   tabId: number;
   type: string;
@@ -320,6 +321,31 @@ function watchPosts() {
 
 /** Updates of a tab's list, one after the other (each reads and writes the whole list). */
 const mediaQueue = new Map<number, Promise<void>>();
+/** Requests that may be media, while under way: what they went out with. */
+const mediaSending = new Map<string, Sent>();
+/** The `Cookie` header listed media went out with, by `mediaKey`: in memory only, never in
+ *  storage (lost when the background sleeps; the download then reads the cookies). */
+const mediaCookies = new Map<string, { at: number; cookies: string }>();
+/** How long a media item's cookies are used, and how many are kept. */
+const MEDIA_COOKIES_FOR = 30 * 60_000;
+const MEDIA_COOKIES_MAX = 200;
+/** Requests under way that are held at most (a page that never answers). */
+const SENDING_MAX = 1000;
+
+function keepCookies(url: string, cookies: string) {
+  const key = mediaKey(url);
+  mediaCookies.delete(key);
+  mediaCookies.set(key, { at: Date.now(), cookies });
+  for (const k of mediaCookies.keys()) {
+    if (mediaCookies.size <= MEDIA_COOKIES_MAX) break;
+    mediaCookies.delete(k);
+  }
+}
+
+function cookiesOf(url: string): string | null {
+  const c = mediaCookies.get(mediaKey(url));
+  return c && Date.now() - c.at < MEDIA_COOKIES_FOR ? c.cookies : null;
+}
 
 function inTab(tabId: number, f: () => Promise<void>) {
   const next = (mediaQueue.get(tabId) ?? Promise.resolve()).then(f, f).catch(() => undefined);
@@ -332,22 +358,54 @@ async function badge(tabId: number, count: number) {
 
 function sniffMedia() {
   void browser.action.setBadgeBackgroundColor({ color: '#2F6FED' }).catch(() => undefined);
+  // What each request went out with (the last hop's, after a redirect).
+  const sendingOf = (d: HeadersDetails) => {
+    if (d.tabId < 0) return;
+    mediaSending.set(d.requestId, sentWith(d.requestHeaders));
+    for (const k of mediaSending.keys()) {
+      if (mediaSending.size <= SENDING_MAX) break;
+      mediaSending.delete(k);
+    }
+  };
   const seen = (d: HeadersDetails) => {
+    const sent = mediaSending.get(d.requestId);
+    mediaSending.delete(d.requestId);
     if (d.tabId < 0 || d.method !== 'GET' || d.statusCode < 200 || d.statusCode >= 300) return;
     const c = classify(d.url, d.responseHeaders);
     if (!c) return;
+    if (sent?.cookies) keepCookies(d.url, sent.cookies);
     inTab(d.tabId, async () => {
       const tab = await browser.tabs.get(d.tabId).catch(() => null);
-      const m: Media = { ...c, url: d.url, title: tab?.title ?? null, pageUrl: tab?.url ?? d.documentUrl ?? null, storeId: storeOf(d), at: Date.now() };
+      const m: Media = {
+        ...c,
+        url: d.url,
+        title: tab?.title ?? null,
+        pageUrl: tab?.url ?? d.documentUrl ?? null,
+        storeId: storeOf(d),
+        referer: sent?.referer ?? null,
+        origin: sent?.headers.Origin ?? null,
+        at: Date.now(),
+      };
       const list = withMedia(await mediaOf(d.tabId), m);
       await saveMedia(d.tabId, list);
       await badge(d.tabId, offers(list).length);
     });
   };
   const webRequest = browser.webRequest as unknown as {
+    onSendHeaders: { addListener(f: (d: HeadersDetails) => void, filter: object, extra: string[]): void };
     onHeadersReceived: { addListener(f: (d: HeadersDetails) => void, filter: object, extra: string[]): void };
+    onErrorOccurred: { addListener(f: (d: HeadersDetails) => void, filter: object): void };
   };
-  webRequest.onHeadersReceived.addListener(seen, { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other', 'object'] }, ['responseHeaders']);
+  const media = { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other', 'object'] };
+  // Chromium shows `Cookie` only with `extraHeaders`, which Firefox (which always shows it)
+  // does not know.
+  try {
+    webRequest.onSendHeaders.addListener(sendingOf, media, ['requestHeaders', 'extraHeaders']);
+  } catch {
+    webRequest.onSendHeaders.addListener(sendingOf, media, ['requestHeaders']);
+  }
+  webRequest.onHeadersReceived.addListener(seen, media, ['responseHeaders']);
+  webRequest.onErrorOccurred.addListener((d) => void mediaSending.delete(d.requestId), media);
   // Another page in the tab: a new list. A closed tab: none.
   browser.tabs.onUpdated.addListener((tabId, info) => {
     if (info.status === 'loading' && info.url) inTab(tabId, async () => {
@@ -359,10 +417,22 @@ function sniffMedia() {
 }
 
 /** A media item the popup asked for, under the name the list shows; a DASH picture with its
- *  sound, which the app joins into one MP4. */
+ *  sound, which the app joins into one MP4. Sent as its request went out: its `Referer`,
+ *  `Origin` and (while the background holds them) `Cookie`; else the page and its cookies. */
 function downloadMedia(m: Media, audio?: Media | null, name?: string) {
   const size = m.size != null && audio?.size != null ? m.size + audio.size : m.size;
-  void explicit({ url: m.url, audioUrl: audio?.url ?? null, pageUrl: m.pageUrl, referer: m.pageUrl, filename: name || mediaName(m), size, mime: m.mime, storeId: m.storeId });
+  void explicit({
+    url: m.url,
+    audioUrl: audio?.url ?? null,
+    pageUrl: m.pageUrl,
+    referer: m.referer || m.pageUrl,
+    filename: name || mediaName(m),
+    size,
+    mime: m.mime,
+    storeId: m.storeId,
+    sentCookies: cookiesOf(m.url),
+    headers: m.origin ? { Origin: m.origin } : undefined,
+  });
 }
 
 export default defineBackground(() => {

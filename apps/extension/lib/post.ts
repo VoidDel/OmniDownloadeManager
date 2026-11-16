@@ -19,21 +19,6 @@ export interface RequestBody {
 /** Larger bodies are not a form's fields. */
 export const MAX_POST = 256 * 1024;
 
-/** What else of the browser's request a form is sent again with. */
-export interface Sent {
-  /** The `Cookie` header as it went out. The cookies read after the answer may differ: a site
-   *  that ties a security code to a cookie may set a new one with the file. */
-  cookies: string | null;
-  /** `Origin`, which servers check on a form against forgery. */
-  headers: Record<string, string>;
-}
-
-/** The `Cookie` and `Origin` of a request's headers, as `webRequest.onSendHeaders` gives them. */
-export function sentWith(requestHeaders: { name: string; value?: string }[] | undefined): Sent {
-  const get = (n: string) => requestHeaders?.find((h) => h.name.toLowerCase() === n)?.value?.trim() || null;
-  const origin = get('origin');
-  return { cookies: get('cookie'), headers: origin && origin !== 'null' ? { Origin: origin } : {} };
-}
 
 const URLENCODED = 'application/x-www-form-urlencoded';
 

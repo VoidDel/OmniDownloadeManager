@@ -2,7 +2,8 @@
 // HLS stream (with its segments and a small sound, which are not listed) and a Bilibili-style
 // DASH picture and sound (whole files fetched in ranges: offered as one video to join). The list and the
 // toolbar badge of its tab, a download from the popup's list (to a stand-in for the app's HTTP
-// channel), and the list starting over on the next page.
+// channel), and the list starting over on the next page. A player in a frame of another site:
+// its media is sent with the Referer and Origin its request went out with.
 
 import { chromium, expect, test, type Browser, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -20,6 +21,7 @@ const MB = 1024 * 1024;
 let site: http.Server;
 let bridge: http.Server;
 let siteUrl = '';
+let port = 0;
 let bridgePort = 0;
 const received: { type: string; payload?: Record<string, unknown> }[] = [];
 
@@ -40,11 +42,20 @@ test.beforeAll(async () => {
           `<!doctype html><title>Big Buck Bunny</title>
            <video src="/media/clip.mp4" preload="auto" muted></video>
            <script>
-             fetch('/hls/index.m3u8').then(() => fetch('/hls/seg0.ts'));
+             // The cookie changes after the playlist was loaded with it.
+             fetch('/hls/index.m3u8').then(() => { document.cookie = 'watch=2; path=/'; return fetch('/hls/seg0.ts'); });
              fetch('/sfx/click.mp3');
              for (const id of [30080, 30280]) fetch('/bili/5678-1-' + id + '.m4s', { headers: { Range: 'bytes=0-1023' } });
            </script>`,
+          { 'Set-Cookie': 'watch=1; Path=/' },
         );
+      // A page with a player from another site (localhost), which loads its video from here.
+      case '/embed':
+        return send('text/html; charset=utf-8', `<!doctype html><title>Embedded</title><iframe src="http://localhost:${port}/player"></iframe>`);
+      case '/player':
+        return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
+      case '/media/cors.mp4':
+        return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
       case '/other':
         return send('text/html; charset=utf-8', '<!doctype html><title>Other</title>');
       case '/media/clip.mp4':
@@ -66,7 +77,8 @@ test.beforeAll(async () => {
         res.end();
     }
   });
-  siteUrl = `http://127.0.0.1:${await listen(site)}`;
+  port = await listen(site);
+  siteUrl = `http://127.0.0.1:${port}`;
   bridge = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -146,6 +158,8 @@ test.describe('media sniffing', () => {
       url: `${siteUrl}/hls/index.m3u8`,
       filename: 'Big Buck Bunny.mp4',
       referer: `${siteUrl}/watch`,
+      // The cookie the playlist was loaded with, not the one the page set afterwards.
+      cookies: 'watch=1',
     });
     // The DASH picture goes with its sound, to be joined.
     const picture = list.find((m) => m.kind === 'dash' && m.track === 'video');
@@ -164,5 +178,27 @@ test.describe('media sniffing', () => {
     await page.goto(`${siteUrl}/other`);
     await expect.poll(async () => (await listOf(tab)).length).toBe(0);
     await expect.poll(() => badgeOf(tab)).toBe('');
+  });
+
+  test("sends a player's media as its request went out", async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/embed`);
+    const tab = await tabOf(page);
+    await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/cors.mp4']);
+    const [media] = await listOf(tab);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html`);
+    const before = received.filter((r) => r.type === 'add_download').length;
+    await popup.evaluate((m) => chrome.runtime.sendMessage({ type: 'download-media', media: m }), media);
+    await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(before + 1);
+    // The frame's site, as the browser sent it (cut to the origin across sites), not the page.
+    expect(received.filter((r) => r.type === 'add_download').at(-1)?.payload).toMatchObject({
+      url: `${siteUrl}/media/cors.mp4`,
+      referer: `http://localhost:${port}/`,
+      tab_url: `${siteUrl}/embed`,
+      headers: { Origin: `http://localhost:${port}` },
+    });
+    await popup.close();
+    await page.close();
   });
 });

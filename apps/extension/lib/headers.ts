@@ -30,6 +30,30 @@ const DOWNLOAD_TYPES = [
   'application/x-rpm',
 ];
 
+/**
+ * What a request went out with, to send it again as the browser did (`webRequest.onSendHeaders`;
+ * Chromium shows `Cookie` only with `extraHeaders`). The cookies read later may differ: a site
+ * that ties a security code to a cookie sets a new one with the file, and a frame of another
+ * site gets the cookies of its own partition.
+ */
+export interface Sent {
+  /** The `Cookie` header as it went out. */
+  cookies: string | null;
+  /** The `Referer` as it went out: a player in a frame sends the frame's address, and the
+   *  page's referrer policy may cut it to the origin. */
+  referer: string | null;
+  /** `Origin`, which servers check on a form against forgery and a media host against other
+   *  sites' players. */
+  headers: Record<string, string>;
+}
+
+/** The `Cookie`, `Referer` and `Origin` of a request's headers. */
+export function sentWith(requestHeaders: Header[] | undefined): Sent {
+  const get = (n: string) => header(requestHeaders, n)?.trim() || null;
+  const origin = get('origin');
+  return { cookies: get('cookie'), referer: get('referer'), headers: origin && origin !== 'null' ? { Origin: origin } : {} };
+}
+
 export function header(headers: Header[] | undefined, name: string): string | undefined {
   const n = name.toLowerCase();
   return headers?.find((h) => h.name.toLowerCase() === n)?.value;

@@ -26,6 +26,11 @@ export interface Media {
   pageUrl: string | null;
   /** The cookie store of its tab (Firefox: a container tab, a private window). */
   storeId?: string | null;
+  /** The `Referer` and `Origin` its request went out with (a player in a frame of another site
+   *  sends that frame's), sent again with the download. The `Cookie` is not kept here (session
+   *  storage): the background holds it in memory. */
+  referer?: string | null;
+  origin?: string | null;
   at: number;
 }
 
@@ -113,7 +118,7 @@ export function withMedia(list: Media[], m: Media): Media[] {
   const i = list.findIndex((x) => mediaKey(x.url) === key);
   if (i >= 0) {
     const old = list[i];
-    const merged = { ...old, size: old.size ?? m.size, mime: old.mime ?? m.mime, title: old.title ?? m.title, at: m.at };
+    const merged = { ...old, size: old.size ?? m.size, mime: old.mime ?? m.mime, title: old.title ?? m.title, referer: m.referer ?? old.referer, origin: m.origin ?? old.origin, at: m.at };
     return list.map((x, j) => (j === i ? merged : x));
   }
   return [...list, m].slice(-MEDIA_MAX);
