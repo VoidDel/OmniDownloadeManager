@@ -3,7 +3,7 @@
 declare const chrome: {
   storage: {
     local: { set(items: object): Promise<void> };
-    session: { get(key: string): Promise<Record<string, unknown>> };
+    session: { get(key: string): Promise<Record<string, unknown>>; remove(key: string): Promise<void> };
   };
   downloads: { search(query: object): Promise<{ filename: string; state: string }[]> };
   tabs: { query(query: object): Promise<{ id?: number }[]> };
