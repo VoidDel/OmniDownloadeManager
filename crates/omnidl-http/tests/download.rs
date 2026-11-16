@@ -551,6 +551,31 @@ async fn decrypts_aes_128_segments() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn takes_the_variant_chosen_in_a_master_playlist() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let master = server.url("/hls/plain/6/master.m3u8");
+    let mut r = job(&master, dir.path(), None, 4);
+    // The smaller one, as the extension offers it (its token may have changed: the query does
+    // not count).
+    let low = server.url("/hls/plain/1/index.m3u8?token=old");
+    r.job.options.hls_variant = Some(low.clone());
+    let (_, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, common::HLS_SEG, "the 1-segment variant");
+    // Probing asks for that one too (the name comes from the master's address).
+    let o = JobOptions {
+        hls_variant: Some(low),
+        ..JobOptions::default()
+    };
+    assert_eq!(engine().probe(&master, &o).await.unwrap().file_name, "6.ts");
+    // One the master does not have: the best.
+    let mut r = job(&master, dir.path(), None, 4);
+    r.job.options.hls_variant = Some(server.url("/hls/plain/9/other.m3u8"));
+    let (_, total) = completed(engine().run(r.job).await);
+    assert_eq!(total, 6 * common::HLS_SEG);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn takes_the_best_variant_of_a_master_playlist() {
     let server = start().await;
     let dir = tempfile::tempdir().unwrap();

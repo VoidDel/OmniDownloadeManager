@@ -149,6 +149,10 @@ fn options_of(d: &AddDownload) -> TaskOptions {
         // An HTTP link's sound only: anything else is not a stream to join.
         audio_source: non_empty(&d.audio_url)
             .filter(|a| TaskKind::detect(a) == Some(TaskKind::Http)),
+        // The variant of an HTTP link's HLS playlist.
+        hls_variant: non_empty(&d.hls_variant)
+            .filter(|v| TaskKind::detect(v) == Some(TaskKind::Http))
+            .filter(|_| TaskKind::detect(&d.url) == Some(TaskKind::Http)),
         // What a form sent, for an HTTP link.
         post: d
             .post
@@ -384,6 +388,25 @@ mod tests {
         assert_eq!(o.referer.as_deref(), Some("https://e.com/page"));
         assert_eq!(o.user_agent.as_deref(), Some("UA"));
         assert_eq!(o.post, None);
+        assert_eq!(o.hls_variant, None);
+    }
+
+    #[test]
+    fn keeps_the_chosen_hls_variant() {
+        let d = AddDownload {
+            url: "https://e.com/v/master.m3u8".into(),
+            hls_variant: Some(" https://e.com/v/360p.m3u8 ".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            options_of(&d).hls_variant.as_deref(),
+            Some("https://e.com/v/360p.m3u8")
+        );
+        let odd = AddDownload {
+            hls_variant: Some("javascript:alert(1)".into()),
+            ..d
+        };
+        assert_eq!(options_of(&odd).hls_variant, None);
     }
 
     #[test]

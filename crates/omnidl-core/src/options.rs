@@ -51,6 +51,10 @@ pub struct TaskOptions {
     /// the browser extension finds them). Both are downloaded and joined into one MP4.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_source: Option<String>,
+    /// HTTP(S): of a master HLS playlist, the variant to download (its playlist's address, as the
+    /// browser extension offered it); unset, or not one of the master's: the highest bandwidth.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hls_variant: Option<String>,
     /// HTTP(S): the file is the answer to a form (a download behind a security code, an
     /// export): the request is this POST instead of a GET. One connection, no resuming (see
     /// [`PostData`]).

@@ -292,5 +292,8 @@
   },
   "notifyBatchOther": {
     "message": "Omni Download に $1 件のメディアを渡しました"
+  },
+  "mediaQuality": {
+    "message": "画質"
   }
 }

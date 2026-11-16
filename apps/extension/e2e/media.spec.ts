@@ -56,6 +56,27 @@ test.beforeAll(async () => {
         return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
       case '/media/cors.mp4':
         return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
+      // A stream in two qualities with its sound apart, loaded as players do: the master, then
+      // one quality and the sound.
+      case '/quality':
+        return send(
+          'text/html; charset=utf-8',
+          `<!doctype html><title>Two qualities</title><script>
+             fetch('/q/master.m3u8').then((r) => r.text())
+               .then(() => Promise.all(['/q/720p.m3u8', '/q/audio.m3u8'].map((u) => fetch(u).then((r) => r.text()))));
+           </script>`,
+        );
+      case '/q/master.m3u8':
+        return send(
+          'application/vnd.apple.mpegurl',
+          '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",DEFAULT=YES,URI="audio.m3u8"\n' +
+            '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,AUDIO="a"\n360p.m3u8\n' +
+            '#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720,AUDIO="a"\n720p.m3u8\n',
+        );
+      case '/q/360p.m3u8':
+      case '/q/720p.m3u8':
+      case '/q/audio.m3u8':
+        return send('application/vnd.apple.mpegurl', '#EXTM3U\n#EXTINF:2,\nseg0.ts\n#EXT-X-ENDLIST\n');
       // A page that names a video it has not loaded (an element, its metadata), and loads a
       // stream and a small sound.
       case '/scan':
@@ -309,6 +330,33 @@ test.describe('media sniffing', () => {
     // Opening it again adds nothing more.
     await popup.reload();
     await expect(popup.locator('.pmedia li')).toHaveCount(3);
+    await popup.close();
+    await page.close();
+  });
+
+  test("offers a stream's qualities and sends the one chosen", async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/quality`);
+    const tab = await tabOf(page);
+    await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname).sort()).toEqual(['/q/720p.m3u8', '/q/audio.m3u8', '/q/master.m3u8']);
+    // Once the master is read: its qualities, and the other two folded into it.
+    await expect.poll(async () => ((await listOf(tab)) as { url: string; variants?: unknown[] }[]).find((m) => m.url.endsWith('master.m3u8'))?.variants?.length).toBe(2);
+    await expect.poll(() => badgeOf(tab)).toBe('1');
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
+    await expect(popup.locator('.pmedia li')).toHaveCount(1);
+    const select = popup.locator('.pmedia li .pmq');
+    await expect(select.locator('option')).toHaveText(['720p', '360p']);
+    await expect(select).toHaveValue(`${siteUrl}/q/720p.m3u8`);
+    await select.selectOption(`${siteUrl}/q/360p.m3u8`);
+    const before = received.filter((r) => r.type === 'add_download').length;
+    await popup.locator('.pmedia li .pmget').click();
+    await expect.poll(() => received.filter((r) => r.type === 'add_download').length).toBe(before + 1);
+    expect(received.filter((r) => r.type === 'add_download').at(-1)?.payload).toMatchObject({
+      url: `${siteUrl}/q/master.m3u8`,
+      hls_variant: `${siteUrl}/q/360p.m3u8`,
+      filename: 'Two qualities.mp4',
+    });
     await popup.close();
     await page.close();
   });

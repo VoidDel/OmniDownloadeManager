@@ -50,7 +50,9 @@ popup, the referrer, origin and cookies its request was sent with (`sniffMedia` 
 `entrypoints/background.ts`; the cookies in memory only). Opening the popup runs `scanPage`
 (`lib/scan.ts`) once in the tab's frames, through `scripting.executeScript`: it reads the page's
 media element sources, media metadata and resource timing entries and returns them; it changes
-nothing in the page. Nothing is sent anywhere else; there is no remote server, no
+nothing in the page. For an HLS playlist the page played, `describeHls` fetches that playlist
+once (credentials included) and parses its qualities (`lib/hls.ts`); the only request the
+extension itself makes to a website. Nothing is sent anywhere else; there is no remote server, no
 analytics and no remote code. This is what `data_collection_permissions` in the manifest declares.
 
 To try it, install the desktop application from

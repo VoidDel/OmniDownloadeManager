@@ -292,5 +292,8 @@
   },
   "notifyBatchOther": {
     "message": "Sent $1 items to Omni Download"
+  },
+  "mediaQuality": {
+    "message": "Quality"
   }
 }

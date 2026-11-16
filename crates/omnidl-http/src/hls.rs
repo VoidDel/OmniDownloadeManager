@@ -275,9 +275,37 @@ async fn get_text(client: &Client, url: &Url) -> Result<String> {
     resp.text().await.map_err(|e| request_error(&e))
 }
 
-/// The media playlist behind `url` (a master's best variant, highest bandwidth) and, when that
-/// variant's sound is a playlist of its own, the sound's.
-async fn media_playlists(client: &Client, url: &Url) -> Result<(Url, Media, Option<Media>)> {
+/// The variant of a master to download: the one at `wanted` (the same address, else the same
+/// one without its query, which may carry a fresh token), else the highest bandwidth.
+fn choose(mut variants: Vec<Variant>, wanted: Option<&str>) -> Variant {
+    let wanted = wanted.and_then(|w| Url::parse(w).ok());
+    let bare = |u: &Url| {
+        let mut u = u.clone();
+        u.set_query(None);
+        u.set_fragment(None);
+        u
+    };
+    if let Some(w) = &wanted {
+        let found = variants
+            .iter()
+            .position(|v| v.url == *w)
+            .or_else(|| variants.iter().position(|v| bare(&v.url) == bare(w)));
+        if let Some(i) = found {
+            return variants.swap_remove(i);
+        }
+        tracing::info!("{w}: not a variant of the playlist; taking the best");
+    }
+    variants.sort_by_key(|v| std::cmp::Reverse(v.bandwidth));
+    variants.swap_remove(0)
+}
+
+/// The media playlist behind `url` (a master's variant at `wanted`, else its best, highest
+/// bandwidth) and, when that variant's sound is a playlist of its own, the sound's.
+async fn media_playlists(
+    client: &Client,
+    url: &Url,
+    wanted: Option<&str>,
+) -> Result<(Url, Media, Option<Media>)> {
     let mut url = url.clone();
     let mut audio: Option<Url> = None;
     for _ in 0..3 {
@@ -297,9 +325,8 @@ async fn media_playlists(client: &Client, url: &Url) -> Result<(Url, Media, Opti
                 };
                 return Ok((url, m, sound));
             }
-            Playlist::Master(mut variants, renditions) => {
-                variants.sort_by_key(|v| std::cmp::Reverse(v.bandwidth));
-                let best = variants.swap_remove(0);
+            Playlist::Master(variants, renditions) => {
+                let best = choose(variants, wanted);
                 // The group's default sound, else its first.
                 audio = best.audio.as_ref().and_then(|g| {
                     let mut group = renditions.iter().filter(|r| &r.group == g);
@@ -331,8 +358,8 @@ struct Plan {
 }
 
 /// A playlist (and its own sound playlist, joined when both are fragmented MP4).
-async fn playlist_plan(client: &Client, url: &Url) -> Result<Plan> {
-    let (media_url, media, sound) = media_playlists(client, url).await?;
+async fn playlist_plan(client: &Client, url: &Url, wanted: Option<&str>) -> Result<Plan> {
+    let (media_url, media, sound) = media_playlists(client, url, wanted).await?;
     if !media.ended {
         return Err(live());
     }
@@ -435,8 +462,9 @@ pub(crate) async fn probe(
     client: &Client,
     url: &Url,
     file_name: Option<&str>,
+    wanted: Option<&str>,
 ) -> Result<(Url, String)> {
-    let plan = playlist_plan(client, url).await?;
+    let plan = playlist_plan(client, url, wanted).await?;
     Ok((plan.final_url, output_name(url, file_name, plan.fmp4)))
 }
 
@@ -645,7 +673,7 @@ async fn go(retry_delay: Duration, job: &Arc<Job>) -> Result<Outcome, Failed> {
     let client = client::build_as(&job.options, &ua).map_err(early)?;
     let plan = match job.options.audio_source.as_deref() {
         Some(audio) => pair_plan(&client, &url, audio).await,
-        None => playlist_plan(&client, &url).await,
+        None => playlist_plan(&client, &url, job.options.hls_variant.as_deref()).await,
     }
     .map_err(early)?;
     let Plan {

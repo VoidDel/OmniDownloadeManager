@@ -22,7 +22,7 @@ It passes these to the Omni Download application running on your computer, throu
 
 To have a form's contents when its answer turns out to be a download, the extension sees what the forms on the pages you visit send. It holds this in memory only while the request is under way, and discards it unless the server answers with a file to download; it is never written to storage by the extension, and it is passed to the application only together with that download.
 
-When you open the toolbar popup, the extension also reads the addresses of the video and audio the current page names or has loaded (its media elements, its video and audio metadata, the media in its list of loaded resources), to complete that list; they are kept the same way. "Download this page's file links" reads the link addresses on the current page, only when you choose that menu item, and passes them to the application in the same way.
+When you open the toolbar popup, the extension also reads the addresses of the video and audio the current page names or has loaded (its media elements, its video and audio metadata, the media in its list of loaded resources), to complete that list; they are kept the same way. For a video stream (an HLS playlist) it lists, the extension requests that playlist once from the site, with the cookies your browser holds for it, to read which qualities it offers; nothing else is fetched and what it reads stays in the list. "Download this page's file links" reads the link addresses on the current page, only when you choose that menu item, and passes them to the application in the same way.
 
 To list the videos, audio and video streams a page plays (in the toolbar popup), the extension looks at the type and size of the files your browser loads. It keeps the addresses of the media it finds, with the page's title and address, in the browser's session storage for that tab only: they are cleared when the tab goes to another page or is closed, and when the browser closes. For each media file it lists, it also notes the referrer, origin and cookies your browser sent when loading it, so the application can request the file the same way (a player embedded from another site, for one, sends its own address as the referrer): the referrer and origin are kept with the media address; the cookies are held in memory only, never stored. A media address is passed to the application only when you click its download button.
 
@@ -65,7 +65,7 @@ Changes to this policy are published in this file, with a new date. Questions: o
 
 为了在表单的应答是一个下载时能拿到表单内容，扩展会看到你访问的网页提交表单时发送的内容。这些内容只在请求进行期间留在内存里；服务器的应答不是要下载的文件时即被丢弃。扩展不会把它写入存储，只会随那一次下载一起交给应用。
 
-打开工具栏弹出面板时，扩展还会读取当前页面声明或已加载的视频、音频地址（页面里的媒体元素、视频和音频元信息、页面已加载资源列表里的媒体），用来补全这个列表，保存方式相同。“下载本页的文件链接”只在你选择这个菜单项时读取当前页面上的链接地址，并以同样的方式交给应用。
+打开工具栏弹出面板时，扩展还会读取当前页面声明或已加载的视频、音频地址（页面里的媒体元素、视频和音频元信息、页面已加载资源列表里的媒体），用来补全这个列表，保存方式相同。对列出的视频流（HLS 播放列表），扩展会带着浏览器为该网站保存的 Cookie 向网站请求一次这个播放列表，读出它提供哪些清晰度；不请求其他内容，读到的信息只保存在这个列表里。“下载本页的文件链接”只在你选择这个菜单项时读取当前页面上的链接地址，并以同样的方式交给应用。
 
 为了在工具栏弹出面板里列出页面播放的视频、音频和视频流，扩展会查看浏览器加载的文件的类型和大小。找到的媒体地址，连同页面标题和地址，只保存在该标签页的浏览器会话存储里：标签页打开别的页面或关闭时清除，浏览器关闭时也会清除。对列出的每个媒体，扩展还会记下浏览器加载它时发送的来源页（Referer）、Origin 和 Cookie，这样应用才能用同样的方式请求这个文件（例如嵌在其他网站播放器里的视频，来源页是播放器的地址）：来源页和 Origin 与媒体地址一起保存；Cookie 只留在内存里，不会写入存储。只有你点击某个媒体的下载按钮时，它的地址才会交给应用。
 

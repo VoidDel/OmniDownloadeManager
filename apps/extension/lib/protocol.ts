@@ -20,6 +20,8 @@ export interface AddDownload {
   /** The download is the answer to a form: what the form sent. The app sends it again, and
    *  answers `browser` when the server does not give the file a second time. */
   post?: PostBody | null;
+  /** Of a master HLS playlist, the quality chosen: its playlist's address. */
+  hls_variant?: string | null;
 }
 
 /** A POST request's body. */

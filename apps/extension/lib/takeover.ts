@@ -25,6 +25,8 @@ export interface Download {
   sentCookies?: string | null;
   /** Headers to send as the browser did (a form's `Origin`). */
   headers?: Record<string, string>;
+  /** Of a master HLS playlist, the quality chosen (its playlist's address). */
+  hlsVariant?: string | null;
 }
 
 /** `taken`: the app has it (or the user dropped it there). `browser`: the browser should go on. */
@@ -86,6 +88,7 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
     ...(d.audioUrl ? { audio_url: d.audioUrl } : {}),
     ...(d.post ? { post: d.post } : {}),
     ...(d.headers && Object.keys(d.headers).length ? { headers: d.headers } : {}),
+    ...(d.hlsVariant ? { hls_variant: d.hlsVariant } : {}),
   };
 }
 

@@ -75,6 +75,10 @@ pub struct AddDownload {
     /// second time, while the browser still holds its own download.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub post: Option<PostBody>,
+    /// Of a master HLS playlist (`url`), the variant the user chose: its playlist's address.
+    /// An app that does not know it downloads the highest bandwidth.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hls_variant: Option<String>,
 }
 
 /// A POST request's body.

@@ -292,5 +292,8 @@
   },
   "notifyBatchOther": {
     "message": "已交给 Omni Download：$1 个媒体"
+  },
+  "mediaQuality": {
+    "message": "清晰度"
   }
 }

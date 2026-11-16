@@ -9,6 +9,7 @@
 
 import type { Header } from './headers';
 import { contentLength, header } from './headers';
+import type { HlsVariant } from './hls';
 
 /** `dash`: a whole-file DASH stream, the picture or the sound (`track`). */
 export type MediaKind = 'video' | 'audio' | 'hls' | 'dash';
@@ -31,6 +32,10 @@ export interface Media {
    *  storage): the background holds it in memory. */
   referer?: string | null;
   origin?: string | null;
+  /** A master HLS playlist: its qualities (highest first) and the playlists it names, folded
+   *  into it in the list (`hls.ts`). */
+  variants?: HlsVariant[];
+  parts?: string[];
   at: number;
 }
 
@@ -168,7 +173,7 @@ export function withMedia(list: Media[], m: Media): Media[] {
   const i = list.findIndex((x) => mediaKey(x.url) === key);
   if (i >= 0) {
     const old = list[i];
-    const merged = { ...old, size: old.size ?? m.size, mime: old.mime ?? m.mime, title: old.title ?? m.title, referer: m.referer ?? old.referer, origin: m.origin ?? old.origin, at: m.at };
+    const merged = { ...old, size: old.size ?? m.size, mime: old.mime ?? m.mime, title: old.title ?? m.title, referer: m.referer ?? old.referer, origin: m.origin ?? old.origin, variants: m.variants ?? old.variants, parts: m.parts ?? old.parts, at: m.at };
     return list.map((x, j) => (j === i ? merged : x));
   }
   return [...list, m].slice(-MEDIA_MAX);
@@ -186,8 +191,11 @@ export interface Offer {
 }
 
 /** The list as offered: each DASH picture with the latest DASH sound (joined by the app); a
- *  DASH sound on its own when there is no picture to go with. Newest first. */
+ *  DASH sound on its own when there is no picture to go with; a master HLS playlist without the
+ *  playlists it names (its qualities, its sound). Newest first. */
 export function offers(list: Media[]): Offer[] {
+  const named = new Set(list.flatMap((m) => (m.kind === 'hls' && m.variants?.length ? (m.parts ?? []).map(mediaKey) : [])));
+  list = list.filter((m) => m.kind !== 'hls' || m.variants?.length || !named.has(mediaKey(m.url)));
   const sounds = list.filter((m) => m.kind === 'dash' && m.track === 'audio');
   const sound = sounds.reduce<Media | null>((a, m) => (!a || m.at >= a.at ? m : a), null);
   const pictures = list.some((m) => m.kind === 'dash' && m.track !== 'audio');

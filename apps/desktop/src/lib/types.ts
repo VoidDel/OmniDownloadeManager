@@ -70,6 +70,8 @@ export interface TaskOptions {
   /** HTTP: the file is the answer to a form; the request is this POST (body in base64). One
    *  connection, no resuming. */
   post?: { contentType: string; body: string } | null;
+  /** HTTP: of a master HLS playlist, the variant to download (its playlist's address). */
+  hlsVariant?: string | null;
 }
 
 export type HashAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512';

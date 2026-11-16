@@ -10,6 +10,7 @@
 import { Icon, Segmented, type IconName } from 'omni-ui';
 import { useEffect, useState } from 'react';
 
+import { qualityLabels } from '../../lib/hls';
 import { t, tn } from '../../lib/i18n';
 import { formatOf, mediaOf, offers, offerTab, sourceOf, type Media, type Offer } from '../../lib/media';
 import { size } from '../../lib/page';
@@ -38,7 +39,7 @@ async function currentTab(): Promise<number | null> {
   return tab?.id ?? null;
 }
 
-const toSend = (o: Offer) => ({ media: o.media, audio: o.audio, name: o.name });
+
 
 export function MediaList() {
   const [tabId, setTabId] = useState<number | null>(null);
@@ -47,6 +48,9 @@ export function MediaList() {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('all');
+  /** The quality chosen for each master HLS playlist (by its address); unset: the best. */
+  const [quality, setQuality] = useState<Record<string, string>>({});
+  const toSend = (o: Offer) => ({ media: o.media, audio: o.audio, name: o.name, hlsVariant: quality[o.media.url] ?? o.media.variants?.[0]?.url ?? null });
 
   useEffect(() => {
     void currentTab().then(setTabId);
@@ -137,6 +141,22 @@ export function MediaList() {
                     {o.name}
                   </span>
                   <small>{details(o)}</small>
+                  {(o.media.variants?.length ?? 0) > 1 && (
+                    <select
+                      className="pmq"
+                      aria-label={`${t('mediaQuality')} ${o.name}`}
+                      title={t('mediaQuality')}
+                      value={quality[o.media.url] ?? o.media.variants![0].url}
+                      disabled={done}
+                      onChange={(e) => setQuality((q) => ({ ...q, [o.media.url]: e.target.value }))}
+                    >
+                      {o.media.variants!.map((v, i) => (
+                        <option key={v.url} value={v.url}>
+                          {qualityLabels(o.media.variants!)[i]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </span>
                 <button type="button" className="iconbtn pmcopy" title={copied === o.media.url ? t('mediaCopied') : t('mediaCopy')} aria-label={`${t('mediaCopy')} ${o.name}`} onClick={() => copy(o)}>
                   <Icon name={copied === o.media.url ? 'check' : 'copy'} />

@@ -39,6 +39,7 @@ body { margin: 0; background: var(--bg-canvas); color: var(--fg-primary); font-f
 .pmedia .iconbtn { width: 28px; height: 28px; flex: none; }
 .pmedia .pmcopy { color: var(--fg-muted); }
 .pmedia li.sent .pname { color: var(--fg-secondary); }
+.pmq { align-self: flex-start; margin-top: 3px; height: 22px; padding: 0 4px; font: inherit; font-size: .74rem; color: var(--fg-primary); background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 6px; }
 .pmcheck { width: 15px; height: 15px; margin: 0; flex: none; accent-color: var(--accent); }
 .pmfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; }
 .pmall { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--fg-secondary); cursor: pointer; }

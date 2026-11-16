@@ -274,6 +274,8 @@ pub struct JobOptions {
     pub audio_source: Option<String>,
     /// The form to send instead of a GET (HTTP; see `TaskOptions::post`).
     pub post: Option<crate::PostData>,
+    /// The variant of a master HLS playlist to download (see `TaskOptions::hls_variant`).
+    pub hls_variant: Option<String>,
 }
 
 impl JobOptions {
@@ -341,6 +343,12 @@ impl JobOptions {
                 .filter(|s| !s.is_empty())
                 .map(str::to_owned),
             post: task.post.clone(),
+            hls_variant: task
+                .hls_variant
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned),
         }
     }
 }

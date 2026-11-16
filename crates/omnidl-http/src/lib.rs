@@ -67,7 +67,7 @@ impl DownloadEngine for HttpEngine {
         }
         if hls::is_playlist_url(&url) {
             let client = client::build_as(options, &ua::preferred(options, &url))?;
-            return playlist(&client, &with_account).await;
+            return playlist(&client, &with_account, options).await;
         }
         let auth = std::sync::Arc::new(auth::Auth::new(options, &mut url));
         let form = form::Form::of(options)?.map(std::sync::Arc::new);
@@ -89,7 +89,7 @@ impl DownloadEngine for HttpEngine {
         })
         .await?;
         if hls::is_playlist_type(p.content_type.as_deref()) {
-            return playlist(&client, &with_account).await;
+            return playlist(&client, &with_account, options).await;
         }
         Ok(ProbeInfo {
             file_name: p.file_name(&url),
@@ -109,8 +109,8 @@ impl DownloadEngine for HttpEngine {
 }
 
 /// A playlist: its video file's name; the size is learned while downloading.
-async fn playlist(client: &reqwest::Client, url: &Url) -> Result<ProbeInfo> {
-    let (_, file_name) = hls::probe(client, url, None).await?;
+async fn playlist(client: &reqwest::Client, url: &Url, o: &JobOptions) -> Result<ProbeInfo> {
+    let (_, file_name) = hls::probe(client, url, None, o.hls_variant.as_deref()).await?;
     Ok(ProbeInfo {
         file_name,
         final_url: auth::without_account(url.clone()).to_string(),
