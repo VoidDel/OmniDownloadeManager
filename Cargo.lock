@@ -4232,7 +4232,7 @@ version = "0.1.2"
 dependencies = [
  "aes-gcm",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "libc",
  "md-5",
  "omnidl-storage",
@@ -4323,7 +4323,7 @@ dependencies = [
  "aes",
  "async-trait",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "futures-util",
  "httpdate",
