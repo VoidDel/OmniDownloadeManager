@@ -13,7 +13,8 @@ import { Icon } from '../../components/Icon';
 import { ShortcutInput } from '../../components/ShortcutInput';
 import { Segmented, Select, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { Category, Density, MaterialKind, RemoveFiles, Settings as S, ThemeMode, WhenDone } from '../../lib/types';
+import { folderFor } from '../../lib/folders';
+import type { Category, CategoryFolders, Density, MaterialKind, RemoveFiles, Settings as S, ThemeMode, WhenDone } from '../../lib/types';
 import { categoryLabel } from '../../lib/words';
 import { useApp } from '../../store/app';
 import { LANGUAGE_NAMES, SUPPORTED, systemLang } from '../../i18n';
@@ -365,6 +366,9 @@ function General({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   );
 }
 
+/** The texts of each way of sorting (`settings.download.byCategory<Key>Hint`). */
+const MODE_KEY: Record<CategoryFolders, string> = { none: 'None', auto: 'Auto', manual: 'Manual' };
+
 /** The categories that can have a folder of their own ("other" always goes to the download folder). */
 const CATEGORY_FOLDERS: Category[] = ['video', 'audio', 'document', 'archive', 'program', 'disk_image', 'image'];
 
@@ -405,6 +409,7 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
   const { t } = useTranslation();
   const e = s.engine;
   const dir = s.downloadDir || defaultDir;
+  const mode: CategoryFolders = s.categoryFolders ?? 'none';
   const browse = async () => {
     const picked = await open({ directory: true, defaultPath: dir || undefined, title: t('settings.download.folderPick') }).catch(() => null);
     if (typeof picked === 'string') set((x) => (x.downloadDir = picked));
@@ -425,10 +430,28 @@ function Download({ s, set }: { s: S; set: (f: (s: S) => void) => void }) {
         </Row>
       </div>
       <div className="set-group">
-        <Row col label={t('settings.download.byCategory')} hint={t('settings.download.byCategoryHint')} />
-        {CATEGORY_FOLDERS.map((c) => (
-          <CategoryFolder key={c} category={c} value={s.categoryDirs?.[c] ?? ''} fallback={dir} set={set} />
-        ))}
+        <Row label={t('settings.download.byCategory')} hint={t(`settings.download.byCategory${MODE_KEY[mode]}Hint`)}>
+          <Segmented<CategoryFolders>
+            value={mode}
+            label={t('settings.download.byCategory')}
+            onChange={(v) => set((x) => (x.categoryFolders = v))}
+            options={[
+              ['none', t('settings.download.byCategoryNone')],
+              ['auto', t('settings.download.byCategoryAuto')],
+              ['manual', t('settings.download.byCategoryManual')],
+            ]}
+          />
+        </Row>
+        {/* Automatic: where each category goes, to see. */}
+        {mode === 'auto' &&
+          CATEGORY_FOLDERS.map((c) => (
+            <Row key={c} label={categoryLabel(c)}>
+              <span className="cat-path" title={folderFor(mode, s.categoryDirs, dir, c, categoryLabel)}>
+                {folderFor(mode, s.categoryDirs, dir, c, categoryLabel)}
+              </span>
+            </Row>
+          ))}
+        {mode === 'manual' && CATEGORY_FOLDERS.map((c) => <CategoryFolder key={c} category={c} value={s.categoryDirs?.[c] ?? ''} fallback={dir} set={set} />)}
       </div>
       <div className="set-group">
         <Row label={t('settings.download.maxConcurrent')} hint={t('settings.download.maxConcurrentHint')}>

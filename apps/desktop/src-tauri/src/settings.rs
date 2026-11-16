@@ -15,8 +15,11 @@ pub struct Settings {
     pub appearance: Appearance,
     /// Where new downloads go; empty: the system's Downloads folder.
     pub download_dir: String,
-    /// A folder of its own for a category (`video`, `disk_image`… as the tasks name them);
-    /// one not listed goes to `download_dir`.
+    /// Whether downloads are sorted into folders by their category (`folder_for`).
+    pub category_folders: CategoryFolders,
+    /// With `CategoryFolders::Manual`, a folder of its own for a category (`video`,
+    /// `disk_image`… as the tasks name them); one not listed goes to `download_dir`. Kept when
+    /// another way is chosen.
     pub category_dirs: BTreeMap<String, String>,
     pub engine: EngineConfig,
     pub browser: BrowserSettings,
@@ -31,12 +34,27 @@ impl Default for Settings {
             general: General::default(),
             appearance: Appearance::default(),
             download_dir: String::new(),
+            category_folders: CategoryFolders::None,
             category_dirs: BTreeMap::new(),
             engine: EngineConfig::default(),
             browser: BrowserSettings::default(),
             schedule: crate::schedule::Schedule::default(),
         }
     }
+}
+
+/// How downloads are sorted into folders by their category. A file of no category (`other`)
+/// goes to the download folder whichever way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CategoryFolders {
+    /// Everything in the download folder.
+    #[default]
+    None,
+    /// A folder per category inside the download folder, named as the UI names the category.
+    Auto,
+    /// The folder set for each category (`category_dirs`); the download folder for the others.
+    Manual,
 }
 
 /// Running in the background, notifications, shortcuts and updates (docs/development-plan.md
@@ -181,6 +199,18 @@ impl Settings {
                 if !has("general", "onboarded") {
                     s.general.onboarded = true;
                 }
+                // Settings from before the choice of how to sort: folders set for categories
+                // were used, nothing else was sorted.
+                if table
+                    .as_ref()
+                    .is_some_and(|t| !t.contains_key("categoryFolders"))
+                {
+                    s.category_folders = if s.category_dirs.values().any(|d| !d.trim().is_empty()) {
+                        CategoryFolders::Manual
+                    } else {
+                        CategoryFolders::None
+                    };
+                }
                 // Settings from before the automatic user agent: one the user changed is kept.
                 if !has("engine", "userAgentAuto") {
                     let ua = s.engine.user_agent.trim();
@@ -193,6 +223,29 @@ impl Settings {
                 tracing::warn!("{}: {e}; using defaults", path.display());
                 Self::default()
             }
+        }
+    }
+
+    /// The folder a new download of `category` (`video`, `disk_image`… as the tasks name them)
+    /// goes to: `download_dir` (the folder new downloads go to, resolved), or a folder for its
+    /// category in it named in `lang` (`Auto`), or the one set for it (`Manual`).
+    pub fn folder_for(&self, category: &str, download_dir: &str, lang: &str) -> String {
+        if category == "other" || category.is_empty() {
+            return download_dir.to_owned();
+        }
+        match self.category_folders {
+            CategoryFolders::None => download_dir.to_owned(),
+            CategoryFolders::Auto => {
+                let name = crate::i18n::tr(lang, &format!("category.{category}"), &[]);
+                Path::new(download_dir)
+                    .join(omnidl_core::filename::sanitize(&name))
+                    .to_string_lossy()
+                    .into_owned()
+            }
+            CategoryFolders::Manual => match self.category_dirs.get(category) {
+                Some(dir) if !dir.trim().is_empty() => dir.trim().to_owned(),
+                _ => download_dir.to_owned(),
+            },
         }
     }
 
@@ -268,6 +321,56 @@ mod tests {
         s.appearance.mode = "dark".into();
         s.save(&path).unwrap();
         assert_eq!(Settings::load(&path), s);
+    }
+
+    #[test]
+    fn sorts_downloads_by_category_as_chosen() {
+        let dl = if cfg!(windows) {
+            "D:\\下载"
+        } else {
+            "/home/u/下载"
+        };
+        let mut s = Settings::default();
+        s.category_dirs.insert("video".into(), "E:\\影片".into());
+        // Not sorted: everything in the download folder.
+        assert_eq!(s.folder_for("video", dl, "zh-CN"), dl);
+        // A folder per category inside it, named in the UI's language; none for "other".
+        s.category_folders = CategoryFolders::Auto;
+        let sub = |name: &str| Path::new(dl).join(name).to_string_lossy().into_owned();
+        assert_eq!(s.folder_for("video", dl, "zh-CN"), sub("视频"));
+        assert_eq!(s.folder_for("disk_image", dl, "en-US"), sub("Disk images"));
+        assert_eq!(s.folder_for("other", dl, "zh-CN"), dl);
+        // The folders set; the download folder for a category without one.
+        s.category_folders = CategoryFolders::Manual;
+        assert_eq!(s.folder_for("video", dl, "zh-CN"), "E:\\影片");
+        assert_eq!(s.folder_for("audio", dl, "zh-CN"), dl);
+        assert_eq!(s.folder_for("other", dl, "zh-CN"), dl);
+    }
+
+    #[test]
+    fn sorts_as_before_in_older_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.toml");
+        // Folders set for categories: they were used.
+        std::fs::write(&path, "[categoryDirs]\nvideo = 'E:\\影片'\n").unwrap();
+        assert_eq!(
+            Settings::load(&path).category_folders,
+            CategoryFolders::Manual
+        );
+        // None set: nothing was sorted.
+        std::fs::write(&path, "downloadDir = 'D:\\下载'\n").unwrap();
+        assert_eq!(
+            Settings::load(&path).category_folders,
+            CategoryFolders::None
+        );
+        // A choice saved is kept.
+        let mut s = Settings::load(&path);
+        s.category_folders = CategoryFolders::Auto;
+        s.save(&path).unwrap();
+        assert_eq!(
+            Settings::load(&path).category_folders,
+            CategoryFolders::Auto
+        );
     }
 
     #[test]

@@ -188,7 +188,12 @@
       "markDownloadsHint": "和瀏覽器下載的檔案一樣：執行程式前 Windows 會先確認，Office 會用受保護的檢視開啟文件。來自本機和區域網路的檔案不標記。",
       "markDownloadsHintMac": "和瀏覽器下載的檔案一樣：第一次開啟時 macOS 會檢查並確認。來自本機和區域網路的檔案不標記。",
       "byCategory": "依類型儲存到不同資料夾",
-      "byCategoryHint": "下載的檔案依副檔名歸類，放到各自的資料夾；留空的類型存到上面的預設下載資料夾",
+      "byCategoryNone": "不分類",
+      "byCategoryAuto": "自動",
+      "byCategoryManual": "手動",
+      "byCategoryNoneHint": "所有下載都存到上面的預設下載資料夾",
+      "byCategoryAutoHint": "在預設下載資料夾裡依類型建立子資料夾（名稱隨介面語言）；不屬於這些類型的檔案存到預設下載資料夾",
+      "byCategoryManualHint": "為每種類型指定資料夾；留空的類型和不屬於這些類型的檔案存到預設下載資料夾",
       "byCategoryPick": "選擇存放{category}的資料夾",
       "byCategoryClear": "改用預設下載資料夾"
     },

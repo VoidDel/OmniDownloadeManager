@@ -188,7 +188,12 @@
       "markDownloadsHint": "As with files downloaded by a browser: Windows asks before running a program, and Office opens documents in Protected View. Files from this computer or the local network are not marked.",
       "markDownloadsHintMac": "As with files downloaded by a browser: macOS checks a file and asks the first time it is opened. Files from this computer or the local network are not marked.",
       "byCategory": "Folders by file type",
-      "byCategoryHint": "Downloads are sorted by their extension into these folders; an empty one means the default download folder above",
+      "byCategoryNone": "Off",
+      "byCategoryAuto": "Automatic",
+      "byCategoryManual": "Manual",
+      "byCategoryNoneHint": "Every download goes to the default download folder above",
+      "byCategoryAutoHint": "A subfolder per type inside the default download folder (named in the interface language); files of no listed type go to the default download folder",
+      "byCategoryManualHint": "Choose a folder for each type; types left empty and files of no listed type go to the default download folder",
       "byCategoryPick": "Choose a folder for {category}",
       "byCategoryClear": "Use the default download folder"
     },
