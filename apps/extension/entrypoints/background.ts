@@ -14,7 +14,8 @@
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, sentWith, type Header, type Sent } from '../lib/headers';
 import { t, tn } from '../lib/i18n';
-import { classify, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
+import { classify, classifyFound, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
+import { scanPage, type Found } from '../lib/scan';
 import { postBody, type RequestBody } from '../lib/post';
 import type { PostBody } from '../lib/protocol';
 import { decide, extensionOf } from '../lib/rules';
@@ -453,6 +454,40 @@ function mediaDownload(m: Media, audio?: Media | null, name?: string): Download 
   };
 }
 
+/**
+ * Looks at the tab's page (every frame) when the popup opens, for media the sniffing did not see,
+ * and adds them to its list. Nothing for a page the extension may not script (the browser's own,
+ * a store's).
+ */
+async function scanTab(tabId: number) {
+  let found: Found[];
+  try {
+    const results = await browser.scripting.executeScript({ target: { tabId, allFrames: true }, func: scanPage });
+    found = results.flatMap((r) => (r.result as Found[] | undefined) ?? []);
+  } catch {
+    return;
+  }
+  if (!found.length) return;
+  inTab(tabId, async () => {
+    const tab = await browser.tabs.get(tabId).catch(() => null);
+    if (!tab?.url) return;
+    let list = await mediaOf(tabId);
+    const before = list.length;
+    for (const f of found) {
+      // What the sniffing listed stays as it is (with what its request went out with).
+      if (list.some((x) => mediaKey(x.url) === mediaKey(f.url))) continue;
+      const c = classifyFound(f);
+      if (!c) continue;
+      // A frame's media went out with that frame as the referrer (or its origin, across sites).
+      const m: Media = { ...c, url: f.url, title: tab.title ?? null, pageUrl: tab.url, storeId: storeOf(tab), referer: f.top ? null : f.frameUrl, at: Date.now() };
+      list = withMedia(list, m);
+    }
+    if (list.length === before) return;
+    await saveMedia(tabId, list);
+    await badge(tabId, offers(list).length);
+  });
+}
+
 interface MediaChoice {
   media: Media;
   audio?: Media | null;
@@ -500,7 +535,8 @@ export default defineBackground(() => {
   // Alt+click from the content script: the browser keeps that link. The popup's media list:
   // download one (here, as the popup closes when the app's window opens).
   browser.runtime.onMessage.addListener((msg: unknown) => {
-    const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string; items?: MediaChoice[] };
+    const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string; items?: MediaChoice[]; tabId?: number };
+    if (m?.type === 'scan-media' && typeof m.tabId === 'number') void scanTab(m.tabId);
     if (m?.type === 'bypass' && typeof m.url === 'string') mark(bypass, m.url, 5000);
     if (m?.type === 'download-media' && m.media) void explicit(mediaDownload(m.media, m.audio, m.name));
     if (m?.type === 'download-media-batch' && Array.isArray(m.items)) {

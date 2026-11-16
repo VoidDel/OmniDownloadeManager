@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classify, cleanTitle, formatOf, fromShownDocument, mediaKey, mediaName, offers, offerTab, onPage, pageKey, sourceOf, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
+import { classify, classifyFound, cleanTitle, formatOf, fromShownDocument, mediaKey, mediaName, offers, offerTab, onPage, pageKey, sourceOf, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
 
 const h = (pairs: Record<string, string>) => Object.entries(pairs).map(([name, value]) => ({ name, value }));
 const MB = 1024 * 1024;
@@ -125,6 +125,29 @@ describe('DASH streams', () => {
     expect(o[1]).toMatchObject({ name: '海边.mp4', size: 42, audio: { url: bili(30232) } });
     // Sound alone: offered as audio.
     expect(offers([at(bili(30280), 'audio', 3, 1)])).toMatchObject([{ kind: 'audio', name: '海边.m4a', audio: null }]);
+  });
+});
+
+describe('what a page names', () => {
+  it('lists media files by address, size or element', () => {
+    expect(classifyFound({ url: 'https://cdn.e.com/a/clip.mp4' })).toEqual({ kind: 'video', mime: null, size: null });
+    expect(classifyFound({ url: 'https://cdn.e.com/a/clip.mp4', size: 3 * MB })).toMatchObject({ kind: 'video', size: 3 * MB });
+    expect(classifyFound({ url: 'https://cdn.e.com/live/index.m3u8', size: 300 })).toMatchObject({ kind: 'hls', size: null });
+    // An element's source whose address says nothing.
+    expect(classifyFound({ url: 'https://e.com/stream?id=7', tag: 'audio' })).toEqual({ kind: 'audio', mime: null, size: null });
+  });
+
+  it('leaves out what is not worth listing', () => {
+    // Small files, pieces of streams, DASH files (told apart only by their ranges), YouTube.
+    expect(classifyFound({ url: 'https://e.com/sfx/click.mp3', size: 10 * 1024 })).toBeNull();
+    expect(classifyFound({ url: 'https://e.com/stream?id=7', tag: 'video', size: 10 * 1024 })).toBeNull();
+    expect(classifyFound({ url: 'https://e.com/hls/seg1.ts', tag: 'video' })).toBeNull();
+    expect(classifyFound({ url: 'https://b.e.com/1-30080.m4s', tag: 'video', size: 40 * MB })).toBeNull();
+    expect(classifyFound({ url: 'https://rr1.googlevideo.com/videoplayback?itag=1', tag: 'video' })).toBeNull();
+    // Not media: an image, a script, a page an element points at by mistake.
+    expect(classifyFound({ url: 'https://e.com/poster.jpg', tag: 'video' })).toBeNull();
+    expect(classifyFound({ url: 'https://e.com/app.js' })).toBeNull();
+    expect(classifyFound({ url: 'blob:https://e.com/1234', tag: 'video' })).toBeNull();
   });
 });
 

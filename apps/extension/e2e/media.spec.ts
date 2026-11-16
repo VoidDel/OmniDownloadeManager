@@ -56,6 +56,21 @@ test.beforeAll(async () => {
         return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
       case '/media/cors.mp4':
         return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
+      // A page that names a video it has not loaded (an element, its metadata), and loads a
+      // stream and a small sound.
+      case '/scan':
+        return send(
+          'text/html; charset=utf-8',
+          `<!doctype html><title>Scanned</title>
+           <meta property="og:video" content="/media/og.mp4">
+           <video src="/media/later.mp4" preload="none"></video>
+           <video src="blob:http://127.0.0.1/whatever"></video>
+           <script>
+             // Read through, as players do: the page's records keep finished loads.
+             fetch('/hls/index.m3u8').then((r) => r.text());
+             fetch('/sfx/click.mp3').then((r) => r.arrayBuffer());
+           </script>`,
+        );
       // A page that plays a video, a song and a stream.
       case '/mixed':
         return send(
@@ -271,6 +286,29 @@ test.describe('media sniffing', () => {
     // They show as sent; nothing is left to choose.
     await expect(popup.locator('.pmedia li.sent')).toHaveCount(3);
     await expect(go).toBeDisabled();
+    await popup.close();
+    await page.close();
+  });
+
+  test('looks at the page when the popup opens, for media the sniffing did not see', async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/scan`);
+    const tab = await tabOf(page);
+    await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/hls/index.m3u8']);
+    // As if it had all been loaded before the extension was there.
+    await worker.evaluate((id) => chrome.storage.session.remove(`media:${id}`), tab);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
+    // The element's video and the metadata's (not loaded), the stream (from the page's records);
+    // not the small sound, nor the element's blob.
+    await expect.poll(async () => (await listOf(tab)).map((m) => `${m.kind} ${new URL(m.url).pathname}`).sort()).toEqual(['hls /hls/index.m3u8', 'video /media/later.mp4', 'video /media/og.mp4']);
+    await expect(popup.locator('.pmedia li')).toHaveCount(3);
+    await expect.poll(() => badgeOf(tab)).toBe('3');
+    const list = (await listOf(tab)) as { url: string; pageUrl?: string; title: string | null }[];
+    expect(list.every((m) => m.pageUrl === `${siteUrl}/scan` && m.title === 'Scanned')).toBe(true);
+    // Opening it again adds nothing more.
+    await popup.reload();
+    await expect(popup.locator('.pmedia li')).toHaveCount(3);
     await popup.close();
     await page.close();
   });

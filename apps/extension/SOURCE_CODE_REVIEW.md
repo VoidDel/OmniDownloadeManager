@@ -47,7 +47,10 @@ user agent and the file name; for a download that is the answer to a form the us
 also what the form sent (`lib/post.ts`; read with `webRequest`, held in memory while the request
 runs and dropped unless the answer is a file to download); for media the user downloads from the
 popup, the referrer, origin and cookies its request was sent with (`sniffMedia` in
-`entrypoints/background.ts`; the cookies in memory only). Nothing is sent anywhere else; there is no remote server, no
+`entrypoints/background.ts`; the cookies in memory only). Opening the popup runs `scanPage`
+(`lib/scan.ts`) once in the tab's frames, through `scripting.executeScript`: it reads the page's
+media element sources, media metadata and resource timing entries and returns them; it changes
+nothing in the page. Nothing is sent anywhere else; there is no remote server, no
 analytics and no remote code. This is what `data_collection_permissions` in the manifest declares.
 
 To try it, install the desktop application from

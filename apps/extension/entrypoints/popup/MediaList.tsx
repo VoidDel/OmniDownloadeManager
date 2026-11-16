@@ -2,6 +2,7 @@
 // background's sniffing), each to hand to Omni Download. A site's picture and sound served apart
 // (DASH) are offered as one video, which the app joins.
 //
+// Opening it looks at the page once more (`scan.ts`) for media the sniffing missed.
 // Video and audio have tabs of their own when the page played both. Each row says the format,
 // where it comes from and how big it is, copies its link, and downloads it (through the app's
 // quick-download window); several chosen ones start at once, without a window each.
@@ -51,9 +52,10 @@ export function MediaList() {
     void currentTab().then(setTabId);
   }, []);
 
-  // The list, and again whenever the background adds to it.
+  // The list, and again whenever the background adds to it (the look at the page among others).
   useEffect(() => {
     if (tabId == null) return;
+    void browser.runtime.sendMessage({ type: 'scan-media', tabId }).catch(() => undefined);
     const load = () => void mediaOf(tabId).then(setItems);
     load();
     const onChanged = (changes: Record<string, unknown>, area: string) => {

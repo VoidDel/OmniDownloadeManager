@@ -200,7 +200,7 @@ Hands downloads from the browser to the Omni Download desktop application on the
 | `nativeMessaging` | Sends the download to the Omni Download desktop application installed on the same computer. This is the extension's core function. |
 | `cookies` | Reads the cookies of the site a download comes from and passes them to the desktop application, so it can fetch files that require the user to be signed in. Cookies are read only for the download being handed over and go only to the local application. |
 | `contextMenus` | Adds "Download with Omni Download" to the menu of links, images, video and audio, and "Download this page's file links" to the page menu. |
-| `scripting` | When the user chooses "Download this page's file links", reads the link addresses on that page. Nothing is injected otherwise. |
+| `scripting` | When the user chooses "Download this page's file links", reads the link addresses on that page. When the user opens the toolbar popup, reads the addresses of the page's video and audio (its media elements, its `og:video`/`og:audio` metadata and the media in the page's resource timing list) to complete "Media on this page". Read only, in the extension's isolated world; nothing is injected otherwise and nothing stays in the page. |
 | `activeTab` | Gives the menu commands and the keyboard shortcut access to the current page only when the user invokes them. |
 | `storage` | Saves the user's take-over rules (minimum file size, file types, excluded sites) and connection settings. |
 | `notifications` | Tells the user when a download could not be handed to the desktop application. |

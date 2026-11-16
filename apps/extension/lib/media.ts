@@ -100,6 +100,22 @@ export function classify(url: string, headers: Header[] | undefined): Pick<Media
   return { kind, mime, size: total };
 }
 
+/** What an address a page names is (`scan.ts`: its media elements, metadata, records), as
+ *  media worth listing: by its address and the size the page knows, as `classify`; else, for an
+ *  element's or the metadata's, by that. Not: pieces of streams, DASH files (whole ones are only
+ *  told apart by their ranges), YouTube's player streams, small files. */
+export function classifyFound(f: { url: string; tag?: 'video' | 'audio'; size?: number | null }): Pick<Media, 'kind' | 'mime' | 'size'> | null {
+  const headers = f.size ? [{ name: 'content-length', value: String(f.size) }] : [];
+  const c = classify(f.url, headers);
+  if (c) return c.kind === 'dash' ? null : c;
+  const ext = extOf(f.url);
+  if (!f.tag || !/^https?:/i.test(f.url) || /(^|\.)googlevideo\.com$/.test(hostOf(f.url))) return null;
+  if (ext === 'm4s' || PIECE_EXT.has(ext) || (f.size != null && f.size < MIN_SIZE)) return null;
+  // An address that names another kind of file (an image, a page) is not the element's media.
+  if (ext && !VIDEO_EXT.has(ext) && !AUDIO_EXT.has(ext)) return null;
+  return { kind: f.tag, mime: null, size: f.size ?? null };
+}
+
 /** A media item's address without what changes between requests of the same file (a range
  *  query some players add), to list it once. */
 export function mediaKey(url: string): string {
