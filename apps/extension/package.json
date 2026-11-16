@@ -1,7 +1,7 @@
 {
   "name": "omnidl-extension",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "description": "Omni Download browser extension for Chrome, Edge and Firefox",

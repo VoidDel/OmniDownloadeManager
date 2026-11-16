@@ -4210,7 +4210,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-bt"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4228,7 +4228,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-core"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -4252,7 +4252,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-desktop"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "arboard",
  "axum",
@@ -4294,7 +4294,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-ftp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4318,7 +4318,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-http"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "aes",
  "async-trait",
@@ -4344,7 +4344,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-ipc"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4353,7 +4353,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-nm-host"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "omnidl-ipc",
  "serde",
@@ -4364,7 +4364,7 @@ dependencies = [
 
 [[package]]
 name = "omnidl-storage"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "fs4",
