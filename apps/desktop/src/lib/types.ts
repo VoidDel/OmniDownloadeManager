@@ -6,6 +6,8 @@ export type TaskKind = 'http' | 'ftp' | 'torrent';
 
 export type TaskStatus = 'queued' | 'probing' | 'downloading' | 'paused' | 'seeding' | 'completed' | 'failed' | 'removed';
 
+export type CategoryFolders = 'none' | 'auto' | 'manual';
+
 export type Category = 'video' | 'audio' | 'document' | 'archive' | 'program' | 'disk_image' | 'image' | 'other';
 
 export type Priority = 'high' | 'normal' | 'low';
@@ -340,6 +342,9 @@ export interface Settings {
   };
   downloadDir: string;
   /** A folder of its own for a category; one not listed (or empty) goes to `downloadDir`. */
+  /** How downloads are sorted into folders by category: not at all, a folder per category in
+   *  the download folder (named as the UI names it), or the folders set (`categoryDirs`). */
+  categoryFolders: CategoryFolders;
   categoryDirs: Partial<Record<Category, string>>;
   engine: EngineConfig;
   browser: BrowserSettings;

@@ -10,9 +10,10 @@ import { create } from 'zustand';
 import { api, asError, listenApp, listenTasks } from '../lib/api';
 import i18n, { initI18n, resolveLang, setLanguage } from '../i18n';
 import { categoryOf } from '../lib/category';
+import { folderFor } from '../lib/folders';
 import { applyTheme, setSystemLook } from '../lib/theme';
 import type { AppError, Category, Prefill, Settings, Stats, Task, TaskStatus, UpdateInfo, UpdateProgress, WhenDone } from '../lib/types';
-import { errorText } from '../lib/words';
+import { categoryLabel, errorText } from '../lib/words';
 
 export type Filter = 'all' | 'active' | 'done' | 'torrent' | 'failed' | 'trash' | `cat:${Category}`;
 export type SortKey = 'added' | 'name' | 'size' | 'progress' | 'speed' | 'status';
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   general: { closeToTray: true, notifyDone: true, notifyFailed: true, shortcutShow: '', shortcutNew: '', checkUpdates: true, onboarded: true, soundDone: true, soundFile: '', floatBall: false, watchClipboard: false, openTorrents: true, removeFiles: 'ask' },
   appearance: { mode: 'system', lightTheme: 'aurora', darkTheme: 'midnight', density: 'comfortable', material: true, materialKind: 'mica', accent: 'theme' },
   downloadDir: '',
+  categoryFolders: 'none',
   categoryDirs: {},
   engine: {
     maxConcurrent: 3,
@@ -535,7 +537,10 @@ export const useApp = create<State>((set, get) => ({
   },
 
   downloadDir: () => get().settings.downloadDir || get().defaultDir,
-  dirFor: (fileName) => get().settings.categoryDirs?.[categoryOf(fileName)]?.trim() || get().downloadDir(),
+  dirFor: (fileName) => {
+    const s = get().settings;
+    return folderFor(s.categoryFolders, s.categoryDirs, get().downloadDir(), categoryOf(fileName), categoryLabel);
+  },
 }));
 
 const ACTIVE: TaskStatus[] = ['queued', 'probing', 'downloading', 'paused'];

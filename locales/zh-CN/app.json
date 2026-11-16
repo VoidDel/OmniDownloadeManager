@@ -188,7 +188,12 @@
       "markDownloadsHint": "和浏览器下载的文件一样：运行程序前 Windows 会先确认，Office 用受保护的视图打开文档。来自本机和局域网的文件不标记。",
       "markDownloadsHintMac": "和浏览器下载的文件一样：第一次打开时 macOS 会检查并确认。来自本机和局域网的文件不标记。",
       "byCategory": "按类型保存到不同文件夹",
-      "byCategoryHint": "下载的文件按扩展名归类，放到各自的文件夹；留空的类型存到上面的默认下载文件夹",
+      "byCategoryNone": "不分类",
+      "byCategoryAuto": "自动",
+      "byCategoryManual": "手动",
+      "byCategoryNoneHint": "所有下载都存到上面的默认下载文件夹",
+      "byCategoryAutoHint": "在默认下载文件夹里按类型建子文件夹（名称随界面语言）；不属于这些类型的文件存到默认下载文件夹",
+      "byCategoryManualHint": "为每种类型指定文件夹；留空的类型和不属于这些类型的文件存到默认下载文件夹",
       "byCategoryPick": "选择存放{category}的文件夹",
       "byCategoryClear": "改用默认下载文件夹"
     },

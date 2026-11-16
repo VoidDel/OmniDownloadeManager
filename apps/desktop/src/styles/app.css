@@ -164,6 +164,9 @@
 .set-row:has(> .ctl > .cat-dir) .ctl { flex: 1; max-width: 78%; }
 .cat-dir { flex: 1; min-width: 0; flex-wrap: nowrap; }
 .cat-dir .inp { flex: 1; min-width: 0; width: auto; }
+/* Automatic sorting: the folder each category goes to, shown. */
+.set-row:has(> .ctl > .cat-path) .ctl { flex: 1; max-width: 78%; justify-content: flex-end; min-width: 0; }
+.cat-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: .86rem; color: var(--fg-secondary); }
 .det-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: .8rem; font-weight: 500; }
 .det-head .muted, .det-head .num { font-weight: 400; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 .det-note { margin: 0; font-size: .86rem; }
