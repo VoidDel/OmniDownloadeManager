@@ -61,9 +61,12 @@ test.beforeAll(async () => {
         return send(
           'text/html; charset=utf-8',
           `<!doctype html><title>First</title><script>
-             fetch('/media/clip.mp4')
-               .then(() => { history.pushState({}, '', '/spa/next'); document.title = 'Next'; return fetch('/media/cors.mp4'); })
-               .then(() => { location.hash = 'comments'; document.body.dataset.done = '1'; });
+             fetch('/media/clip.mp4');
+             // Called by the test once the first video is listed.
+             window.next = () =>
+               Promise.resolve()
+                 .then(() => { history.pushState({}, '', '/spa/next'); document.title = 'Next'; return fetch('/media/cors.mp4'); })
+                 .then(() => { location.hash = 'comments'; document.body.dataset.done = '1'; });
            </script>`,
         );
       case '/other':
@@ -194,7 +197,8 @@ test.describe('media sniffing', () => {
     const page = await context.newPage();
     await page.goto(`${siteUrl}/spa`);
     const tab = await tabOf(page);
-    await page.waitForSelector('body[data-done]', { state: 'attached' });
+    await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/clip.mp4']);
+    await page.evaluate(() => (window as unknown as { next: () => Promise<void> }).next());
     await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/cors.mp4']);
     // The anchor is the same page: the list stays.
     await page.waitForTimeout(300);

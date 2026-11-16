@@ -328,10 +328,6 @@ function watchPosts() {
 const mediaQueue = new Map<number, Promise<void>>();
 /** Requests that may be media, while under way: what they went out with. */
 const mediaSending = new Map<string, Sent>();
-/** The address each tab shows, as `tabs.onUpdated` said last (read when a response arrives, so
- *  that media go with the page they were loaded for, not the one the tab has moved on to by the
- *  time the list is written). Lost when the background sleeps: then the tab is asked. */
-const tabUrls = new Map<number, string>();
 /** The `Cookie` header listed media went out with, by `mediaKey`: in memory only, never in
  *  storage (lost when the background sleeps; the download then reads the cookies). */
 const mediaCookies = new Map<string, { at: number; cookies: string }>();
@@ -385,7 +381,9 @@ function sniffMedia() {
     const c = classify(d.url, d.responseHeaders);
     if (!c) return;
     if (sent?.cookies) keepCookies(d.url, sent.cookies);
-    const page = topPageOf(d) ?? tabUrls.get(d.tabId) ?? null;
+    // The page the request was made for, when it says (Firefox). Chromium's requests do not, and
+    // its tab events may come before or after them: the tab is asked when the item is written.
+    const page = topPageOf(d);
     inTab(d.tabId, async () => {
       const tab = await browser.tabs.get(d.tabId).catch(() => null);
       // The tab has gone to another page since.
@@ -425,7 +423,6 @@ function sniffMedia() {
   browser.tabs.onUpdated.addListener((tabId, info) => {
     if (!info.url) return;
     const url = info.url;
-    tabUrls.set(tabId, url);
     inTab(tabId, async () => {
       const list = await mediaOf(tabId);
       const kept = onPage(list, url);
@@ -434,10 +431,7 @@ function sniffMedia() {
       await badge(tabId, offers(kept).length);
     });
   });
-  browser.tabs.onRemoved.addListener((tabId) => {
-    tabUrls.delete(tabId);
-    inTab(tabId, () => saveMedia(tabId, []));
-  });
+  browser.tabs.onRemoved.addListener((tabId) => inTab(tabId, () => saveMedia(tabId, [])));
 }
 
 /** A media item the popup asked for, under the name the list shows; a DASH picture with its
