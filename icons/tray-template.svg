@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <!-- The macOS menu bar icon: app-icon.svg's glyph alone, in black on transparent. macOS uses
+       it as a template image and tints it as it does the system's own icons (white on a dark menu
+       bar, black on a light one). 18 points high, drawn at 36 pixels for Retina screens; lines
+       about as heavy as the system's symbols. -->
+  <g fill="none" stroke="#000" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 4.5V21.5"/>
+    <path d="M10 14L18 22L26 14"/>
+    <path d="M9 30.5H27"/>
+  </g>
+</svg>

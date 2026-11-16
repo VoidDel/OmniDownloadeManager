@@ -3,7 +3,11 @@
 //!
 //! A click shows the main window. The menu shows it, starts a new download, starts or pauses
 //! everything, sets the global speed limit and quits. While something downloads, the icon carries
-//! a green dot and the tooltip shows the speeds.
+//! a dot and the tooltip shows the speeds.
+//!
+//! On macOS the icon is a template image (icons/tray/, from icons/tray-template*.svg): the glyph
+//! alone, tinted by the menu bar as the system's own icons are. Elsewhere it is the app's icon,
+//! with a green dot.
 
 use std::sync::Mutex;
 
@@ -53,8 +57,8 @@ pub fn sync(app: &AppHandle) {
                 crate::focus_main(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        b = b.icon(icon.clone());
+    if let Some(icon) = icon(app, false) {
+        b = b.icon(icon).icon_as_template(TEMPLATE);
     }
     match b.build(app) {
         Ok(_) => *SHOWN.lock().unwrap_or_else(|e| e.into_inner()) = (false, NAME.into()),
@@ -90,16 +94,33 @@ pub fn activity(app: &AppHandle, stats: &Stats) {
         shown.1 = text;
     }
     if shown.0 != busy {
-        let icon = app.default_window_icon().map(|i| {
-            if busy {
-                with_dot(i)
-            } else {
-                i.clone().to_owned()
-            }
-        });
-        let _ = tray.set_icon(icon);
+        // Together: `set_icon` alone would make it an ordinary image again.
+        let _ = tray.set_icon_with_as_template(icon(app, busy), TEMPLATE);
         shown.0 = busy;
     }
+}
+
+/// The menu bar tints the icon (macOS).
+const TEMPLATE: bool = cfg!(target_os = "macos");
+
+/// The icon, idle or `busy` (see the module).
+fn icon(app: &AppHandle, busy: bool) -> Option<Image<'static>> {
+    if TEMPLATE {
+        let png: &[u8] = if busy {
+            include_bytes!("../icons/tray/busy-template.png")
+        } else {
+            include_bytes!("../icons/tray/template.png")
+        };
+        return Image::from_bytes(png)
+            .inspect_err(|e| tracing::warn!("tray icon: {e}"))
+            .ok();
+    }
+    let i = app.default_window_icon()?;
+    Some(if busy {
+        with_dot(i)
+    } else {
+        i.clone().to_owned()
+    })
 }
 
 /// The app icon with a green dot in its lower right corner, ringed so it stands out on any
@@ -248,4 +269,25 @@ pub fn run_all(app: &AppHandle, start: bool) {
 /// Shows the main window with the new-download dialog open.
 pub fn new_download(app: &AppHandle) {
     crate::new_task(app, Prefill::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_bar_icons_are_templates() {
+        for png in [
+            &include_bytes!("../icons/tray/template.png")[..],
+            &include_bytes!("../icons/tray/busy-template.png")[..],
+        ] {
+            let i = Image::from_bytes(png).unwrap();
+            // 18 points at 2x.
+            assert_eq!((i.width(), i.height()), (36, 36));
+            // Black, its shape in the alpha alone: macOS draws it in the menu bar's colour.
+            let px = i.rgba().chunks(4);
+            assert!(px.clone().all(|p| p[3] == 0 || p[..3] == [0, 0, 0]));
+            assert!(px.clone().any(|p| p[3] == 255) && px.clone().any(|p| p[3] == 0));
+        }
+    }
 }
