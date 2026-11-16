@@ -1,6 +1,6 @@
 // The floating ball (docs/development-plan.md §6.3, "悬浮窗"): the overall progress of the running
-// downloads as a ring, the speed inside it, in the theme's colours (it follows the settings as they
-// change). No window material: the system cannot draw one in a round window (see float.rs). Links (or a `.torrent` file) dragged onto it are
+// downloads and the speed, drawn by `Ball` in the look chosen in the settings (it follows the
+// settings as they change). No window material: the system cannot draw one in a round window (see float.rs). Links (or a `.torrent` file) dragged onto it are
 // downloaded; it moves when dragged; a double click opens the main window, the right button a
 // menu (native: the window is only as big as the ball).
 
@@ -11,7 +11,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Icon } from '../../components/Icon';
 import { resolveLang, setLanguage } from '../../i18n';
 import { api } from '../../lib/api';
 import * as fmt from '../../lib/format';
@@ -19,9 +18,7 @@ import { nextFrame } from '../../lib/frame';
 import { applyTheme } from '../../lib/theme';
 import type { FloatState } from '../../lib/types';
 import { useApp } from '../../store/app';
-
-const R = 25; // ring radius in the 56 × 56 ball
-const RING = 2 * Math.PI * R;
+import { Ball } from './Ball';
 
 /** The links of a drop: `text/uri-list` (its comment lines left out), else the plain text. */
 function droppedText(d: DataTransfer): string {
@@ -44,6 +41,7 @@ export function FloatApp() {
   // Settings changed in the main window (or the tray) arrive as `settings:changed`.
   const appearance = useApp((s) => s.settings.appearance);
   const language = useApp((s) => s.settings.language);
+  const look = useApp((s) => s.settings.general.floatStyle) ?? 'classic';
   const platform = useApp((s) => s.platform);
   const first = useRef(true);
   useEffect(() => {
@@ -113,7 +111,6 @@ export function FloatApp() {
     if (text.trim()) void api.floatDrop(text);
   };
 
-  const [num, unit] = fmt.speed(state.speed).split(' ');
   const pct = state.percent;
   const title = [
     'Omni Download',
@@ -122,10 +119,10 @@ export function FloatApp() {
   ].join('\n');
   return (
     <div className="float" onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDrop}>
-      <div
-        className="ball"
-        data-busy={state.busy}
-        data-over={over}
+      <Ball
+        look={look}
+        state={state}
+        over={over}
         title={title}
         role="img"
         aria-label={title}
@@ -137,29 +134,7 @@ export function FloatApp() {
           e.preventDefault();
           void api.floatMenu();
         }}
-      >
-        <svg className="ring" viewBox="0 0 56 56" aria-hidden="true">
-          <circle className="track" cx="28" cy="28" r={R} />
-          {state.busy && (
-            <circle
-              className={`arc${pct == null ? ' spin' : ''}`}
-              cx="28"
-              cy="28"
-              r={R}
-              strokeDasharray={RING}
-              strokeDashoffset={pct == null ? RING * 0.75 : RING * (1 - pct / 100)}
-            />
-          )}
-        </svg>
-        {over || !state.busy ? (
-          <Icon name="download" className="ico" />
-        ) : (
-          <span className="spd">
-            <b>{num}</b>
-            <small>{unit}</small>
-          </span>
-        )}
-      </div>
+      />
     </div>
   );
 }

@@ -154,6 +154,8 @@
       "soundReset": "Use the built-in sound",
       "floatBall": "Show floating ball",
       "floatBallHint": "Shows download progress above other windows; drop a link on it to download, double-click to open the main window",
+      "floatStyle": "Floating ball style",
+      "floatStyleHint": "Liquid, Comet and Aurora are animated dark glass balls in the accent colour; they move faster as downloads speed up",
       "watchClipboard": "Watch the clipboard",
       "watchClipboardHint": "When you copy a download link to a video, archive, installer or similar file, or a magnet link, asks whether to download it"
     },
@@ -845,6 +847,12 @@
   "float": {
     "hide": "Hide floating ball",
     "idle": "Nothing is downloading",
-    "hint": "Drop a link here to download it · Double-click to open the main window"
+    "hint": "Drop a link here to download it · Double-click to open the main window",
+    "style": {
+      "classic": "Classic",
+      "liquid": "Liquid",
+      "comet": "Comet",
+      "aurora": "Aurora"
+    }
   }
 }

@@ -473,19 +473,124 @@ html.float-root, html.float-root body, html.float-root #root { background: trans
   box-shadow: 0 0 0 1px var(--border-default), 0 3px 10px rgb(0 0 0 / .18);
   transition: transform var(--dur), background var(--dur), color var(--dur);
 }
+
 .ball svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
 .ball .track { fill: none; stroke: var(--bg-pressed); stroke-width: 3; }
 .ball .arc { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
-.ball .arc.spin { transform-origin: 28px 28px; animation: ball-spin 1.2s linear infinite; }
-@keyframes ball-spin { to { transform: rotate(360deg); } }
-.ball .ico { width: 22px; height: 22px; pointer-events: none; }
-.ball .spd { display: flex; flex-direction: column; align-items: center; line-height: 1.05; color: var(--fg-primary); font-variant-numeric: tabular-nums; pointer-events: none; }
+/* Sizes unknown: a quarter of the ring going round (the whole drawing turns, which costs no painting). */
+.ball svg.ring.spin { animation: ball-turn 1.2s linear infinite; }
+@keyframes ball-turn { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+@keyframes ball-orbit { to { transform: rotate(360deg); } }
+.ball .ico { position: relative; width: 22px; height: 22px; pointer-events: none; }
+.ball .spd { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1.05; color: var(--fg-primary); font-variant-numeric: tabular-nums; pointer-events: none; }
 .ball .spd b { font-size: 13px; font-weight: 650; }
 .ball .spd small { font-size: 9px; color: var(--fg-secondary); }
 /* A link dragged over it. */
 .ball[data-over="true"] { transform: scale(1.08); background: var(--accent); color: var(--accent-fg, #fff); }
 .ball[data-over="true"] .track { stroke: transparent; }
-@media (prefers-reduced-motion: reduce) { .ball, .ball .arc { transition: none; } .ball .arc.spin { animation: none; } }
+
+/* The lit looks (liquid, comet, aurora; see Ball.tsx): a dark glass ball whatever the theme, lit
+   in the theme's accent; a glow round it shows while the pointer (or a link held) is over it. What loops is a transform or an
+   opacity of a layer of its own (will-change: Ball.tsx holds the loops and moves them itself, a
+   few times a second, at a pace that follows the speed; without a layer each move would paint). */
+.ball.lit svg.ring.spin, .ball .lq .wave, .ball .lq .bub, .ball .comet, .ball .au, .ball .blob { will-change: transform, opacity; }
+.ball.lit {
+  --hot: color-mix(in oklab, var(--accent) 55%, #fff);
+  /* The accent's neighbours, for the aurora: mixed, or turned on the colour wheel where the
+     WebView can. */
+  --lit-2: color-mix(in oklab, var(--accent) 45%, #c04cff);
+  --lit-3: color-mix(in oklab, var(--accent) 40%, #1fe0c0);
+  --glass: radial-gradient(120% 120% at 30% 16%, color-mix(in oklab, var(--accent) 34%, #1b2338), #090d18 74%);
+  background: #121a2e; background: var(--glass); color: #fff;
+  /* Its glow stays with it (behind the ball, in front of what the ball is on). */
+  isolation: isolate;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .14), 0 3px 10px rgb(0 0 0 / .32);
+}
+@supports (color: oklch(from red l c h)) {
+  .ball.lit { --lit-2: oklch(from var(--accent) calc(l + .06) c calc(h + 70)); --lit-3: oklch(from var(--accent) calc(l + .12) c calc(h - 85)); }
+}
+.ball.lit[data-over="true"] { background: var(--glass); color: #fff; }
+.ball.lit::before {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, transparent 79.5%, color-mix(in oklab, var(--accent) 85%, transparent) 81%, transparent 100%);
+  opacity: 0; transition: opacity .25s ease;
+}
+.ball.lit:hover::before { opacity: .85; }
+.ball.lit[data-over="true"]::before { opacity: 1; }
+.ball .body { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; isolation: isolate; pointer-events: none; }
+/* Light on the glass, upper left. */
+.ball .body::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(58% 42% at 32% 18%, rgb(255 255 255 / .2), transparent 72%); }
+.ball.lit .ico { filter: drop-shadow(0 0 4px color-mix(in oklab, var(--accent) 85%, transparent)); }
+.ball.lit .spd { color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .7), 0 0 6px rgb(0 0 0 / .35); }
+.ball.lit .spd small { color: rgb(255 255 255 / .82); }
+.ball.lit .track { stroke: rgb(255 255 255 / .12); stroke-width: 2.5; }
+.ball.lit .arc { stroke-width: 2.5; }
+.ball.lit[data-over="true"] .track { stroke: var(--hot); }
+
+/* Liquid: as full as the downloads are done (--level, 0 to 1), two waves on its surface and
+   bubbles rising while it fills. */
+.ball .lq { position: absolute; inset: 0; transform: translateY(calc((1 - var(--level, .16)) * 100%)); transition: transform .8s cubic-bezier(.25, .8, .3, 1); }
+.ball .lq .wave {
+  --crest: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 6' preserveAspectRatio='none'%3E%3Cpath d='M0 3Q14 -1.5 28 3T56 3V6H0Z'/%3E%3C/svg%3E");
+  position: absolute; left: 0; top: -5px; width: 168px; height: calc(100% + 5px);
+  /* Its top edge: one wave per ball's width, so that going one width along comes back to the start. */
+  -webkit-mask: var(--crest) 0 0 / 56px 6px repeat-x, linear-gradient(#000, #000) 0 5.5px / 100% 100% no-repeat;
+  mask: var(--crest) 0 0 / 56px 6px repeat-x, linear-gradient(#000, #000) 0 5.5px / 100% 100% no-repeat;
+  animation: lq-drift 2.8s linear infinite;
+}
+/* Bright at its surface, deep below it: the speed stays readable on it. */
+.ball .lq .wave.front { background: linear-gradient(180deg, var(--hot) 0, color-mix(in oklab, var(--accent) 82%, #05070f) 9px, color-mix(in oklab, var(--accent) 52%, #05070f) 100%); }
+.ball .lq .wave.back { left: -19px; top: -8px; background: var(--hot); opacity: .42; animation-duration: 4.6s; animation-direction: reverse; }
+@keyframes lq-drift { to { transform: translateX(-56px); } }
+.ball .lq .bub { position: absolute; left: 11px; top: 34px; width: 4px; height: 4px; border-radius: 50%; background: rgb(255 255 255 / .65); opacity: 0; }
+.ball .lq .bub:nth-of-type(4) { left: 26px; width: 3px; height: 3px; }
+.ball .lq .bub:nth-of-type(5) { left: 42px; width: 5px; height: 5px; }
+.ball[data-busy="true"] .lq .bub { animation: lq-bub 2.6s ease-in infinite; }
+.ball[data-busy="true"] .lq .bub:nth-of-type(4) { animation-duration: 3.2s; animation-delay: -1.1s; }
+.ball[data-busy="true"] .lq .bub:nth-of-type(5) { animation-duration: 2.2s; animation-delay: -1.7s; }
+@keyframes lq-bub { 0% { transform: translateY(0) scale(.5); opacity: 0; } 18% { opacity: .8; } 80% { opacity: .5; } 100% { transform: translateY(-28px) scale(1); opacity: 0; } }
+
+/* Comet: a head with a fading tail runs round the ring, over the progress drawn on it. */
+.ball[data-look="comet"] .arc { stroke: color-mix(in oklab, var(--accent) 62%, transparent); }
+.ball .comet { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; opacity: .55; transition: opacity .4s; animation: ball-orbit 2.6s linear infinite; }
+.ball[data-busy="true"] .comet, .ball[data-over="true"] .comet { opacity: 1; }
+.ball .comet .tail {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 58%, color-mix(in oklab, var(--hot) 70%, transparent) 86%, #fff 99.5%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 23.2px, #000 23.7px, #000 26.3px, transparent 26.8px);
+  mask: radial-gradient(circle, transparent 23.2px, #000 23.7px, #000 26.3px, transparent 26.8px);
+}
+.ball .comet .head { position: absolute; left: 50%; top: .5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 5px 2px var(--hot), 0 0 10px 3px color-mix(in oklab, var(--accent) 70%, transparent); }
+
+/* Aurora: three lights (the accent and its neighbours) drift and turn inside the ball; the ring is white. */
+.ball[data-look="aurora"] { --glass: radial-gradient(120% 120% at 30% 16%, #16203a, #070a14 74%); }
+.ball[data-look="aurora"] .arc { stroke: #fff; }
+.ball .au { position: absolute; inset: 0; opacity: .72; transition: opacity .5s; animation: ball-orbit 16s linear infinite; }
+.ball[data-busy="true"] .au, .ball[data-over="true"] .au { opacity: 1; }
+.ball .blob { position: absolute; width: 50px; height: 50px; border-radius: 50%; mix-blend-mode: screen; }
+.ball .blob.a { left: -12px; top: -10px; background: radial-gradient(closest-side, var(--accent) 12%, transparent); animation: au-a 6s ease-in-out infinite alternate; }
+.ball .blob.b { left: 18px; top: -2px; background: radial-gradient(closest-side, var(--lit-2) 12%, transparent); animation: au-b 7.5s ease-in-out infinite alternate; }
+.ball .blob.c { left: 2px; top: 20px; background: radial-gradient(closest-side, var(--lit-3) 12%, transparent); animation: au-c 5.2s ease-in-out infinite alternate; }
+@keyframes au-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(16px, 12px) scale(1.25); } }
+@keyframes au-b { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-18px, 14px) scale(.85); } }
+@keyframes au-c { from { transform: translate(0, 0) scale(.9); } to { transform: translate(12px, -16px) scale(1.3); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ball, .ball *, .ball::before { transition: none !important; animation: none !important; }
+}
+
+/* The looks to choose from in the settings: each drawn as it is, on a ground like a desktop's. */
+.fstyles { display: flex; flex-wrap: wrap; gap: 10px; }
+.fstyle {
+  display: grid; justify-items: center; gap: 8px; width: 104px; padding: 14px 8px 9px; border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default); background: var(--bg-subtle); color: var(--fg-secondary); font-size: .85rem; cursor: default;
+}
+.fstyle:hover { border-color: var(--border-strong, var(--fg-tertiary)); }
+.fstyle[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--fg-primary); }
+.fstyle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fstyle .ball { pointer-events: none; margin: 8px; }
+/* The ball does not feel the pointer here: its glow shows with the pointer on its tile. */
+.fstyle:hover .ball.lit::before { opacity: .85; }
 
 /* ---------------------------------------------------------------- scheduled downloads */
 .set-time { width: 148px; font-variant-numeric: tabular-nums; }

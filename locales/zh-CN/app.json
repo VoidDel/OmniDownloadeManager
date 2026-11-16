@@ -154,6 +154,8 @@
       "soundReset": "恢复内置提示音",
       "floatBall": "显示悬浮球",
       "floatBallHint": "始终在最前面显示下载进度；把链接拖到上面即可下载，双击打开主窗口",
+      "floatStyle": "悬浮球样式",
+      "floatStyleHint": "液态、彗星和极光是带动画的深色玻璃球，颜色跟随强调色，下载越快动得越快",
       "watchClipboard": "监视剪贴板",
       "watchClipboardHint": "复制视频、压缩包、安装包等文件的下载链接或磁力链接时，询问是否下载"
     },
@@ -845,6 +847,12 @@
   "float": {
     "hide": "隐藏悬浮球",
     "idle": "没有正在下载的任务",
-    "hint": "拖入链接即可下载 · 双击打开主窗口"
+    "hint": "拖入链接即可下载 · 双击打开主窗口",
+    "style": {
+      "classic": "经典",
+      "liquid": "液态",
+      "comet": "彗星",
+      "aurora": "极光"
+    }
   }
 }

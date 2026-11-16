@@ -57,6 +57,29 @@ pub enum CategoryFolders {
     Manual,
 }
 
+/// The floating ball's looks. One this version does not know (a file from a newer one) is the
+/// classic one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", from = "String")]
+pub enum FloatStyle {
+    #[default]
+    Classic,
+    Liquid,
+    Comet,
+    Aurora,
+}
+
+impl From<String> for FloatStyle {
+    fn from(name: String) -> Self {
+        match name.as_str() {
+            "liquid" => Self::Liquid,
+            "comet" => Self::Comet,
+            "aurora" => Self::Aurora,
+            _ => Self::Classic,
+        }
+    }
+}
+
 /// Running in the background, notifications, shortcuts and updates (docs/development-plan.md
 /// §6.5, §7.3). Starting with the system is the system's own setting (`autostart_set`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +104,8 @@ pub struct General {
     /// The floating ball: a small always-on-top circle with the overall progress; links dropped
     /// on it are downloaded (see `float`).
     pub float_ball: bool,
+    /// How the ball is drawn (the page's business: features/float/Ball.tsx).
+    pub float_style: FloatStyle,
     /// Download links copied anywhere are offered for download (see `clipboard`).
     pub watch_clipboard: bool,
     /// A `.torrent` file downloaded over HTTP or FTP opens the new-download dialog with it (its
@@ -105,6 +130,7 @@ impl Default for General {
             shortcut_new: String::new(),
             check_updates: true,
             float_ball: false,
+            float_style: FloatStyle::default(),
             watch_clipboard: false,
             open_torrents: true,
             remove_files: "ask".into(),
@@ -371,6 +397,34 @@ mod tests {
             Settings::load(&path).category_folders,
             CategoryFolders::Auto
         );
+    }
+
+    #[test]
+    fn keeps_the_floating_balls_look() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.toml");
+        let mut s = Settings::default();
+        assert_eq!(s.general.float_style, FloatStyle::Classic);
+        s.general.float_style = FloatStyle::Aurora;
+        s.save(&path).unwrap();
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("floatStyle = \"aurora\"")
+        );
+        assert_eq!(
+            Settings::load(&path).general.float_style,
+            FloatStyle::Aurora
+        );
+        // A look of a newer version: the classic one, and the rest of the file still read.
+        std::fs::write(
+            &path,
+            "[general]\nfloatStyle = \"nebula\"\nfloatBall = true\n",
+        )
+        .unwrap();
+        let s = Settings::load(&path);
+        assert_eq!(s.general.float_style, FloatStyle::Classic);
+        assert!(s.general.float_ball);
     }
 
     #[test]

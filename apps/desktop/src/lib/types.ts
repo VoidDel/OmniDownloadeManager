@@ -321,6 +321,8 @@ export interface Settings {
     soundFile: string;
     /** The floating ball: overall progress above other windows; links dropped on it download. */
     floatBall: boolean;
+    /** How the ball is drawn (features/float/Ball.tsx). */
+    floatStyle: FloatStyle;
     /** Download links copied anywhere are offered for download. */
     watchClipboard: boolean;
     /** A downloaded `.torrent` file opens the new-download dialog with it. */
@@ -471,6 +473,9 @@ export const emptyOptions = (): TaskOptions => ({
 });
 
 /** What the floating ball shows. */
+/** The floating ball's looks. */
+export type FloatStyle = 'classic' | 'liquid' | 'comet' | 'aurora';
+
 export interface FloatState {
   busy: boolean;
   /** Overall percent of the running downloads, when their sizes are known. */
