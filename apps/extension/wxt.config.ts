@@ -48,6 +48,9 @@ export default defineConfig({
       ],
       // Cookies of the download's site, and the local fallback channel (127.0.0.1).
       host_permissions: ['<all_urls>'],
+      // The toolbar button: a tile that fills its square (scripts/ext-icons.mjs); `icons` (the
+      // extensions page, the stores) keep the margin the stores ask for.
+      action: { default_icon: { 16: 'icon/toolbar-16.png', 32: 'icon/toolbar-32.png' } },
       commands: {
         'download-page': {
           suggested_key: { default: 'Alt+Shift+D' },
