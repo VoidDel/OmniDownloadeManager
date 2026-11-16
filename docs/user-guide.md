@@ -134,7 +134,7 @@ Omni Download 是一个下载管理器：多连接下载 HTTP、HTTPS 和 FTP �
 
 支持 Chrome、Edge、Brave、Chromium 和 Firefox。
 
-1. 在浏览器里安装 Omni Download 扩展。扩展尚未上架商店时，按 [README 的“浏览器扩展”一节](../README.md#浏览器扩展) 手动加载。
+1. 在浏览器里安装 Omni Download 扩展：[Chrome 网上应用店](https://chromewebstore.google.com/detail/kjlikfchbfphdjcafhclmehpgnekedhg)（Chrome、Brave、Chromium）、[Microsoft Edge 加载项](https://microsoftedge.microsoft.com/addons/detail/opflkejfjljlncpianfbijacendmcgmo)、[Firefox 附加组件](https://addons.mozilla.org/firefox/addon/omni-download/)。首次启动的引导和“设置 › 浏览器”里的“获取扩展”也会打开对应的商店页面。
 2. 运行一次 Omni Download，它会为本机的浏览器写好通信配置。“设置 › 浏览器”里可以看到每个浏览器的状态。
 
 之后在浏览器里点下载：

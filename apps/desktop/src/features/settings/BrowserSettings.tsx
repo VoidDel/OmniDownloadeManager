@@ -51,8 +51,11 @@ export function BrowserLogo({ id }: { id: BrowserId }) {
   return <img className="blogo" src={LOGO[id]} alt="" draggable={false} />;
 }
 
-/** A browser as a card: its logo, name and state. One not installed is greyed. */
+/** A browser as a card: its logo, name and state, and where to get the extension for an
+ *  installed browser whose extension has not been in touch. One not installed is greyed. */
 function BrowserCard({ b, seen, before }: { b: BrowserState; seen?: number; before?: number }) {
+  const run = useApp((st) => st.run);
+  const { t } = useTranslation();
   const [cls, text] = browserState(b, seen, before);
   return (
     <div className={`card bcard ${cls}`}>
@@ -65,6 +68,12 @@ function BrowserCard({ b, seen, before }: { b: BrowserState; seen?: number; befo
           <i aria-hidden="true" />
           {text}
         </span>
+        {b.detected && cls !== 'ok' && (
+          <button type="button" className="bget" onClick={() => void run(() => api.extensionOpen(b.id))}>
+            {t('welcome.getExtension')}
+            <Icon name="external" />
+          </button>
+        )}
       </span>
     </div>
   );

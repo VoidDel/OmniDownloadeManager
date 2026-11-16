@@ -477,16 +477,28 @@ pub fn reveal(app: &AppHandle, task: &Task) -> Result<()> {
 /// install it by hand.
 #[tauri::command]
 pub fn extension_open(app: AppHandle, browser: String) -> Result<()> {
-    const GUIDE: &str = "https://github.com/VoidDel/OmniDownloadeManager#浏览器扩展";
-    /// (browser id, store page), filled in as the stores list the extension.
-    const STORES: [(&str, &str); 0] = [];
-    let url = STORES
-        .iter()
-        .find(|(b, _)| *b == browser)
-        .map_or(GUIDE, |(_, url)| url);
+    let url = extension_page(&browser);
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(Error::internal)
+}
+
+/// Where a browser gets the extension: its store's page (the IDs of
+/// `browser::integration::CHROMIUM_EXTENSION_IDS`). Brave and Chromium install from the Chrome
+/// Web Store; another browser gets the guide.
+fn extension_page(browser: &str) -> &'static str {
+    const CHROME: &str =
+        "https://chromewebstore.google.com/detail/kjlikfchbfphdjcafhclmehpgnekedhg";
+    match browser {
+        "chrome" | "brave" | "chromium" => CHROME,
+        "edge" => {
+            "https://microsoftedge.microsoft.com/addons/detail/opflkejfjljlncpianfbijacendmcgmo"
+        }
+        "firefox" => "https://addons.mozilla.org/firefox/addon/omni-download/",
+        _ => {
+            "https://github.com/VoidDel/OmniDownloadeManager/blob/main/docs/user-guide.md#接管浏览器的下载"
+        }
+    }
 }
 
 /// Plays the completion sound as it would sound (`file`: a WAV file, empty: the built-in one).
@@ -555,4 +567,23 @@ pub fn magnet_register(app: AppHandle) -> Result<MagnetHandler> {
         .register("magnet")
         .map_err(|e| Error::internal(format!("registering for magnet links: {e}")))?;
     Ok(magnet_status(app))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sends_each_browser_to_its_store() {
+        use crate::browser::integration::CHROMIUM_EXTENSION_IDS;
+        assert!(extension_page("edge").ends_with(CHROMIUM_EXTENSION_IDS[1]));
+        for b in ["chrome", "brave", "chromium"] {
+            assert!(
+                extension_page(b).ends_with(CHROMIUM_EXTENSION_IDS[2]),
+                "{b}"
+            );
+        }
+        assert!(extension_page("firefox").starts_with("https://addons.mozilla.org/"));
+        assert!(extension_page("opera").contains("user-guide.md"));
+    }
 }

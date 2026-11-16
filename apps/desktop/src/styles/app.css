@@ -314,6 +314,10 @@
 .bcard.off .blogo { filter: grayscale(1); opacity: .45; }
 .bcard .meta .bstate { font-size: .8rem; gap: 5px; }
 .bcard .meta .bstate i { width: 6px; height: 6px; flex: none; }
+/* "Get the extension": a link under the state (opens the browser's store). */
+.bcard .bget { align-self: flex-start; display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; padding: 0; font-size: .8rem; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.bcard .bget:hover { text-decoration: underline; }
+.bcard .bget .ic { width: 12px; height: 12px; }
 .welcome-browsers .blogo { width: 22px; height: 22px; flex: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .site-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 2px; }
