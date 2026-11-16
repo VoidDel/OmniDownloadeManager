@@ -6,9 +6,10 @@
 #
 # with the Native Messaging host bundled, each update package signed with the minisign key
 # (secret TAURI_SIGNING_PRIVATE_KEY, and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) and
-# latest.json for the in-app updater. Publishing the draft makes it the update. A second job adds
-# the software bill of materials (CycloneDX: every Rust crate built into the app and into the
-# Native Messaging host, with versions and licences).
+# latest.json for the in-app updater. Publishing the draft makes it the update. Two more jobs
+# write the notes (docs/releases/README.md: what changed, from docs/releases/<tag>.md, and links
+# that download each installer) and add the software bill of materials (CycloneDX: every Rust
+# crate built into the app and into the Native Messaging host, with versions and licences).
 # Code signing and notarisation are not part of this yet.
 name: Release
 
@@ -91,10 +92,36 @@ jobs:
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
           tagName: ${{ github.ref_name }}
           releaseName: Omni Download ${{ github.ref_name }}
-          releaseBody: See the assets below for Windows, macOS and Linux.
+          # Replaced by the notes job once the three are in.
+          releaseBody: Building…
           releaseDraft: true
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+
+  # The draft's text and the update dialog's (docs/releases/README.md), from
+  # docs/releases/<tag>.md: what changed, then links that download each installer (checked
+  # against what the three uploaded) and the install tips. The update dialog gets what changed
+  # alone, as plain text, in latest.json (which tauri-action filled with the placeholder).
+  notes:
+    needs: bundle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name' > assets.txt
+          node scripts/release-notes.mjs "${GITHUB_REF_NAME}" body assets.txt > body.md
+          gh release edit "${GITHUB_REF_NAME}" --notes-file body.md
+          node scripts/release-notes.mjs "${GITHUB_REF_NAME}" update > update.txt
+          gh release download "${GITHUB_REF_NAME}" --pattern latest.json --dir updater
+          jq --rawfile notes update.txt '.notes = $notes' updater/latest.json > latest.json
+          gh release upload "${GITHUB_REF_NAME}" latest.json --clobber
 
   # What the release is made of (docs/development-plan.md §8.4), attached to the same draft.
   sbom:
