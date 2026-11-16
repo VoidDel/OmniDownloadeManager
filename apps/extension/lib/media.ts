@@ -156,6 +156,22 @@ export function onPage(list: Media[], url: string): Media[] {
   return list.filter((m) => !m.pageUrl || pageKey(m.pageUrl) === key);
 }
 
+/**
+ * `list` with the page at `url` titled `title`, or null when nothing changes. A site that moves
+ * to another video itself loads the video before it changes the title: what was listed in
+ * between took the old one.
+ */
+export function retitled(list: Media[], url: string, title: string): Media[] | null {
+  const key = pageKey(url);
+  let changed = false;
+  const next = list.map((m) => {
+    if (!m.pageUrl || pageKey(m.pageUrl) !== key || m.title === title) return m;
+    changed = true;
+    return { ...m, title };
+  });
+  return changed ? next : null;
+}
+
 /** Whether a request comes from a document the tab shows: not one being prerendered for a
  *  later visit, nor one the tab has left (Chromium says, `documentLifecycle`; elsewhere: yes). */
 export function fromShownDocument(d: { documentLifecycle?: string }): boolean {

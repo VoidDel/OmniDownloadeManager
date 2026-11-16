@@ -14,7 +14,7 @@
 import { send } from '../lib/bridge';
 import { contentLength, dispositionName, header, isDownload, sentWith, type Header, type Sent } from '../lib/headers';
 import { t, tn } from '../lib/i18n';
-import { classify, classifyFound, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
+import { classify, classifyFound, fromShownDocument, mediaKey, mediaName, mediaOf, offers, onPage, pageKey, retitled, saveMedia, topPageOf, withMedia, type Media } from '../lib/media';
 import { parseMaster } from '../lib/hls';
 import { scanPage, type Found } from '../lib/scan';
 import { postBody, type RequestBody } from '../lib/post';
@@ -462,16 +462,26 @@ function sniffMedia() {
   webRequest.onErrorOccurred.addListener((d) => void mediaSending.delete(d.requestId), media);
   // Another page in the tab (a site's own navigation too): the media of that page only. A closed
   // tab: none.
-  browser.tabs.onUpdated.addListener((tabId, info) => {
-    if (!info.url) return;
-    const url = info.url;
-    inTab(tabId, async () => {
-      const list = await mediaOf(tabId);
-      const kept = onPage(list, url);
-      if (kept.length === list.length) return;
-      await saveMedia(tabId, kept);
-      await badge(tabId, offers(kept).length);
-    });
+  browser.tabs.onUpdated.addListener((tabId, info, tab) => {
+    if (info.url) {
+      const url = info.url;
+      inTab(tabId, async () => {
+        const list = await mediaOf(tabId);
+        const kept = onPage(list, url);
+        if (kept.length === list.length) return;
+        await saveMedia(tabId, kept);
+        await badge(tabId, offers(kept).length);
+      });
+    }
+    // The page's title, which such a site sets after its video started loading.
+    if (info.title && tab.url) {
+      const url = tab.url;
+      const title = info.title;
+      inTab(tabId, async () => {
+        const next = retitled(await mediaOf(tabId), url, title);
+        if (next) await saveMedia(tabId, next);
+      });
+    }
   });
   browser.tabs.onRemoved.addListener((tabId) => inTab(tabId, () => saveMedia(tabId, [])));
 }

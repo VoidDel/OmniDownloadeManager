@@ -109,7 +109,8 @@ test.beforeAll(async () => {
         );
       case '/media/song.mp3':
         return send('audio/mpeg', Buffer.alloc(MB, 6));
-      // A site that moves to another video itself (history.pushState), then to an anchor.
+      // A site that moves to another video itself (history.pushState) and titles the page once it
+      // loads (as bilibili does), then goes to an anchor.
       case '/spa':
         return send(
           'text/html; charset=utf-8',
@@ -118,8 +119,9 @@ test.beforeAll(async () => {
              // Called by the test once the first video is listed.
              window.next = () =>
                Promise.resolve()
-                 .then(() => { history.pushState({}, '', '/spa/next'); document.title = 'Next'; return fetch('/media/cors.mp4'); })
-                 .then(() => { location.hash = 'comments'; document.body.dataset.done = '1'; });
+                 .then(() => { history.pushState({}, '', '/spa/next'); return fetch('/media/cors.mp4'); })
+                 .then(() => new Promise((r) => setTimeout(r, 150)))
+                 .then(() => { document.title = 'Next'; location.hash = 'comments'; document.body.dataset.done = '1'; });
            </script>`,
         );
       case '/other':
@@ -258,10 +260,12 @@ test.describe('media sniffing', () => {
     await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/clip.mp4']);
     await page.evaluate(() => (window as unknown as { next: () => Promise<void> }).next());
     await expect.poll(async () => (await listOf(tab)).map((m) => new URL(m.url).pathname)).toEqual(['/media/cors.mp4']);
-    // The anchor is the same page: the list stays.
+    // The anchor is the same page: the list stays. The title is the one the page set afterwards.
+    await expect
+      .poll(async () => ((await listOf(tab)) as { url: string; pageUrl?: string; title: string | null }[]).map((m) => [new URL(m.url).pathname, m.pageUrl, m.title]))
+      .toEqual([['/media/cors.mp4', `${siteUrl}/spa/next`, 'Next']]);
     await page.waitForTimeout(300);
-    const list = (await listOf(tab)) as { url: string; pageUrl?: string }[];
-    expect(list.map((m) => [new URL(m.url).pathname, m.pageUrl])).toEqual([['/media/cors.mp4', `${siteUrl}/spa/next`]]);
+    expect((await listOf(tab)).length).toBe(1);
     await expect.poll(() => badgeOf(tab)).toBe('1');
     await page.close();
   });

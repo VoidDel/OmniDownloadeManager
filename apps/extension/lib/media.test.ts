@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classify, classifyFound, cleanTitle, formatOf, fromShownDocument, mediaKey, mediaName, offers, offerTab, onPage, pageKey, sourceOf, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
+import { classify, classifyFound, cleanTitle, formatOf, fromShownDocument, mediaKey, mediaName, offers, offerTab, onPage, pageKey, retitled, sourceOf, topPageOf, withMedia, MEDIA_MAX, type Media } from './media';
 
 const h = (pairs: Record<string, string>) => Object.entries(pairs).map(([name, value]) => ({ name, value }));
 const MB = 1024 * 1024;
@@ -73,6 +73,18 @@ describe('pages', () => {
     expect(onPage(list, 'https://e.com/v/2').map((m) => m.url.slice(-5))).toEqual(['c.mp4', 'd.mp4']);
     expect(onPage(list, 'https://e.com/v/1?p=2').map((m) => m.url.slice(-5))).toEqual(['d.mp4']);
     expect(pageKey('not a url')).toBe('not a url');
+  });
+
+  it("takes the title the page has now, which a site's own navigation sets late", () => {
+    const list = [
+      { ...at('https://cdn.e.com/a.mp4', 'https://e.com/v/2'), title: 'First video' },
+      { ...at('https://cdn.e.com/b.mp4', 'https://e.com/v/2'), title: 'Second video' },
+      { ...at('https://cdn.e.com/c.mp4', null), title: 'Elsewhere' },
+    ];
+    const next = retitled(list, 'https://e.com/v/2#reply', 'Second video');
+    expect(next?.map((m) => m.title)).toEqual(['Second video', 'Second video', 'Elsewhere']);
+    expect(retitled(next!, 'https://e.com/v/2', 'Second video')).toBeNull();
+    expect(retitled(list, 'https://e.com/v/3', 'Third')).toBeNull();
   });
 
   it('takes the page from the request when it says', () => {
