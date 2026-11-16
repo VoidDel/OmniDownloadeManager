@@ -175,6 +175,10 @@ pub struct Pong {
 /// address with a GET and save the page it gets.
 pub const CAP_POST: &str = "post";
 
+/// The app downloads DASH manifests (`.mpd`) as videos. An app without it would save the
+/// manifest itself.
+pub const CAP_DASH: &str = "dash";
+
 /// `get_status` result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Status {

@@ -295,5 +295,8 @@
   },
   "mediaQuality": {
     "message": "畫質"
+  },
+  "notifyDashNeedsApp": {
+    "message": "要下載 DASH 影片串流，請先將 Omni Download 更新至最新版本。"
   }
 }

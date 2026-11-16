@@ -42,6 +42,8 @@ parking_lot = "0.12"
 # HTTP: rustls with the platform verifier (system trust store). HTTP/1.1 only: HTTP/2 would carry
 # every connection of a download over one TCP stream. No decompression features, so no
 # Accept-Encoding is sent and Content-Length matches the bytes written to disk.
+# DASH manifests (`.mpd`): the version already in the tree.
+quick-xml = { version = "0.42", default-features = false }
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "system-proxy", "socks", "stream"] }
 url = "2"
 httpdate = "1"

@@ -24,6 +24,8 @@ let siteUrl = '';
 let port = 0;
 let bridgePort = 0;
 const received: { type: string; payload?: Record<string, unknown> }[] = [];
+/** What the stand-in app says it understands (`ping`). */
+let capabilities = ['post', 'dash'];
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port)));
@@ -56,6 +58,11 @@ test.beforeAll(async () => {
         return send('text/html; charset=utf-8', `<!doctype html><title>Player</title><script>fetch('http://127.0.0.1:${port}/media/cors.mp4')</script>`);
       case '/media/cors.mp4':
         return send('video/mp4', Buffer.alloc(MB, 5), { 'Access-Control-Allow-Origin': '*' });
+      // A DASH player: it loads the manifest (then its segments, not served here).
+      case '/dashpage':
+        return send('text/html; charset=utf-8', `<!doctype html><title>Dash show</title><script>fetch('/d/manifest.mpd').then((r) => r.text());</script>`);
+      case '/d/manifest.mpd':
+        return send('application/dash+xml', '<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"><Period/></MPD>');
       // A stream in two qualities with its sound apart, loaded as players do: the master, then
       // one quality and the sound.
       case '/quality':
@@ -150,7 +157,7 @@ test.beforeAll(async () => {
           ? { action: 'started', asked: true, task_id: 't' }
           : msg.type === 'get_status'
             ? { app_version: '9.9.9', running: 0, download_speed: 0, recent: [] }
-            : { app_version: '9.9.9' };
+            : { app_version: '9.9.9', capabilities };
       res.end(JSON.stringify({ id: msg.id, ok: true, result }));
     });
   });
@@ -357,6 +364,34 @@ test.describe('media sniffing', () => {
       hls_variant: `${siteUrl}/q/360p.m3u8`,
       filename: 'Two qualities.mp4',
     });
+    await popup.close();
+    await page.close();
+  });
+
+  test('lists a DASH manifest, for an app that downloads it', async () => {
+    const page = await context.newPage();
+    await page.goto(`${siteUrl}/dashpage`);
+    const tab = await tabOf(page);
+    await expect.poll(async () => (await listOf(tab)).map((m) => `${m.kind} ${new URL(m.url).pathname}`)).toEqual(['mpd /d/manifest.mpd']);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
+    await expect(popup.locator('.pmedia li small')).toContainText('DASH · 127.0.0.1');
+    const adds = () => received.filter((r) => r.type === 'add_download');
+    // An app that does not say it downloads DASH would save the manifest: not given it.
+    capabilities = ['post'];
+    try {
+      const before = adds().length;
+      await popup.locator('.pmedia li .pmget').click();
+      await popup.waitForTimeout(500);
+      expect(adds().length).toBe(before);
+    } finally {
+      capabilities = ['post', 'dash'];
+    }
+    await popup.reload();
+    const before = adds().length;
+    await popup.locator('.pmedia li .pmget').click();
+    await expect.poll(() => adds().length).toBe(before + 1);
+    expect(adds().at(-1)?.payload).toMatchObject({ url: `${siteUrl}/d/manifest.mpd`, filename: 'Dash show.mp4' });
     await popup.close();
     await page.close();
   });

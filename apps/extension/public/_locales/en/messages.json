@@ -295,5 +295,8 @@
   },
   "mediaQuality": {
     "message": "Quality"
+  },
+  "notifyDashNeedsApp": {
+    "message": "Update Omni Download to download DASH video streams."
   }
 }

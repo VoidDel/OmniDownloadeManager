@@ -15,7 +15,7 @@ import { t, tn } from '../../lib/i18n';
 import { formatOf, mediaOf, offers, offerTab, sourceOf, type Media, type Offer } from '../../lib/media';
 import { size } from '../../lib/page';
 
-const ICON: Record<Offer['kind'], IconName> = { video: 'fileVideo', audio: 'fileAudio', hls: 'fileVideo', dash: 'fileVideo' };
+const ICON: Record<Offer['kind'], IconName> = { video: 'fileVideo', audio: 'fileAudio', hls: 'fileVideo', dash: 'fileVideo', mpd: 'fileVideo' };
 
 type Tab = 'all' | 'video' | 'audio';
 
@@ -135,7 +135,7 @@ export function MediaList() {
                 {many && (
                   <input type="checkbox" className="pmcheck" aria-label={o.name} checked={done || chosen.has(o.media.url)} disabled={done} onChange={() => toggle(o)} />
                 )}
-                <Icon name={ICON[o.kind]} className={`pmi ${o.kind === 'dash' ? 'video' : o.kind}`} />
+                <Icon name={ICON[o.kind]} className={`pmi ${o.kind === 'dash' || o.kind === 'mpd' ? 'video' : o.kind}`} />
                 <span className="pmtxt">
                   <span className="pname" title={o.audio ? `${o.media.url}\n${o.audio.url}` : o.media.url}>
                     {o.name}

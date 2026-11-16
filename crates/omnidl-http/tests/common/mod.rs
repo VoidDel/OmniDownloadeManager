@@ -80,6 +80,8 @@ pub struct Stats {
     pub lag_cut: AtomicUsize,
     /// The bodies `/form` was sent (one per POST).
     pub forms: Mutex<Vec<String>>,
+    /// The files of `/dash` asked for (`{rep}/{file}`).
+    pub dash: Mutex<Vec<String>>,
     /// User agents `/picky` was asked with.
     pub agents: Mutex<Vec<String>>,
     /// Bodies dropped before their end (connections that stopped early).
@@ -132,6 +134,8 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/picky/{size}", get(picky))
         .route("/checked/{size}", get(checked))
         .route("/form/{kind}/{size}", get(form).post(form))
+        .route("/dash/{kind}/manifest.mpd", get(dash_manifest))
+        .route("/dash/{kind}/{rep}/{file}", get(dash_file))
         .route("/changing/{size}", get(changing))
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
@@ -903,6 +907,113 @@ pub fn fmp4(handler: &[u8; 4], frags: u32, size: usize) -> Vec<u8> {
         out.extend(mp4_box(b"mdat", &data));
     }
     out
+}
+
+/// A fragmented MP4 cut as DASH serves it: the init section, and each fragment (a `styp` box,
+/// then its `moof` and `mdat`) as a segment of its own.
+pub fn fmp4_segments(handler: &[u8; 4], frags: u32, size: usize) -> (Vec<u8>, Vec<Vec<u8>>) {
+    let whole = fmp4(handler, frags, size);
+    let mut boxes = Vec::new();
+    let mut at = 0;
+    while at + 8 <= whole.len() {
+        let len = u32::from_be_bytes(whole[at..at + 4].try_into().unwrap()) as usize;
+        boxes.push(&whole[at..at + len]);
+        at += len;
+    }
+    let init = [boxes[0], boxes[1]].concat();
+    let styp = mp4_box(b"styp", b"msdh\0\0\0\0msdhmsix");
+    let segs = boxes[2..]
+        .chunks(2)
+        .map(|pair| [styp.as_slice(), pair[0], pair[1]].concat())
+        .collect();
+    (init, segs)
+}
+
+/// The streams of `/dash`: a picture in two qualities and a sound, three segments each.
+fn dash_rep(rep: &str) -> Option<(&'static [u8; 4], usize)> {
+    match rep {
+        "v-high" => Some((b"vide", 2000)),
+        "v-low" => Some((b"vide", 500)),
+        "a" => Some((b"soun", 300)),
+        _ => None,
+    }
+}
+
+/// `/dash/{kind}/manifest.mpd`: `template` (`$Number%03d$`, two qualities, a sound), `timeline`
+/// (`$Time$`), `whole` (each stream one file, `SegmentBase`), `live`, `drm`.
+async fn dash_manifest(UrlPath(kind): UrlPath<String>) -> Response {
+    let reps = r#"<Representation id="v-low" bandwidth="100000" width="320" height="180"/>
+        <Representation id="v-high" bandwidth="900000" width="1280" height="720"/>"#;
+    let body = match kind.as_str() {
+        "template" => format!(
+            r#"<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT3S">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1000" duration="1000" startNumber="1" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number%03d$.m4s"/>
+      {reps}
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4">
+      <SegmentTemplate timescale="1000" duration="1000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number%03d$.m4s"/>
+      <Representation id="a" bandwidth="64000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>"#
+        ),
+        "timeline" => format!(
+            r#"<MPD type="static"><Period duration="PT3S">
+    <AdaptationSet contentType="video"><SegmentTemplate timescale="1000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/t-$Time$.m4s">
+      <SegmentTimeline><S t="0" d="1000" r="2"/></SegmentTimeline></SegmentTemplate>{reps}</AdaptationSet>
+    <AdaptationSet contentType="audio"><SegmentTemplate timescale="1000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/t-$Time$.m4s">
+      <SegmentTimeline><S t="0" d="1000" r="-1"/></SegmentTimeline></SegmentTemplate><Representation id="a" bandwidth="64000"/></AdaptationSet>
+  </Period></MPD>"#
+        ),
+        "whole" => r#"<MPD type="static" mediaPresentationDuration="PT3S"><Period>
+    <AdaptationSet mimeType="video/mp4"><Representation id="v" bandwidth="900000"><BaseURL>/fmp4/vide/3/2000</BaseURL><SegmentBase indexRange="0-9"/></Representation></AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4"><Representation id="a" bandwidth="64000"><BaseURL>/fmp4/soun/3/300</BaseURL></Representation></AdaptationSet>
+  </Period></MPD>"#
+            .to_owned(),
+        "live" => r#"<MPD type="dynamic"><Period/></MPD>"#.to_owned(),
+        "drm" => r#"<MPD mediaPresentationDuration="PT3S"><Period><AdaptationSet mimeType="video/mp4">
+    <ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc"/>
+    <Representation id="v-high" bandwidth="1"><BaseURL>v.mp4</BaseURL></Representation></AdaptationSet></Period></MPD>"#
+            .to_owned(),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    ([(header::CONTENT_TYPE, "application/dash+xml")], body).into_response()
+}
+
+async fn dash_file(
+    State(s): S,
+    UrlPath((_, rep, file)): UrlPath<(String, String, String)>,
+) -> Response {
+    s.dash.lock().push(format!("{rep}/{file}"));
+    let Some((handler, size)) = dash_rep(&rep) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let (init, segs) = fmp4_segments(handler, 3, size);
+    let index = |n: &str| n.parse::<usize>().ok();
+    let body = if file == "init.mp4" {
+        Some(init)
+    } else if let Some(n) = file
+        .strip_prefix("seg-")
+        .and_then(|f| f.strip_suffix(".m4s"))
+        .and_then(index)
+    {
+        n.checked_sub(1).and_then(|i| segs.get(i).cloned())
+    } else if let Some(t) = file
+        .strip_prefix("t-")
+        .and_then(|f| f.strip_suffix(".m4s"))
+        .and_then(index)
+    {
+        segs.get(t / 1000).cloned()
+    } else {
+        None
+    };
+    match body {
+        Some(b) => ([(header::CONTENT_TYPE, "video/mp4")], b).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn fmp4_file(

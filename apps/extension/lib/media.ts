@@ -1,18 +1,20 @@
 // Media sniffing: the videos, audio and streams a page loads (seen in its network requests),
 // kept per tab for the popup to offer for download.
 //
-// Listed: whole video and audio files, HLS playlists, and the whole-file DASH streams sites such
-// as Bilibili play (`.m4s` files fetched in ranges, the picture and the sound apart): the popup
-// offers a picture together with the sound, which the app joins into one MP4. Not listed: pieces
-// of streams (HLS segments, small DASH segments), tiny files, DASH manifests, and YouTube's
-// player streams (expiring pieces, or its own protocol: not files to download).
+// Listed: whole video and audio files, HLS playlists, DASH manifests (`.mpd`, which the app
+// downloads into one MP4), and the whole-file DASH streams sites such as Bilibili play (`.m4s`
+// files fetched in ranges, the picture and the sound apart): the popup offers a picture together
+// with the sound, which the app joins into one MP4. Not listed: pieces of streams (HLS segments,
+// small DASH segments), tiny files, and YouTube's player streams (expiring pieces, or its own
+// protocol: not files to download).
 
 import type { Header } from './headers';
 import { contentLength, header } from './headers';
 import type { HlsVariant } from './hls';
 
-/** `dash`: a whole-file DASH stream, the picture or the sound (`track`). */
-export type MediaKind = 'video' | 'audio' | 'hls' | 'dash';
+/** `dash`: a whole-file DASH stream, the picture or the sound (`track`). `mpd`: a DASH
+ *  manifest. */
+export type MediaKind = 'video' | 'audio' | 'hls' | 'dash' | 'mpd';
 
 export interface Media {
   url: string;
@@ -47,7 +49,7 @@ const MIN_SIZE = 512 * 1024;
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mkv', 'mov', 'flv', 'm4v', 'avi', 'wmv', '3gp', 'ogv']);
 const AUDIO_EXT = new Set(['mp3', 'm4a', 'aac', 'flac', 'ogg', 'oga', 'opus', 'wav', 'wma']);
 /** Pieces of streams. */
-const PIECE_EXT = new Set(['ts', 'mpd', 'f4f', 'key']);
+const PIECE_EXT = new Set(['ts', 'f4f', 'key']);
 const HLS_TYPES = ['application/vnd.apple.mpegurl', 'application/x-mpegurl', 'audio/mpegurl', 'audio/x-mpegurl'];
 
 function extOf(url: string): string {
@@ -89,12 +91,13 @@ export function classify(url: string, headers: Header[] | undefined): Pick<Media
   const total = Number.isFinite(whole) && whole > 0 ? whole : size;
   // A playlist's own length says nothing of the video's.
   if ((mime && HLS_TYPES.includes(mime)) || ext === 'm3u8') return { kind: 'hls', mime, size: null };
+  if (mime === 'application/dash+xml' || ext === 'mpd') return { kind: 'mpd', mime, size: null };
   // A DASH file played in ranges is a whole stream; one fetched whole is a segment of one.
   if (ext === 'm4s') {
     if (!range || total == null || total < MIN_SIZE) return null;
     return { kind: 'dash', mime, size: total, track: dashTrack(url, mime) };
   }
-  if (PIECE_EXT.has(ext) || mime === 'video/mp2t' || mime === 'video/iso.segment' || mime === 'application/dash+xml') return null;
+  if (PIECE_EXT.has(ext) || mime === 'video/mp2t' || mime === 'video/iso.segment') return null;
   let kind: MediaKind | null = null;
   if (mime?.startsWith('video/')) kind = 'video';
   else if (mime?.startsWith('audio/')) kind = 'audio';
@@ -222,7 +225,7 @@ export function offerTab(o: Offer): 'video' | 'audio' {
  *  extension, else its type. Unknown: `null`. */
 export function formatOf(o: Offer): string | null {
   if (o.kind === 'hls') return 'HLS';
-  if (o.kind === 'dash') return 'DASH';
+  if (o.kind === 'dash' || o.kind === 'mpd') return 'DASH';
   const ext = lastSegment(o.media.url)[1];
   if (VIDEO_EXT.has(ext) || AUDIO_EXT.has(ext)) return ext.toUpperCase();
   const typed = o.media.mime ? EXT_BY_TYPE[o.media.mime] : undefined;
@@ -346,7 +349,7 @@ export function mediaName(m: Media, as: Offer['kind'] = m.kind === 'dash' ? 'das
   const [stem, ext] = lastSegment(m.url);
   const title = cleanTitle(m.title, m.pageUrl);
   const fallback = () => title || (meaningless(stem) ? '' : stem) || hostOf(m.pageUrl ?? m.url) || 'video';
-  if (as === 'hls' || as === 'dash') return `${fallback()}.mp4`;
+  if (as === 'hls' || as === 'dash' || as === 'mpd') return `${fallback()}.mp4`;
   if (m.kind === 'dash') return `${fallback()}.m4a`;
   const known = as === 'audio' ? AUDIO_EXT.has(ext) : VIDEO_EXT.has(ext) || AUDIO_EXT.has(ext);
   if (stem && known && !meaningless(stem)) return `${stem}.${ext}`;

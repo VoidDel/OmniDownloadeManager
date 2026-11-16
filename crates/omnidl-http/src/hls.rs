@@ -1,4 +1,5 @@
-//! HLS (`.m3u8`): a video cut into many short files listed by a playlist. The best variant of a
+//! HLS (`.m3u8`): a video cut into many short files listed by a playlist. DASH manifests
+//! (`.mpd`, `dash.rs`) become the same kind of plan and are downloaded here too. The best variant of a
 //! master playlist is chosen, its segments are fetched several at once (decrypted when the
 //! playlist uses AES-128) and written one after the other into one file: MPEG-TS segments make
 //! a `.ts` file, fragmented MP4 (`#EXT-X-MAP`) an `.mp4`. Live playlists (no `#EXT-X-ENDLIST`)
@@ -31,9 +32,10 @@ const MAX_PARALLEL: usize = 8;
 /// How often progress is saved.
 const SAVE_EVERY: Duration = Duration::from_secs(1);
 
-/// Whether `url` names a playlist (`….m3u8`, any query).
+/// Whether `url` names a playlist (`….m3u8`, or a DASH manifest `….mpd`; any query).
 pub(crate) fn is_playlist_url(url: &Url) -> bool {
-    url.path().to_ascii_lowercase().ends_with(".m3u8")
+    let p = url.path().to_ascii_lowercase();
+    p.ends_with(".m3u8") || p.ends_with(".mpd")
 }
 
 /// Whether a `Content-Type` is a playlist's.
@@ -51,6 +53,7 @@ pub(crate) fn is_playlist_type(content_type: Option<&str>) -> bool {
                 | "application/x-mpegurl"
                 | "audio/mpegurl"
                 | "audio/x-mpegurl"
+                | "application/dash+xml"
         )
     })
 }
@@ -63,20 +66,20 @@ pub(crate) fn is_hls_state(r: &ResumeState) -> bool {
 // ------------------------------------------------------------------------------- the playlist
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Key {
+pub(crate) struct Key {
     uri: Url,
     iv: Option<[u8; 16]>,
 }
 
 /// One file to fetch: a segment, or the init section of fragmented MP4.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Part {
-    url: Url,
+pub(crate) struct Part {
+    pub url: Url,
     /// `(length, offset)` of a byte range of `url`.
-    range: Option<(u64, u64)>,
-    key: Option<Key>,
+    pub range: Option<(u64, u64)>,
+    pub key: Option<Key>,
     /// Media sequence number (the IV when the key has none).
-    seq: u64,
+    pub seq: u64,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -305,11 +308,16 @@ async fn media_playlists(
     client: &Client,
     url: &Url,
     wanted: Option<&str>,
+    mut first: Option<String>,
 ) -> Result<(Url, Media, Option<Media>)> {
     let mut url = url.clone();
     let mut audio: Option<Url> = None;
     for _ in 0..3 {
-        match parse(&get_text(client, &url).await?, &url)? {
+        let text = match first.take() {
+            Some(t) => t,
+            None => get_text(client, &url).await?,
+        };
+        match parse(&text, &url)? {
             Playlist::Media(m) => {
                 let sound = match audio.filter(|a| *a != url) {
                     Some(a) => match parse(&get_text(client, &a).await?, &a)? {
@@ -344,22 +352,27 @@ async fn media_playlists(
 }
 
 /// What one run fetches: the parts in order, and where the sound to join begins.
-struct Plan {
+pub(crate) struct Plan {
     /// Where the parts come from (the media playlist, or the picture's file): with `tag`, what
     /// a resumed run checks.
-    final_url: Url,
-    tag: String,
-    parts: Vec<Part>,
+    pub final_url: Url,
+    pub tag: String,
+    pub parts: Vec<Part>,
     /// The first part of the sound when it is joined to the picture at the end.
-    sound_from: Option<usize>,
-    fmp4: bool,
+    pub sound_from: Option<usize>,
+    pub fmp4: bool,
     /// The bytes in all, when known beforehand (a pair of files).
-    total: Option<u64>,
+    pub total: Option<u64>,
 }
 
-/// A playlist (and its own sound playlist, joined when both are fragmented MP4).
+/// A playlist (and its own sound playlist, joined when both are fragmented MP4), or a DASH
+/// manifest (`dash.rs`).
 async fn playlist_plan(client: &Client, url: &Url, wanted: Option<&str>) -> Result<Plan> {
-    let (media_url, media, sound) = media_playlists(client, url, wanted).await?;
+    let text = get_text(client, url).await?;
+    if crate::dash::is_mpd(&text) {
+        return crate::dash::plan(client, url, &text).await;
+    }
+    let (media_url, media, sound) = media_playlists(client, url, wanted, Some(text)).await?;
     if !media.ended {
         return Err(live());
     }
@@ -393,7 +406,7 @@ async fn playlist_plan(client: &Client, url: &Url, wanted: Option<&str>) -> Resu
 const CHUNK: u64 = 4 << 20;
 
 /// A file of a pair in parts of `CHUNK` bytes (one part when the server ignores ranges).
-fn chunks(url: &Url, total: u64, ranges: bool, seq: &mut u64) -> Vec<Part> {
+pub(crate) fn chunks(url: &Url, total: u64, ranges: bool, seq: &mut u64) -> Vec<Part> {
     let mut parts = Vec::new();
     let mut part = |range| {
         parts.push(Part {
@@ -484,7 +497,7 @@ pub(crate) async fn probe_pair(client: &Client, video: &Url, audio: &str) -> Res
     })
 }
 
-fn live() -> Error {
+pub(crate) fn live() -> Error {
     Error::new(
         ErrorCode::Unsupported,
         "a live stream (the playlist has no end): not recorded",
@@ -499,7 +512,7 @@ fn output_name(url: &Url, given: Option<&str>, fmp4: bool) -> String {
         let stem = n.rsplit_once('.').map_or(n, |(s, e)| {
             if matches!(
                 e.to_ascii_lowercase().as_str(),
-                "m3u8" | "ts" | "mp4" | "m4s" | "m4v" | "m4a"
+                "m3u8" | "mpd" | "ts" | "mp4" | "m4s" | "m4v" | "m4a"
             ) {
                 s
             } else {
@@ -520,10 +533,12 @@ fn output_name(url: &Url, given: Option<&str>, fmp4: bool) -> String {
         .last()
         .and_then(|s| s.rsplit_once('.').map(|(a, _)| a.to_owned()))
         .unwrap_or_default();
-    const GENERIC: [&str; 9] = [
+    const GENERIC: [&str; 11] = [
         "index",
         "playlist",
         "master",
+        "manifest",
+        "stream",
         "prog_index",
         "chunklist",
         "video",

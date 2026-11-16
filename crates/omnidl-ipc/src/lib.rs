@@ -22,8 +22,8 @@ mod server;
 pub use endpoint::{ENV_ENDPOINT, Stream, connect, endpoint};
 pub use frame::{MAX_REPLY, MAX_REQUEST, read_frame, write_frame};
 pub use protocol::{
-    AddAction, AddBatch, AddDownload, AddMagnet, AddResult, Body, BridgeError, CAP_POST, ErrorCode,
-    HOST_NAME, Pong, PostBody, RecentTask, Request, Response, Status,
+    AddAction, AddBatch, AddDownload, AddMagnet, AddResult, Body, BridgeError, CAP_DASH, CAP_POST,
+    ErrorCode, HOST_NAME, Pong, PostBody, RecentTask, Request, Response, Status,
 };
 #[cfg(feature = "tokio")]
 pub use server::{Listener, read_frame_async, write_frame_async};

@@ -295,5 +295,8 @@
   },
   "mediaQuality": {
     "message": "画質"
+  },
+  "notifyDashNeedsApp": {
+    "message": "DASH 動画ストリームをダウンロードするには、Omni Download を最新版に更新してください。"
   }
 }

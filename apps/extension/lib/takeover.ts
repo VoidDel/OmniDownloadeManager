@@ -92,18 +92,29 @@ export async function payloadFor(d: Download, silent: boolean): Promise<AddDownl
   };
 }
 
+/** What the app that is running understands beyond the first protocol (`Pong.capabilities`);
+ *  none when it is not running (asking does not start it). */
+export async function appCapabilities(): Promise<string[]> {
+  try {
+    const r = await send<Pong>({ type: 'ping' });
+    return (r.ok && r.result?.capabilities) || [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * The app that is running sends forms again (`AddDownload.post`). An older one would ignore
  * what the form sent, fetch the address with a GET and save the page it gets: it is not given
- * those downloads. Neither is an app that is not running (asking does not start it).
+ * those downloads. Neither is an app that is not running.
  */
 export async function appSendsForms(): Promise<boolean> {
-  try {
-    const r = await send<Pong>({ type: 'ping' });
-    return !!(r.ok && r.result?.capabilities?.includes('post'));
-  } catch {
-    return false;
-  }
+  return (await appCapabilities()).includes('post');
+}
+
+/** The app that is running downloads DASH manifests (an older one would save the manifest). */
+export async function appDownloadsDash(): Promise<boolean> {
+  return (await appCapabilities()).includes('dash');
 }
 
 export async function notify(message: string): Promise<void> {

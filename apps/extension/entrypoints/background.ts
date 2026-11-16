@@ -21,7 +21,7 @@ import { postBody, type RequestBody } from '../lib/post';
 import type { PostBody } from '../lib/protocol';
 import { decide, extensionOf } from '../lib/rules';
 import { load } from '../lib/settings';
-import { appSendsForms, basename, handOver, notify, payloadFor, storeOf, type Download } from '../lib/takeover';
+import { appDownloadsDash, appSendsForms, basename, handOver, notify, payloadFor, storeOf, type Download } from '../lib/takeover';
 
 /** Links the user asked the browser to keep (Alt+click), and our own re-downloads. */
 const bypass = new Map<string, number>();
@@ -540,6 +540,7 @@ interface MediaChoice {
 /** Several media the popup's list chose: each starts without the quick-download window, one
  *  after the other; one notification says how many went. */
 async function downloadMediaBatch(items: MediaChoice[]) {
+  if (items.some((i) => i.media.kind === 'mpd') && !(await dashAllowed())) items = items.filter((i) => i.media.kind !== 'mpd');
   let taken = 0;
   for (const i of items) {
     const out = await handOver(mediaDownload(i.media, i.audio, i.name, i.hlsVariant), true, false);
@@ -550,6 +551,20 @@ async function downloadMediaBatch(items: MediaChoice[]) {
     if (out.kind === 'taken') taken++;
   }
   if (taken) void notify(tn('notifyBatch', taken));
+}
+
+/** Whether the app downloads a DASH manifest; says so when it does not (an older app would
+ *  save the manifest itself). */
+async function dashAllowed(): Promise<boolean> {
+  if (await appDownloadsDash()) return true;
+  void notify(t('notifyDashNeedsApp'));
+  return false;
+}
+
+/** One media item the popup chose, through the quick-download window. */
+async function downloadOneMedia(i: MediaChoice) {
+  if (i.media.kind === 'mpd' && !(await dashAllowed())) return;
+  await explicit(mediaDownload(i.media, i.audio, i.name, i.hlsVariant));
 }
 
 /** Media downloads given together, one batch after the other. */
@@ -581,7 +596,7 @@ export default defineBackground(() => {
     const m = msg as { type?: string; url?: string; media?: Media; audio?: Media | null; name?: string; hlsVariant?: string | null; items?: MediaChoice[]; tabId?: number };
     if (m?.type === 'scan-media' && typeof m.tabId === 'number') void scanTab(m.tabId);
     if (m?.type === 'bypass' && typeof m.url === 'string') mark(bypass, m.url, 5000);
-    if (m?.type === 'download-media' && m.media) void explicit(mediaDownload(m.media, m.audio, m.name, m.hlsVariant));
+    if (m?.type === 'download-media' && m.media) void downloadOneMedia({ media: m.media, audio: m.audio, name: m.name, hlsVariant: m.hlsVariant });
     if (m?.type === 'download-media-batch' && Array.isArray(m.items)) {
       const items = m.items.filter((i) => i?.media?.url);
       mediaBatches = mediaBatches.then(() => downloadMediaBatch(items)).catch(() => undefined);

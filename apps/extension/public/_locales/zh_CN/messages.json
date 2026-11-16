@@ -295,5 +295,8 @@
   },
   "mediaQuality": {
     "message": "清晰度"
+  },
+  "notifyDashNeedsApp": {
+    "message": "要下载 DASH 视频流，请先把 Omni Download 更新到最新版本。"
   }
 }

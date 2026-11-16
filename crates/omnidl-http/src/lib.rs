@@ -4,10 +4,12 @@
 //! several connections, hands the rest of a slow segment to idle connections (work stealing),
 //! and resumes after a pause or a restart when the server's ETag / Last-Modified / length are
 //! unchanged. Servers that ignore ranges get one connection and start over after a pause.
-//! An HLS playlist (`.m3u8`) is downloaded segment by segment into one video file (`hls`).
+//! An HLS playlist (`.m3u8`) is downloaded segment by segment into one video file (`hls`), and
+//! so is a DASH manifest (`.mpd`, `dash`): its picture and sound joined into one MP4.
 
 mod auth;
 mod client;
+mod dash;
 mod download;
 mod form;
 mod hls;

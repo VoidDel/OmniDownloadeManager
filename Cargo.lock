@@ -4330,6 +4330,7 @@ dependencies = [
  "omnidl-core",
  "omnidl-storage",
  "parking_lot",
+ "quick-xml 0.42.0",
  "reqwest",
  "sha2 0.10.9",
  "tempfile",

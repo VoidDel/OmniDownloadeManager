@@ -550,6 +550,82 @@ async fn decrypts_aes_128_segments() {
     );
 }
 
+/// The joined file holds every fragment's data of the picture (`size` bytes each) and of the
+/// sound, in one MP4.
+fn assert_joined_dash(path: &std::path::Path, size: usize) {
+    let joined = std::fs::read(path).unwrap();
+    let has = |needle: &[u8]| joined.windows(needle.len()).any(|w| w == needle);
+    assert_eq!(&joined[4..8], b"ftyp");
+    for i in 0..3 {
+        assert!(
+            has(&common::fmp4_data(b"vide", i, size)),
+            "picture fragment {i}"
+        );
+        assert!(
+            has(&common::fmp4_data(b"soun", i, 300)),
+            "sound fragment {i}"
+        );
+    }
+    assert!(!has(b"styp"), "segment types are not copied");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_dash_manifest_into_one_mp4() {
+    for kind in ["template", "timeline"] {
+        let server = start().await;
+        let dir = tempfile::tempdir().unwrap();
+        let url = server.url(&format!("/dash/{kind}/manifest.mpd"));
+        let probe = engine().probe(&url, &JobOptions::default()).await.unwrap();
+        assert_eq!(probe.file_name, format!("{kind}.mp4"));
+        let r = job(&url, dir.path(), None, 4);
+        let (name, _) = completed(engine().run(r.job).await);
+        assert_eq!(name, format!("{kind}.mp4"));
+        assert_joined_dash(&dir.path().join(&name), 2000);
+        // The best picture only, each file once.
+        let asked = server.stats.dash.lock().clone();
+        assert!(
+            asked.iter().all(|f| !f.starts_with("v-low/")),
+            "{kind}: {asked:?}"
+        );
+        let mut unique = asked.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            8,
+            "{kind}: two inits and six segments: {asked:?}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_dash_manifest_of_whole_files() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = job(&server.url("/dash/whole/manifest.mpd"), dir.path(), None, 4);
+    let (name, _) = completed(engine().run(r.job).await);
+    assert_joined_dash(&dir.path().join(&name), 2000);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_live_and_encrypted_dash() {
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let e = failed(
+        engine()
+            .run(job(&server.url("/dash/live/manifest.mpd"), dir.path(), None, 4).job)
+            .await,
+    );
+    assert!(e.message.contains("live"), "{e}");
+    let e = failed(
+        engine()
+            .run(job(&server.url("/dash/drm/manifest.mpd"), dir.path(), None, 4).job)
+            .await,
+    );
+    assert_eq!(e.code, ErrorCode::Unsupported, "{e}");
+    assert!(e.message.contains("DRM"), "{e}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn takes_the_variant_chosen_in_a_master_playlist() {
     let server = start().await;

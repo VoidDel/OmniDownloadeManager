@@ -41,7 +41,7 @@ pub async fn handle(app: &AppHandle, req: Request) -> Response {
             id,
             Pong {
                 app_version: env!("CARGO_PKG_VERSION").into(),
-                capabilities: vec![omnidl_ipc::CAP_POST.into()],
+                capabilities: vec![omnidl_ipc::CAP_POST.into(), omnidl_ipc::CAP_DASH.into()],
             },
         ),
         Body::GetStatus => Response::ok(id, status(&state)),

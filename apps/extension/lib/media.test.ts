@@ -11,16 +11,18 @@ describe('classify', () => {
     expect(classify('https://cdn.example.com/x?id=1', h({ 'content-type': 'audio/mpeg', 'content-length': String(5 * MB) }))?.kind).toBe('audio');
     expect(classify('https://cdn.example.com/hls/index.m3u8?t=1', h({}))?.kind).toBe('hls');
     expect(classify('https://cdn.example.com/play', h({ 'content-type': 'application/vnd.apple.mpegurl' }))?.kind).toBe('hls');
+    // A DASH manifest: a video the app downloads (its own length is not the video's either).
+    expect(classify('https://cdn.example.com/v/manifest.mpd?t=1', h({ 'content-length': '900' }))).toEqual({ kind: 'mpd', mime: null, size: null });
+    expect(classify('https://cdn.example.com/v/play', h({ 'content-type': 'application/dash+xml' }))?.kind).toBe('mpd');
     // The playlist's own length is not the video's.
     expect(classify('https://cdn.example.com/hls/index.m3u8', h({ 'content-length': '42' }))?.size).toBeNull();
     // A range of a big file: its whole size.
     expect(classify('https://v.example.com/b.webm', h({ 'content-type': 'video/webm', 'content-length': '65536', 'content-range': `bytes 0-65535/${300 * MB}` }))?.size).toBe(300 * MB);
   });
 
-  it('leaves out pieces of streams, small files, DASH and pages', () => {
+  it('leaves out pieces of streams, small files and pages', () => {
     expect(classify('https://cdn.example.com/hls/seg12.ts', h({ 'content-type': 'video/mp2t' }))).toBeNull();
     expect(classify('https://cdn.example.com/dash/chunk-3.m4s', h({}))).toBeNull();
-    expect(classify('https://cdn.example.com/manifest.mpd', h({ 'content-type': 'application/dash+xml' }))).toBeNull();
     expect(classify('https://example.com/click.mp3', h({ 'content-type': 'audio/mpeg', 'content-length': '20000' }))).toBeNull();
     expect(classify('https://example.com/', h({ 'content-type': 'text/html' }))).toBeNull();
     expect(classify('blob:https://example.com/123', h({ 'content-type': 'video/mp4' }))).toBeNull();
@@ -163,6 +165,8 @@ describe('what the list says', () => {
     expect(formatOf(unknown)).toBeNull();
     const [hls] = offers([item('https://e.com/v/index.m3u8', 'hls')]);
     expect([formatOf(hls), offerTab(hls)]).toEqual(['HLS', 'video']);
+    const [mpd] = offers([item('https://e.com/v/manifest.mpd', 'mpd')]);
+    expect([formatOf(mpd), offerTab(mpd), mpd.name]).toEqual(['DASH', 'video', 'Clip.mp4']);
   });
 
   it('puts a DASH picture under video and its sound alone under audio', () => {
