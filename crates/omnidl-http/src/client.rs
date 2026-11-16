@@ -35,7 +35,11 @@ pub(crate) fn build_as(o: &JobOptions, ua: &str) -> Result<Client> {
         .redirect(redirects(o.allow_insecure_redirect))
         .pool_max_idle_per_host(o.connections as usize)
         .tcp_nodelay(true)
-        .http1_only();
+        .http1_only()
+        // `User-Agent:`, as browsers and curl write header names, not hyper's `user-agent:`:
+        // a server may tell a program by the lower case (Cloudflare's browser check refuses a
+        // browser's user agent that comes with it, even with the clearance cookie).
+        .http1_title_case_headers();
     b = match &o.proxy {
         // reqwest reads the system settings by default.
         ProxyConfig::System => b,
@@ -136,6 +140,24 @@ pub(crate) fn status_error(status: StatusCode) -> Error {
     }
 }
 
+/// What a Cloudflare browser check adds to the message of the refusal it answers with
+/// (`cf-mitigated: challenge`): a page the browser solves, which a program cannot.
+const BROWSER_CHECK: &str = "Cloudflare browser check";
+
+/// An error status from the server, telling a Cloudflare browser check apart.
+pub(crate) fn response_error(r: &reqwest::Response) -> Error {
+    let mut e = status_error(r.status());
+    let challenge = r
+        .headers()
+        .get_all("cf-mitigated")
+        .iter()
+        .any(|v| v.as_bytes().eq_ignore_ascii_case(b"challenge"));
+    if challenge {
+        e.message = format!("{} ({BROWSER_CHECK})", e.message);
+    }
+    e
+}
+
 /// The error with its causes: reqwest's own message is only the outermost one.
 fn chain(e: &reqwest::Error) -> String {
     let mut s = e.to_string();
@@ -170,5 +192,57 @@ mod tests {
         // The error is told apart from any other redirect error.
         let e = Error::new(ErrorCode::InsecureRedirect, "x");
         assert!(!e.is_transient());
+    }
+
+    /// Header names go out as browsers and curl write them (`User-Agent:`), not in lower case.
+    #[tokio::test]
+    async fn writes_header_names_in_title_case() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut c, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = c.read(&mut buf).await.unwrap();
+                assert!(n > 0, "the request ended early");
+                request.extend_from_slice(&buf[..n]);
+            }
+            c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await
+                .unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        let o = JobOptions {
+            referer: Some("http://example.com/page".into()),
+            cookies: Some("a=1".into()),
+            headers: [("x-custom-token".to_owned(), "t".to_owned())].into(),
+            proxy: ProxyConfig::None,
+            ..JobOptions::default()
+        };
+        let client = build_as(&o, "Mozilla/5.0 Test").unwrap();
+        let r = client
+            .get(format!("http://{addr}/file.bin"))
+            .header(reqwest::header::RANGE, "bytes=0-0")
+            .send()
+            .await
+            .unwrap();
+        assert!(r.status().is_success());
+        let request = server.await.unwrap();
+        for line in [
+            "Host: ",
+            "User-Agent: Mozilla/5.0 Test",
+            "Accept: */*",
+            "Accept-Encoding: identity",
+            "Referer: http://example.com/page",
+            "Cookie: a=1",
+            "Range: bytes=0-0",
+            "X-Custom-Token: t",
+        ] {
+            let wanted = format!("\r\n{line}");
+            assert!(request.contains(&wanted), "no {line:?} in {request:?}");
+        }
     }
 }

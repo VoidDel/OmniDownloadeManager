@@ -858,6 +858,22 @@ async fn keeps_the_user_agent_of_a_task_with_cookies() {
     assert!(agents.iter().all(|a| a.contains("Mozilla")), "{agents:?}");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn names_a_cloudflare_browser_check() {
+    // A task from the browser, with its cookies and user agent, that the check refuses: the
+    // error says what refused it, and no other user agent is tried.
+    let server = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = job(&server.url("/checked/1000"), dir.path(), None, 1);
+    r.job.options.cookies = Some("cf_clearance=ok".into());
+    r.job.options.user_agent_fixed = true;
+    let e = failed(engine().run(r.job).await);
+    assert_eq!(e.code, ErrorCode::Forbidden);
+    assert!(e.message.contains("Cloudflare"), "{}", e.message);
+    let agents = server.stats.agents.lock().clone();
+    assert!(agents.iter().all(|a| a.contains("Mozilla")), "{agents:?}");
+}
+
 fn failed(o: Outcome) -> omnidl_core::Error {
     match o {
         Outcome::Failed(e, _) => e,

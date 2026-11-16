@@ -20,7 +20,7 @@ use url::Url;
 
 use crate::{
     auth::Auth,
-    client::{request_error, status_error},
+    client::{request_error, response_error},
 };
 
 /// What the server says about a URL.
@@ -105,9 +105,9 @@ pub(crate) async fn probe(client: &Client, auth: &Auth, url: &Url) -> Result<Pro
             let total = length(r.headers(), CONTENT_LENGTH);
             Ok(describe(&r, total, false))
         }
-        s => match from_head {
+        _ => match from_head {
             Some((p, _)) => Ok(p),
-            None => Err(status_error(s)),
+            None => Err(response_error(&r)),
         },
     }
     // The ranged GET's body (one byte, or the whole file on a 200) is dropped unread, which

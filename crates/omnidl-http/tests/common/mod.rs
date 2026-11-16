@@ -128,6 +128,7 @@ pub async fn start_at(addr: &str) -> Server {
         .route("/throttled/{per}/{total}/{size}", get(throttled))
         .route("/burst/{fast}/{slow}/{burst}/{size}", get(burst))
         .route("/picky/{size}", get(picky))
+        .route("/checked/{size}", get(checked))
         .route("/changing/{size}", get(changing))
         .route("/nohead/{size}", get(nohead))
         .route("/named/{size}", get(named))
@@ -329,6 +330,26 @@ async fn picky(method: Method, headers: HeaderMap, State(s): S, UrlPath(size): S
     s.agents.lock().push(ua.clone());
     if ua.contains("Mozilla") {
         return StatusCode::FORBIDDEN.into_response();
+    }
+    serve(&method, &headers, size, Opts::default(), &s)
+}
+
+/// A Cloudflare browser check that tells a program from the browser it says it is: a browser's
+/// user agent gets the challenge (403 with `cf-mitigated: challenge`), as does anyone without
+/// the clearance cookie.
+async fn checked(method: Method, headers: HeaderMap, State(s): S, UrlPath(size): Size) -> Response {
+    let ua = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    s.agents.lock().push(ua.clone());
+    let cleared = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|c| c.contains("cf_clearance=ok"));
+    if ua.contains("Mozilla") || !cleared {
+        return (StatusCode::FORBIDDEN, [("cf-mitigated", "challenge")]).into_response();
     }
     serve(&method, &headers, size, Opts::default(), &s)
 }
